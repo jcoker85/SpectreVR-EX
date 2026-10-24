@@ -22,3 +22,8 @@
 *.opendb
 *.VC.db
 crashlytics-buildid.txt
+
+# Original Spectre VR install (copyrighted, reference only)
+/Tools/SpectreVR/
+/Tools/GeneralUser-GS/
+/Tools/fluidsynth/

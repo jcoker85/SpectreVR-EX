@@ -8,11 +8,12 @@ namespace SpectreEX
         const float Lifetime = 3f;
 
         Vector3 velocity;
-        float damage;
+        int damage;
+        Team team;
         GameObject owner;
         float dieAt;
 
-        public static void Spawn(Vector3 position, Vector3 direction, float speed, float damage, Material material, GameObject owner)
+        public static void Spawn(Vector3 position, Vector3 direction, float speed, int damage, Team team, Material material, GameObject owner)
         {
             var go = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             go.name = "Bolt";
@@ -24,6 +25,7 @@ namespace SpectreEX
             var p = go.AddComponent<Projectile>();
             p.velocity = direction.normalized * speed;
             p.damage = damage;
+            p.team = team;
             p.owner = owner;
             p.dieAt = Time.time + Lifetime;
         }
@@ -39,7 +41,8 @@ namespace SpectreEX
             {
                 if (owner != null && hit.collider.transform.IsChildOf(owner.transform)) continue;
 
-                var health = hit.collider.GetComponentInParent<TankHealth>();
+                var health = hit.collider.GetComponentInParent<Health>();
+                if (health != null && health.team == team) continue; // no friendly fire between robots
                 if (health != null) health.TakeDamage(damage);
                 Derez.Burst(hit.point, GetComponent<MeshRenderer>().sharedMaterial, 6, 4f);
                 Destroy(gameObject);

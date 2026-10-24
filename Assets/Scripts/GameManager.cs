@@ -1,123 +1,273 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace SpectreEX
 {
-    // Score, rounds (collect every flag to advance), respawns and the HUD.
+    // Spectre VR session rules: lives, score, levels, the level clock and its time bonus,
+    // spawning each level's flags, ammo dumps and robots, and respawns.
     public class GameManager : MonoBehaviour
     {
-        public static GameManager Instance { get; private set; }
-
-        public TankHealth player;
-        public Transform[] enemySpawns;
-        public float respawnDelay = 3f;
-        public float difficultyPerRound = 0.25f;
-
-        public int Score { get; private set; }
-        public int Round { get; private set; } = 1;
-
-        Flag[] flags;
-        Vector3 playerSpawnPos;
-        Quaternion playerSpawnRot;
-        string banner;
-        float bannerUntil;
-        GUIStyle hudStyle, bannerStyle;
-
-        void Awake()
-        {
-            Instance = this;
-            flags = FindObjectsByType<Flag>(FindObjectsSortMode.None);
-            if (player != null)
-            {
-                playerSpawnPos = player.transform.position;
-                playerSpawnRot = player.transform.rotation;
-            }
-        }
-
-        void Start() => ShowBanner("ROUND 1 — COLLECT THE FLAGS");
-
-        public int FlagsRemaining
+        // Re-found on demand so a script recompile during Play mode doesn't strand everything
+        static GameManager instance;
+        public static GameManager Instance
         {
             get
             {
-                int n = 0;
-                foreach (var f in flags) if (f.gameObject.activeSelf) n++;
-                return n;
+                if (instance == null) instance = FindFirstObjectByType<GameManager>();
+                return instance;
+            }
+            private set => instance = value;
+        }
+
+        [Header("Scene")]
+        public PlayerTank player;
+        public Renderer[] wallRenderers;
+        public float arenaHalfSize = 120f;
+
+        [Header("Prefabs")]
+        public Flag flagPrefab;
+        public AmmoDump ammoDumpPrefab;
+        public GameObject roverPrefab, turretPrefab, orbiterPrefab, slicerPrefab;
+
+        [Header("Rules")]
+        public int startingLives = 3;
+        public int extraLifeEvery = 10000;
+        public int flagPoints = 100;
+        public int timeBonusPerSecond = 10;
+        public float playerRespawnDelay = 3f;
+        public float robotRespawnDelay = 12f;
+
+        public int Score { get; private set; }
+        public int Lives { get; private set; }
+        public int Level { get; private set; }
+        public float TimeRemaining { get; private set; }
+        public int FlagsTotal { get; private set; }
+        public int FlagsCollected { get; private set; }
+        public bool Playing { get; private set; }
+        public LevelPlan Plan { get; private set; }
+
+        public readonly List<Flag> Flags = new List<Flag>();
+        public readonly List<AmmoDump> Dumps = new List<AmmoDump>();
+        public readonly List<Health> Robots = new List<Health>();
+
+        public System.Action<string, string> ShowBanner;           // big title, red tip
+        public System.Action<string[], string[]> ShowStats;         // label rows, value rows
+        public System.Action HideOverlays;
+
+        readonly Dictionary<GameObject, GameObject> prefabOf = new Dictionary<GameObject, GameObject>();
+        int nextExtraLife;
+        float wallNits = -1f;
+
+        void Awake() => Instance = this;
+
+        // Wait a frame so the HUD has subscribed before the first banner goes up
+        IEnumerator Start()
+        {
+            yield return null;
+            yield return NewGame();
+        }
+
+        IEnumerator NewGame()
+        {
+            Score = 0;
+            Lives = startingLives;
+            nextExtraLife = extraLifeEvery;
+            Level = 0;
+            Sfx.Play(Snd.Welcome);
+            yield return NextLevel();
+        }
+
+        IEnumerator NextLevel()
+        {
+            Level++;
+            Plan = LevelPlan.For(Level);
+            BuildLevel(Plan);
+            if (MusicPlayer.Instance != null) MusicPlayer.Instance.PlayForLevel(Level);
+
+            ShowBanner?.Invoke($"LEVEL {Level}", Plan.tip);
+            yield return new WaitForSeconds(3f);
+            HideOverlays?.Invoke();
+            Playing = true;
+        }
+
+        void Update()
+        {
+            if (!Playing) return;
+            float before = TimeRemaining;
+            TimeRemaining = Mathf.Max(0f, TimeRemaining - Time.deltaTime);
+            if (before > 10f && TimeRemaining <= 10f) Sfx.Play(Snd.TimeTick);
+        }
+
+        // ---------- level construction ----------
+
+        void BuildLevel(LevelPlan plan)
+        {
+            foreach (var f in Flags) if (f != null) Destroy(f.gameObject);
+            foreach (var d in Dumps) if (d != null) Destroy(d.gameObject);
+            foreach (var r in Robots) if (r != null) Destroy(r.gameObject);
+            Flags.Clear(); Dumps.Clear(); Robots.Clear(); prefabOf.Clear();
+
+            SetWallColor(plan.wallColor);
+
+            // Player starts each level near the middle, fully stocked
+            if (TryFindSpawnPoint(out var start, 0f, nearCentre: true))
+            {
+                if (player.Health.IsDead) player.Health.Revive(start, Quaternion.identity);
+                else
+                {
+                    player.transform.SetPositionAndRotation(start, Quaternion.identity);
+                    var rb = player.GetComponent<Rigidbody>();
+                    rb.position = start; rb.rotation = Quaternion.identity; rb.linearVelocity = Vector3.zero;
+                }
+            }
+            player.Health.Restore(player.Health.maxShields);
+            player.ResetForLife();
+
+            for (int i = 0; i < plan.flags; i++)
+                if (TryFindSpawnPoint(out var p, 25f)) Flags.Add(Instantiate(flagPrefab, p, Quaternion.identity));
+            for (int i = 0; i < plan.ammoDumps; i++)
+                if (TryFindSpawnPoint(out var p, 25f)) Dumps.Add(Instantiate(ammoDumpPrefab, p - Vector3.up * p.y, Quaternion.identity));
+
+            FlagsTotal = Flags.Count;
+            FlagsCollected = 0;
+            TimeRemaining = plan.timeAllowed;
+
+            for (int i = 0; i < plan.rovers; i++) SpawnRobot(roverPrefab, 50f);
+            for (int i = 0; i < plan.turrets; i++) SpawnRobot(turretPrefab, 40f);
+            for (int i = 0; i < plan.orbiters; i++) SpawnRobot(orbiterPrefab, 50f);
+            for (int i = 0; i < plan.slicers; i++) SpawnRobot(slicerPrefab, 60f);
+        }
+
+        void SpawnRobot(GameObject prefab, float minDistance)
+        {
+            if (prefab == null || !TryFindSpawnPoint(out var p, minDistance)) return;
+            var go = Instantiate(prefab, p, Quaternion.Euler(0f, Random.Range(0f, 360f), 0f));
+            prefabOf[go] = prefab;
+            var h = go.GetComponent<Health>();
+            h.SetMaxShields(prefab.GetComponent<Health>().maxShields + Plan.robotShields - 1);
+            var ai = go.GetComponent<EnemyBase>();
+            if (ai != null) ai.difficulty = Plan.difficulty;
+            Robots.Add(h);
+        }
+
+        // Random open spot on the arena floor, clear of obstacles and at least minDistance from the player.
+        public bool TryFindSpawnPoint(out Vector3 point, float minDistanceFromPlayer, bool nearCentre = false)
+        {
+            float range = nearCentre ? 20f : arenaHalfSize - 12f;
+            for (int i = 0; i < 200; i++)
+            {
+                var p = new Vector3(Random.Range(-range, range), 0.1f, Random.Range(-range, range));
+                if (minDistanceFromPlayer > 0f && player != null && Vector3.Distance(p, player.transform.position) < minDistanceFromPlayer) continue;
+                if (Physics.CheckBox(p + Vector3.up * 2f, new Vector3(3.5f, 1.5f, 3.5f), Quaternion.identity, ~0, QueryTriggerInteraction.Collide)) continue;
+                point = p;
+                return true;
+            }
+            point = Vector3.zero + Vector3.up * 0.1f;
+            return false;
+        }
+
+        void SetWallColor(Color c)
+        {
+            foreach (var r in wallRenderers)
+            {
+                if (r == null) continue;
+                var m = r.material;
+                if (wallNits < 0f)
+                {
+                    Color cur = m.GetColor("_EmissiveColor");
+                    wallNits = Mathf.Max(cur.r, Mathf.Max(cur.g, cur.b));
+                }
+                m.SetColor("_EmissiveColor", c * wallNits);
+            }
+        }
+
+        // ---------- events ----------
+
+        public void AddScore(int points)
+        {
+            Score += points;
+            while (extraLifeEvery > 0 && Score >= nextExtraLife)
+            {
+                Lives++;
+                nextExtraLife += extraLifeEvery;
+                Sfx.Play(Snd.ExtraLife);
             }
         }
 
         public void OnFlagCollected(Flag flag)
         {
-            Score += 100;
-            if (FlagsRemaining == 0) NextRound();
+            Flags.Remove(flag);
+            FlagsCollected++;
+            AddScore(flagPoints);
+            Sfx.Play(Snd.FlagPickup);
+            int left = FlagsTotal - FlagsCollected;
+            if (left == 1) Sfx.Play(Snd.OneMoreFlag);
+            if (left == 0 && Playing) StartCoroutine(LevelComplete());
         }
 
-        void NextRound()
+        IEnumerator LevelComplete()
         {
-            Round++;
-            Score += 500 * (Round - 1);
-            foreach (var f in flags) f.Respawn();
-            foreach (var e in FindObjectsByType<EnemyTankAI>(FindObjectsSortMode.None)) e.difficulty += difficultyPerRound;
-            ShowBanner($"ROUND {Round}");
+            Playing = false;
+            if (MusicPlayer.Instance != null) MusicPlayer.Instance.PlayTrack("AWARD", loop: false);
+            Sfx.Play(Snd.Award);
+
+            int allowed = Mathf.RoundToInt(Plan.timeAllowed);
+            int taken = Mathf.RoundToInt(Plan.timeAllowed - TimeRemaining);
+            int bonus = Mathf.RoundToInt(TimeRemaining) * timeBonusPerSecond;
+            AddScore(bonus);
+            ShowStats?.Invoke(
+                new[] { "TIME ALLOWED", "TIME TAKEN", "TIME BONUS", "SCORE" },
+                new[] { allowed.ToString(), taken.ToString(), bonus.ToString(), Score.ToString() });
+            yield return new WaitForSeconds(4.5f);
+            HideOverlays?.Invoke();
+            yield return NextLevel();
         }
 
-        public void OnTankDestroyed(TankHealth tank)
+        public void OnDestroyed(Health h)
         {
-            if (tank.isPlayer)
+            if (h.team == Team.Player)
             {
-                Score = Mathf.Max(0, Score - 250);
-                ShowBanner("DEREZZED");
+                StartCoroutine(PlayerDown());
+                return;
             }
-            else
-            {
-                Score += 250;
-            }
-            StartCoroutine(RespawnAfterDelay(tank));
+
+            AddScore(h.scoreValue);
+            Robots.Remove(h);
+            var go = h.gameObject;
+            prefabOf.TryGetValue(go, out var prefab);
+            prefabOf.Remove(go);
+            Destroy(go, 0.05f);
+            if (prefab != null) StartCoroutine(RespawnRobot(prefab, Level));
         }
 
-        IEnumerator RespawnAfterDelay(TankHealth tank)
+        IEnumerator RespawnRobot(GameObject prefab, int level)
         {
-            yield return new WaitForSeconds(respawnDelay);
-            if (tank.isPlayer)
-            {
-                tank.Revive(playerSpawnPos, playerSpawnRot);
-            }
-            else
-            {
-                // Spawn at whichever spawn point is farthest from the player
-                Transform best = null;
-                float bestDist = -1f;
-                foreach (var s in enemySpawns)
-                {
-                    float d = player != null ? Vector3.Distance(s.position, player.transform.position) : Random.value;
-                    if (d > bestDist) { bestDist = d; best = s; }
-                }
-                if (best != null) tank.Revive(best.position, best.rotation);
-            }
+            yield return new WaitForSeconds(robotRespawnDelay);
+            if (Level == level && Playing) SpawnRobot(prefab, 60f);
         }
 
-        void ShowBanner(string text)
+        IEnumerator PlayerDown()
         {
-            banner = text;
-            bannerUntil = Time.time + 2.5f;
-        }
+            Lives--;
+            Sfx.Play(Snd.PlayerDown);
+            yield return new WaitForSeconds(playerRespawnDelay);
 
-        void OnGUI()
-        {
-            if (hudStyle == null)
+            if (Lives <= 0)
             {
-                hudStyle = new GUIStyle(GUI.skin.label) { fontSize = 22, fontStyle = FontStyle.Bold };
-                hudStyle.normal.textColor = new Color(0.3f, 0.95f, 1f);
-                bannerStyle = new GUIStyle(hudStyle) { fontSize = 44, alignment = TextAnchor.MiddleCenter };
+                Playing = false;
+                Sfx.Play(Snd.GameOver);
+                ShowBanner?.Invoke("GAME OVER", $"FINAL SCORE {Score}");
+                yield return new WaitForSeconds(5f);
+                HideOverlays?.Invoke();
+                yield return NewGame();
+                yield break;
             }
 
-            float shields = player != null ? player.Shields : 0f;
-            GUI.Label(new Rect(24, 18, 600, 32), $"SCORE {Score:000000}    ROUND {Round}", hudStyle);
-            GUI.Label(new Rect(24, 48, 600, 32), $"FLAGS {flags.Length - FlagsRemaining}/{flags.Length}    SHIELDS {Mathf.CeilToInt(shields)}", hudStyle);
-            GUI.Label(new Rect(24, Screen.height - 44, 900, 32), "WASD drive · SPACE/LMB fire · V cockpit view", hudStyle);
-
-            if (Time.time < bannerUntil)
-                GUI.Label(new Rect(0, Screen.height * 0.3f, Screen.width, 60), banner, bannerStyle);
+            TryFindSpawnPoint(out var p, 50f);
+            player.Health.Revive(p, Quaternion.Euler(0f, Random.Range(0f, 360f), 0f));
+            player.ResetForLife();
+            Sfx.Play(Snd.PlayerUp);
         }
     }
 }
