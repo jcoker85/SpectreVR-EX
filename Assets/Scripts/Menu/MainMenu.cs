@@ -73,6 +73,9 @@ namespace SpectreEX.Menu
             gm = GameManager.Instance;
             GameSettings.Load();
             if (segmentFont == null) segmentFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            // Sample the glyph atlas with point filtering so strokes stay solid black, with no grey fringe
+            PointFilterFont(segmentFont);
+            Font.textureRebuilt += PointFilterFont;
             buttonsTex = LoadTex("Buttons");
             dotSprite = MakeDotSprite();
             BuildCanvas();
@@ -85,6 +88,13 @@ namespace SpectreEX.Menu
         void OnDestroy()
         {
             if (Keyboard.current != null) Keyboard.current.onTextInput -= OnTextInput;
+            Font.textureRebuilt -= PointFilterFont;
+        }
+
+        void PointFilterFont(Font f)
+        {
+            if (f == segmentFont && f.material != null && f.material.mainTexture != null)
+                f.material.mainTexture.filterMode = FilterMode.Point;
         }
 
         // ---------- open / close ----------

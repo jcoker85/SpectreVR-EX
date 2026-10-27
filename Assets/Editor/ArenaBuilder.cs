@@ -58,6 +58,7 @@ namespace SpectreEX.EditorTools
             EnsureLayer(PlayerLayer);
             ConfigurePixelArt("Assets/Resources/Menu");
             ConfigurePixelArt("Assets/Resources/HUD");
+            ConfigureCrispFont(MenuFontPath);
             CreateMaterials();
 
             var prefabs = BuildPrefabs();
@@ -134,6 +135,16 @@ namespace SpectreEX.EditorTools
                 imp.textureCompression = TextureImporterCompression.Uncompressed;
                 imp.SaveAndReimport();
             }
+        }
+
+        // Render without antialiasing so menu text is solid black pixels on the 1993 dialogs,
+        // instead of grey, uneven segments where strokes straddle pixel boundaries
+        static void ConfigureCrispFont(string path)
+        {
+            var imp = AssetImporter.GetAtPath(path) as TrueTypeFontImporter;
+            if (imp == null || imp.fontRenderingMode == FontRenderingMode.HintedRaster) return;
+            imp.fontRenderingMode = FontRenderingMode.HintedRaster;
+            imp.SaveAndReimport();
         }
 
         static void SetLayerRecursive(GameObject go, int layer)
