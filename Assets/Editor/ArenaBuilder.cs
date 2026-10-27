@@ -26,7 +26,6 @@ namespace SpectreEX.EditorTools
         const string VolumePath = "Assets/Settings/ArenaVolume.asset";
         const string PlayerLayer = "PlayerModel";
         const string HudFontPath = "Assets/Fonts/DSEG14Classic-Light.ttf";
-        const string MenuFontPath = "Assets/Fonts/DSEG14Classic-Regular.ttf";   // heavier strokes read better on the white dialogs
 
         public const float ArenaHalfSize = 120f;
         const float DotSpacing = 6f;
@@ -44,7 +43,8 @@ namespace SpectreEX.EditorTools
         const float ShapeScale = 0.13f;
         const float EdgeThickness = 0.07f;
         const float FlagHeightStretch = 3f;
-        const float FlagBaseScale = 0.35f;   // keeps the base pyramid small next to the craft
+        const float FlagBaseScale = 0.35f;   // keeps the base pyramid's footprint small next to the craft
+        const float FlagBaseHeight = 0.4f;   // and its height low
 
         static Material floorMat, bodyMat, wallMat, blockMat, dotMat, cyanMat, flagMat, poleMat, dumpMat;
         static Material roverMat, turretMat, orbiterMat, slicerMat, enemyBoltMat;
@@ -58,7 +58,6 @@ namespace SpectreEX.EditorTools
             EnsureLayer(PlayerLayer);
             ConfigurePixelArt("Assets/Resources/Menu");
             ConfigurePixelArt("Assets/Resources/HUD");
-            ConfigureCrispFont(MenuFontPath);
             CreateMaterials();
 
             var prefabs = BuildPrefabs();
@@ -86,7 +85,7 @@ namespace SpectreEX.EditorTools
             gmGo.AddComponent<MusicPlayer>();
             var hudFont = AssetDatabase.LoadAssetAtPath<Font>(HudFontPath);
             gmGo.AddComponent<SpectreHud>().segmentFont = hudFont;
-            gmGo.AddComponent<SpectreEX.Menu.MainMenu>().segmentFont = AssetDatabase.LoadAssetAtPath<Font>(MenuFontPath);
+            gmGo.AddComponent<SpectreEX.Menu.MainMenu>();
             gm.floorDots = GameObject.Find("FloorDots").GetComponent<Renderer>();
 
             BuildCamera(player.transform);
@@ -135,16 +134,6 @@ namespace SpectreEX.EditorTools
                 imp.textureCompression = TextureImporterCompression.Uncompressed;
                 imp.SaveAndReimport();
             }
-        }
-
-        // Render without antialiasing so menu text is solid black pixels on the 1993 dialogs,
-        // instead of grey, uneven segments where strokes straddle pixel boundaries
-        static void ConfigureCrispFont(string path)
-        {
-            var imp = AssetImporter.GetAtPath(path) as TrueTypeFontImporter;
-            if (imp == null || imp.fontRenderingMode == FontRenderingMode.HintedRaster) return;
-            imp.fontRenderingMode = FontRenderingMode.HintedRaster;
-            imp.SaveAndReimport();
         }
 
         static void SetLayerRecursive(GameObject go, int layer)
@@ -389,11 +378,12 @@ namespace SpectreEX.EditorTools
         }
 
         // An original Spectre VR shape in the SpectreEX style: black panels with glowing edges.
-        static Transform SpectreModel(string name, Transform parent, int shapeId, float scale, Material glow, out Bounds bounds)
+        static Transform SpectreModel(string name, Transform parent, int shapeId, float scale, Material glow, out Bounds bounds,
+                                      System.Func<Vector3, Vector3> warp = null, string variant = "")
         {
-            string key = $"Spectre_{shapeId}_{Mathf.RoundToInt(scale * 1000)}";
-            var body = SaveMesh(ShapeLibrary.BodyMesh(shapeId, scale), key + "_Body");
-            var edges = SaveMesh(ShapeLibrary.EdgeMesh(shapeId, scale, EdgeThickness), key + "_Edges");
+            string key = $"Spectre_{shapeId}_{Mathf.RoundToInt(scale * 1000)}{variant}";
+            var body = SaveMesh(ShapeLibrary.BodyMesh(shapeId, scale, warp), key + "_Body");
+            var edges = SaveMesh(ShapeLibrary.EdgeMesh(shapeId, scale, EdgeThickness, warp), key + "_Edges");
             var model = new GameObject(name).transform;
             model.SetParent(parent, false);
             MeshObj("Panels", model, body, bodyMat, Vector3.zero, Vector3.one, Quaternion.identity);
@@ -416,9 +406,17 @@ namespace SpectreEX.EditorTools
             var visual = new GameObject("Visual").transform;
             visual.SetParent(f.transform, false);
             visual.localPosition = Vector3.zero;
-            var stand = SpectreModel("Stand", visual, FlagShape, 0.15f, poleMat, out var b);
-            stand.localScale = new Vector3(FlagBaseScale, FlagHeightStretch, FlagBaseScale);
-            float poleTop = b.max.y * FlagHeightStretch;
+            // Shape 10086: base plate y 0-1, pyramid up to y 5, pole to y 16, tip at 17 (shape units).
+            // Squash the plate and pyramid, stretch the pole so its top stays FlagHeightStretch x the
+            // original, and narrow the footprint - all baked into the mesh so edge lines stay even.
+            const float pyramidTop = 5f, shapeTop = 17f;
+            float poleStretch = (shapeTop * FlagHeightStretch - pyramidTop * FlagBaseHeight) / (shapeTop - pyramidTop);
+            System.Func<Vector3, Vector3> warp = p => new Vector3(
+                p.x * FlagBaseScale,
+                p.y <= pyramidTop ? p.y * FlagBaseHeight : pyramidTop * FlagBaseHeight + (p.y - pyramidTop) * poleStretch,
+                p.z * FlagBaseScale);
+            SpectreModel("Stand", visual, FlagShape, 0.15f, poleMat, out var b, warp, "_flag");
+            float poleTop = b.max.y;
             MeshObj("Pennant", visual, pennant, flagMat, new Vector3(0.05f, poleTop - 1.7f, 0f), new Vector3(1.5f, 1.5f, 1f), Quaternion.identity);
             NoShadows(f);
 

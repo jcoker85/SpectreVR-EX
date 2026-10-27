@@ -21,7 +21,6 @@ namespace SpectreEX.Menu
     // begins at a higher level, as in the original.
     public class MainMenu : MonoBehaviour
     {
-        public Font segmentFont;
         public int altStartLevel = 5;
 
         const int MainW = 522, MainH = 332;
@@ -44,7 +43,7 @@ namespace SpectreEX.Menu
             public Vector2 size;            // image pixels
             public readonly List<Hotspot> hotspots = new List<Hotspot>();
             public readonly List<(RectTransform rt, Rect r)> placed = new List<(RectTransform, Rect)>();
-            public readonly List<(Text t, int size)> texts = new List<(Text, int)>();
+            public readonly List<(PixelSegmentText t, int size)> texts = new List<(PixelSegmentText, int)>();
             public System.Action onEscape, onEnter, onAnyClick;
             public System.Action refresh;
         }
@@ -57,14 +56,14 @@ namespace SpectreEX.Menu
         Vector2Int lastScreen;
         readonly List<MenuScreen> stack = new List<MenuScreen>();
         MenuScreen main, vehicles, custom, options, matrix, about, help, controls, scores, notice;
-        Text noticeText;
+        PixelSegmentText noticeText;
         GameManager gm;
 
         // Name entry for the high-score table
         bool enteringName;
         string pendingName = "";
         int pendingScore, pendingLevel;
-        readonly List<Text> scoreRows = new List<Text>();
+        readonly List<PixelSegmentText> scoreRows = new List<PixelSegmentText>();
 
         public bool IsOpen => canvas != null && canvas.enabled;
 
@@ -72,10 +71,6 @@ namespace SpectreEX.Menu
         {
             gm = GameManager.Instance;
             GameSettings.Load();
-            if (segmentFont == null) segmentFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            // Sample the glyph atlas with point filtering so strokes stay solid black, with no grey fringe
-            PointFilterFont(segmentFont);
-            Font.textureRebuilt += PointFilterFont;
             buttonsTex = LoadTex("Buttons");
             dotSprite = MakeDotSprite();
             BuildCanvas();
@@ -88,13 +83,6 @@ namespace SpectreEX.Menu
         void OnDestroy()
         {
             if (Keyboard.current != null) Keyboard.current.onTextInput -= OnTextInput;
-            Font.textureRebuilt -= PointFilterFont;
-        }
-
-        void PointFilterFont(Font f)
-        {
-            if (f == segmentFont && f.material != null && f.material.mainTexture != null)
-                f.material.mainTexture.filterMode = FilterMode.Point;
         }
 
         // ---------- open / close ----------
@@ -269,7 +257,7 @@ namespace SpectreEX.Menu
             int[] rowY = { 40, 104, 168, 232 };
             Key[] keys = { Key.B, Key.S, Key.T, Key.U };
             var frames = new List<Image[]>();
-            var stats = new List<Text[]>();
+            var stats = new List<PixelSegmentText[]>();
             for (int i = 0; i < 4; i++)
             {
                 int idx = i;
@@ -293,9 +281,9 @@ namespace SpectreEX.Menu
                 {
                     foreach (var f in frames[i]) f.enabled = GameSettings.SelectedVehicle == i;
                     var v = GameSettings.Vehicle(i);
-                    stats[i][0].text = v.speed.ToString();
-                    stats[i][1].text = v.shields.ToString();
-                    stats[i][2].text = v.ammo.ToString();
+                    stats[i][0].Text = v.speed.ToString();
+                    stats[i][1].Text = v.shields.ToString();
+                    stats[i][2].Text = v.ammo.ToString();
                 }
             };
         }
@@ -334,10 +322,10 @@ namespace SpectreEX.Menu
             custom.refresh = () =>
             {
                 var c = GameSettings.Custom;
-                points.text = (VehicleSpec.TotalPoints - (c.speed + c.shields + c.ammo)).ToString();
-                speed.text = c.speed.ToString();
-                shields.text = c.shields.ToString();
-                ammo.text = c.ammo.ToString();
+                points.Text = (VehicleSpec.TotalPoints - (c.speed + c.shields + c.ammo)).ToString();
+                speed.Text = c.speed.ToString();
+                shields.Text = c.shields.ToString();
+                ammo.Text = c.ammo.ToString();
             };
         }
 
@@ -404,10 +392,8 @@ namespace SpectreEX.Menu
         void BuildControls()
         {
             controls = Panel("Controls", new Vector2(510, 292));
-            var t = AddText(controls, new Rect(22, 14, 470, 268), 9, Color.black, TextAnchor.UpperLeft);
-            t.horizontalOverflow = HorizontalWrapMode.Overflow;
-            t.lineSpacing = 1.15f;
-            t.text = Seg(
+            var t = AddText(controls, new Rect(22, 12, 470, 270), 9, Color.black, TextAnchor.UpperLeft);
+            t.Text = Seg(
                 "SPECTREEX CONTROLS\n\n" +
                 "DRIVE        ARROWS, WASD OR KEYPAD\n" +
                 "FIRE         SPACE, KEYPAD 0 OR MOUSE\n" +
@@ -433,11 +419,11 @@ namespace SpectreEX.Menu
             // Drawn over the robot artwork on the main menu, in the HUD's green segment display style
             scores = NewScreen("Scores", new Vector2(MainW, MainH));
             AddRect(scores, new Rect(9, 9, 362, 283), Color.black);
-            var title = AddText(scores, new Rect(9, 16, 362, 24), 15, new Color(0.25f, 0.78f, 0.27f), TextAnchor.MiddleCenter, segmentFont);
-            title.text = Seg("HIGH SCORES");
+            var title = AddText(scores, new Rect(9, 16, 362, 24), 15, new Color(0.25f, 0.78f, 0.27f), TextAnchor.MiddleCenter);
+            title.Text = Seg("HIGH SCORES");
             for (int i = 0; i < HighScores.Count; i++)
-                scoreRows.Add(AddText(scores, new Rect(24, 50 + i * 22, 332, 20), 11, new Color(0.25f, 0.78f, 0.27f), TextAnchor.MiddleLeft, segmentFont));
-            var footer = AddText(scores, new Rect(9, 270, 362, 18), 8, new Color(0.2f, 0.6f, 0.22f), TextAnchor.MiddleCenter, segmentFont);
+                scoreRows.Add(AddText(scores, new Rect(24, 50 + i * 22, 332, 20), 11, new Color(0.25f, 0.78f, 0.27f), TextAnchor.MiddleLeft));
+            var footer = AddText(scores, new Rect(9, 270, 362, 18), 8, new Color(0.2f, 0.6f, 0.22f), TextAnchor.MiddleCenter);
             scores.refresh = () =>
             {
                 var list = HighScores.Load();
@@ -453,12 +439,12 @@ namespace SpectreEX.Menu
                     if (i < list.Count)
                     {
                         var e = list[i];
-                        scoreRows[i].text = Seg($"{i + 1,2} {e.name,-9} {e.score,7} L{e.level:00}");
+                        scoreRows[i].Text = Seg($"{i + 1,2} {e.name,-9} {e.score,7} L{e.level:00}");
                         scoreRows[i].color = i == insertAt ? new Color(0.95f, 0.16f, 0.12f) : new Color(0.25f, 0.78f, 0.27f);
                     }
-                    else scoreRows[i].text = "";
+                    else scoreRows[i].Text = "";
                 }
-                footer.text = Seg(enteringName ? "TYPE YOUR NAME AND PRESS ENTER" : "PRESS ANY KEY");
+                footer.Text = Seg(enteringName ? "TYPE YOUR NAME AND PRESS ENTER" : "PRESS ANY KEY");
             };
             scores.onAnyClick = () => { if (!enteringName) Pop(); };
             scores.onEscape = () => { enteringName = false; Pop(); };
@@ -484,11 +470,10 @@ namespace SpectreEX.Menu
         {
             notice = Panel("Notice", new Vector2(300, 110));
             noticeText = AddText(notice, new Rect(14, 14, 272, 52), 9, Color.black, TextAnchor.MiddleCenter);
-            noticeText.horizontalOverflow = HorizontalWrapMode.Overflow;
             var ok = new Rect(110, 72, 80, 26);
             AddRect(notice, ok, Color.black);
             AddRect(notice, new Rect(ok.x + 2, ok.y + 2, ok.width - 4, ok.height - 4), new Color(0.75f, 0.75f, 0.75f));
-            AddText(notice, ok, 10, Color.black, TextAnchor.MiddleCenter).text = "OK";
+            AddText(notice, ok, 10, Color.black, TextAnchor.MiddleCenter).Text = "OK";
             Button(notice, ok, Pop);
             notice.onAnyClick = null;
             notice.onEscape = notice.onEnter = Pop;
@@ -496,7 +481,7 @@ namespace SpectreEX.Menu
 
         void ShowNotice(string text)
         {
-            noticeText.text = Seg(text);
+            noticeText.Text = Seg(text);
             Push(notice);
         }
 
@@ -571,25 +556,22 @@ namespace SpectreEX.Menu
 
         readonly List<(RectTransform stroke, RectTransform box)> strokes = new List<(RectTransform, RectTransform)>();
 
-        Text AddText(MenuScreen s, Rect r, int size, Color c, TextAnchor anchor, Font font = null)
+        // Pixel-grid DSEG14 text. 'size' is a rough point size: 15 and up draws the glyphs at twice
+        // the artwork's pixel size (titles), anything smaller at the artwork's own pixel size.
+        PixelSegmentText AddText(MenuScreen s, Rect r, int size, Color c, TextAnchor anchor)
         {
             var go = new GameObject("Text", typeof(RectTransform));
             go.transform.SetParent(s.root, false);
-            var t = go.AddComponent<Text>();
-            t.font = font != null ? font : segmentFont;
-            t.fontStyle = FontStyle.Normal;
+            var t = go.AddComponent<PixelSegmentText>();
             t.color = c;
             t.alignment = anchor;
-            t.horizontalOverflow = HorizontalWrapMode.Wrap;
-            t.verticalOverflow = VerticalWrapMode.Overflow;
             t.raycastTarget = false;
             s.placed.Add(((RectTransform)go.transform, r));
-            s.texts.Add((t, size));
+            s.texts.Add((t, size >= 15 ? 2 : 1));
             return t;
         }
 
-        // DSEG14: uppercase only, '!' is its full-width blank (a plain space is a narrow gap),
-        // and '~' lights every segment, so never show a literal tilde
+        // Uppercase, and DSEG's full-width blank for spaces so columns line up
         static string Seg(string s) => s.ToUpperInvariant().Replace(' ', '!');
 
         static Texture2D LoadTex(string name)
@@ -621,7 +603,12 @@ namespace SpectreEX.Menu
             scale = Mathf.Max(1, Mathf.Min(Screen.width / MainW, Screen.height / MainH));
             foreach (var s in AllScreens())
             {
-                s.root.sizeDelta = s.size * scale;
+                // Pin each screen's top-left to a whole screen pixel so every art and text pixel lands on the grid
+                Vector2 size = s.size * scale;
+                s.root.anchorMin = s.root.anchorMax = Vector2.zero;
+                s.root.pivot = Vector2.zero;
+                s.root.anchoredPosition = ScreenOrigin(s);
+                s.root.sizeDelta = size;
                 foreach (var (rt, r) in s.placed)
                 {
                     rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f);
@@ -629,25 +616,18 @@ namespace SpectreEX.Menu
                     rt.anchoredPosition = new Vector2(r.x, -r.y) * scale;
                     rt.sizeDelta = r.size * scale;
                 }
-                foreach (var (t, size) in s.texts) t.fontSize = EvenSegmentSize(size * scale);
+                foreach (var (t, mult) in s.texts) t.PixelScale = mult * scale;
             }
             // Corner to corner of the 11x11 interior: 11 * sqrt(2)
             foreach (var (stroke, box) in strokes)
                 stroke.sizeDelta = new Vector2(15.5f * scale, Mathf.Max(1, scale));
         }
 
-        // Pixel sizes at which DSEG14 rasterises with every segment the same thickness (measured with
-        // FreeType: 1px strokes at 10-16, 2px at 20-26, 3px at 30-37, 4px at 41-48). Sizes in between,
-        // such as 18, mix 1px and 2px segments and look uneven.
-        static readonly int[] EvenSizes = { 10, 11, 12, 13, 14, 15, 16, 20, 21, 22, 23, 24, 26, 30, 31, 32, 34, 36, 37, 41, 42, 44, 46, 47, 48 };
-
-        static int EvenSegmentSize(int wanted)
+        // Bottom-left of a screen, centred and rounded down to whole pixels
+        Vector2 ScreenOrigin(MenuScreen s)
         {
-            if (wanted > EvenSizes[EvenSizes.Length - 1]) return wanted;
-            int best = EvenSizes[0];
-            foreach (int s in EvenSizes)
-                if (Mathf.Abs(s - wanted) <= Mathf.Abs(best - wanted)) best = s;   // ties go to the larger size
-            return best;
+            Vector2 size = s.size * scale;
+            return new Vector2(Mathf.Floor((Screen.width - size.x) / 2f), Mathf.Floor((Screen.height - size.y) / 2f));
         }
 
         // ---------- navigation and input ----------
@@ -686,8 +666,7 @@ namespace SpectreEX.Menu
 
             // Mouse position in the top screen's image pixels (y down)
             Vector2 mouse = Mouse.current != null ? Mouse.current.position.ReadValue() : new Vector2(-1, -1);
-            Vector2 size = top.size * scale;
-            Vector2 origin = new Vector2((Screen.width - size.x) / 2f, (Screen.height - size.y) / 2f);
+            Vector2 origin = ScreenOrigin(top);
             Vector2 local = (mouse - origin) / scale;
             Vector2 img = new Vector2(local.x, top.size.y - local.y);
 

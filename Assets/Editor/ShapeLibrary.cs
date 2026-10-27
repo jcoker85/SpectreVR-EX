@@ -28,20 +28,25 @@ namespace SpectreEX.EditorTools
             return def;
         }
 
-        static Vector3[] Verts(ShapeDef s, float scale)
+        // warp (optional) reshapes each vertex in the shape's own units before scaling, so the result
+        // keeps uniform edge thickness - unlike stretching the finished model with its transform
+        static Vector3[] Verts(ShapeDef s, float scale, Func<Vector3, Vector3> warp)
         {
             var v = new Vector3[s.verts.Length / 3];
             for (int i = 0; i < v.Length; i++)
-                v[i] = new Vector3(s.verts[i * 3], s.verts[i * 3 + 1], s.verts[i * 3 + 2]) * scale;
+            {
+                var p = new Vector3(s.verts[i * 3], s.verts[i * 3 + 1], s.verts[i * 3 + 2]);
+                v[i] = (warp != null ? warp(p) : p) * scale;
+            }
             return v;
         }
 
         // Panels: every face fan-triangulated, emitted with both windings and flat normals,
         // so the original's mixed face orientation never leaves holes.
-        public static Mesh BodyMesh(int id, float scale)
+        public static Mesh BodyMesh(int id, float scale, Func<Vector3, Vector3> warp = null)
         {
             var s = Get(id);
-            var v = Verts(s, scale);
+            var v = Verts(s, scale, warp);
             var verts = new List<Vector3>();
             var tris = new List<int>();
             foreach (var f in s.faces)
@@ -66,10 +71,10 @@ namespace SpectreEX.EditorTools
         }
 
         // Glow lines: one thin square prism per unique polygon edge, merged into one mesh.
-        public static Mesh EdgeMesh(int id, float scale, float thickness)
+        public static Mesh EdgeMesh(int id, float scale, float thickness, Func<Vector3, Vector3> warp = null)
         {
             var s = Get(id);
-            var v = Verts(s, scale);
+            var v = Verts(s, scale, warp);
             var seen = new HashSet<long>();
             var verts = new List<Vector3>();
             var tris = new List<int>();
