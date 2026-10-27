@@ -42,6 +42,7 @@ namespace SpectreEX.EditorTools
         const int PlayerShape = 10011, RoverShape = 10010, TurretShape = 10034, OrbiterShape = 10017, SlicerShape = 10039, FlagShape = 10086;
         const float ShapeScale = 0.13f;
         const float EdgeThickness = 0.07f;
+        const float FlagHeightStretch = 3f;
 
         static Material floorMat, bodyMat, wallMat, blockMat, dotMat, cyanMat, flagMat, poleMat, dumpMat;
         static Material roverMat, turretMat, orbiterMat, slicerMat, enemyBoltMat;
@@ -372,12 +373,15 @@ namespace SpectreEX.EditorTools
             trigger.radius = 3f;
             trigger.center = new Vector3(0f, 1.5f, 0f);
 
-            // Original flag stand (pole on a base plate) with a red pennant at the top of the pole
+            // Original flag stand (pole on a base plate), stretched tall so flags stand well above
+            // the craft as in the original, with a red pennant at the top of the pole
             var visual = new GameObject("Visual").transform;
             visual.SetParent(f.transform, false);
             visual.localPosition = Vector3.zero;
-            SpectreModel("Stand", visual, FlagShape, 0.15f, poleMat, out var b);
-            MeshObj("Pennant", visual, pennant, flagMat, new Vector3(0.05f, b.max.y - 1.1f, 0f), new Vector3(1f, 1f, 1f), Quaternion.identity);
+            var stand = SpectreModel("Stand", visual, FlagShape, 0.15f, poleMat, out var b);
+            stand.localScale = new Vector3(1f, FlagHeightStretch, 1f);
+            float poleTop = b.max.y * FlagHeightStretch;
+            MeshObj("Pennant", visual, pennant, flagMat, new Vector3(0.05f, poleTop - 1.7f, 0f), new Vector3(1.5f, 1.5f, 1f), Quaternion.identity);
             NoShadows(f);
 
             var flag = f.AddComponent<Flag>();

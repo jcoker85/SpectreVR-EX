@@ -6,8 +6,8 @@ namespace SpectreEX.Hud
 {
     // The Spectre VR instrument panel, rebuilt for widescreen: green DSEG14 segment-display text,
     // LIVES / DAMAGE / AMMO and SCORE / LEVEL / TIME hugging the top-left, the H (hyperspace) and
-    // F (flags) gauges, WEAPON box and tick-mark radar hugging the top-right, the cockpit crosshair,
-    // and the big "LEVEL n" banner with its red tip line.
+    // F (flags) gauges and WEAPON box in the top-right corner, the tick-mark radar in the bottom-right
+    // corner, the cockpit crosshair, and the big "LEVEL n" banner with its red tip line.
     //
     // Layout units are a 480-unit-tall screen (the original's height); widths follow the real aspect.
     public class SpectreHud : MonoBehaviour
@@ -93,18 +93,21 @@ namespace SpectreEX.Hud
             levelValue = Value(mid, 56, r2);
             timeValue = Value(mid, 56, r3);
 
-            // Top-right corner: radar, with the WEAPON box and H / F gauges to its left
-            var right = Group("Right", new Vector2(1f, 1f), new Vector2(-Margin, -Margin));
-            radarRoot = NewRect("Radar", right);
-            Place(radarRoot, -2 * RadarRadius, 0, 2 * RadarRadius, 2 * RadarRadius);
-            float cx = -RadarRadius, cy = RadarRadius, rr = RadarRadius;
-            Line(right, cx, cy - rr, cx, cy - rr + 6, FrameWhite);
-            Line(right, cx, cy + rr - 6, cx, cy + rr, FrameWhite);
-            Line(right, cx - rr, cy, cx - rr + 6, cy, FrameWhite);
-            Line(right, cx + rr - 6, cy, cx + rr, cy, FrameWhite);
+            // Bottom-right corner: radar (tick marks around an invisible ring, dots for everything nearby)
+            var radarCorner = Group("RadarCorner", new Vector2(1f, 0f), new Vector2(-Margin, Margin));
+            float rd = 2 * RadarRadius;
+            radarRoot = NewRect("Radar", radarCorner);
+            Place(radarRoot, -rd, -rd, rd, rd);
+            float cx = -RadarRadius, cy = -RadarRadius, rr = RadarRadius;
+            Line(radarCorner, cx, cy - rr, cx, cy - rr + 6, FrameWhite);
+            Line(radarCorner, cx, cy + rr - 6, cx, cy + rr, FrameWhite);
+            Line(radarCorner, cx - rr, cy, cx - rr + 6, cy, FrameWhite);
+            Line(radarCorner, cx + rr - 6, cy, cx + rr, cy, FrameWhite);
 
-            float wx = -2 * RadarRadius - 16 - 38;
-            Label(right, "WEAPON", wx - 4, r1);
+            // Top-right corner: WEAPON box flush right, H / F gauges to its left
+            var right = Group("Right", new Vector2(1f, 1f), new Vector2(-Margin, -Margin));
+            float wx = -38;
+            MakeText(right, "WEAPON", 0, r1, LabelSize, LabelGreen, TextAnchor.MiddleRight);
             Frame(right, wx, 17, 38, 38, FrameWhite);
             var icon = NewRect("WeaponIcon", right);
             Place(icon, wx + 7, 24, 24, 24);
@@ -147,7 +150,7 @@ namespace SpectreEX.Hud
             // Bottom: transient messages and the opening controls hint
             var bottom = Group("Bottom", new Vector2(0.5f, 0f), Vector2.zero);
             message = MakeText(bottom, "", 0, -60, 13, AlertRed, TextAnchor.MiddleCenter);
-            hint = MakeText(bottom, "ARROWS DRIVE   SPACE FIRE   TAB VIEW   BKSP HYPERSPACE   J JUMP", 0, -Margin - 6, 8, LabelGreen, TextAnchor.MiddleCenter);
+            hint = MakeText(bottom, "ARROWS DRIVE  SPACE FIRE  TAB VIEW  BKSP HYPERSPACE  J JUMP", 0, -Margin - 6, 8, LabelGreen, TextAnchor.MiddleCenter);
         }
 
         RectTransform NewRect(string name, Transform parent)
@@ -198,9 +201,12 @@ namespace SpectreEX.Hud
             t.horizontalOverflow = HorizontalWrapMode.Overflow;
             t.verticalOverflow = VerticalWrapMode.Overflow;
             t.raycastTarget = false;
-            t.text = s;
+            t.text = Seg(s);
             return t;
         }
+
+        // DSEG draws ' ' as a narrow gap; '!' is its full-width blank, so words keep their spacing
+        static string Seg(string s) => s?.Replace(' ', '!');
 
         Text Label(RectTransform parent, string s, float x, float y) => MakeText(parent, s, x, y, LabelSize, LabelGreen, TextAnchor.MiddleLeft);
         Text Value(RectTransform parent, float x, float y) => MakeText(parent, "", x, y, ValueSize, DigitGreen, TextAnchor.MiddleLeft);
@@ -279,8 +285,8 @@ namespace SpectreEX.Hud
         {
             statsRoot.SetActive(false);
             bannerRoot.SetActive(true);
-            bannerTitle.text = title;
-            bannerTip.text = tip ?? "";
+            bannerTitle.text = Seg(title);
+            bannerTip.text = Seg(tip ?? "");
         }
 
         void OnStats(string[] labels, string[] values)
@@ -289,7 +295,7 @@ namespace SpectreEX.Hud
             statsRoot.SetActive(true);
             for (int i = 0; i < statLabels.Count; i++)
             {
-                statLabels[i].text = i < labels.Length ? labels[i] : "";
+                statLabels[i].text = i < labels.Length ? Seg(labels[i]) : "";
                 statValues[i].text = i < values.Length ? values[i] : "";
             }
         }
@@ -302,7 +308,7 @@ namespace SpectreEX.Hud
 
         public void Flash(string text, float seconds = 1.5f)
         {
-            message.text = text;
+            message.text = Seg(text);
             messageUntil = Time.time + seconds;
         }
 
