@@ -13,9 +13,9 @@ namespace SpectreEX.EditorTools
     // reproducible: SpectreEX > Build Arena Scene. Re-running overwrites Assets/Scenes/Arena.unity,
     // the prefabs in Assets/Prefabs and the generated meshes/textures.
     //
-    // Look: Spectre VR's black void with tall glowing gradient walls (recoloured per level at runtime),
-    // a dotted floor and flat-coloured robots, kept on a ray-traced glossy floor with the neon-edged
-    // player tank and obstacles from the first prototype.
+    // Look: Spectre VR's black void with tall glowing gradient walls (recoloured per level at runtime)
+    // and a dotted floor, on a ray-traced glossy floor. The player craft and robots use the original
+    // game's 3D shapes (see ShapeLibrary) rendered as black panels with neon edges, like the obstacles.
     public static class ArenaBuilder
     {
         const string MaterialDir = "Assets/Materials";
@@ -25,6 +25,7 @@ namespace SpectreEX.EditorTools
         const string ScenePath = "Assets/Scenes/Arena.unity";
         const string VolumePath = "Assets/Settings/ArenaVolume.asset";
         const string PlayerLayer = "PlayerModel";
+        const string HudFontPath = "Assets/Fonts/DSEG14Classic-Light.ttf";
 
         public const float ArenaHalfSize = 120f;
         const float DotSpacing = 6f;
@@ -35,10 +36,17 @@ namespace SpectreEX.EditorTools
         static readonly Color RoverPink = new Color(1f, 0.32f, 0.45f);
         static readonly Color Red = new Color(1f, 0.08f, 0.06f);
         static readonly Color OrbiterBlue = new Color(0.15f, 0.25f, 1f);
+        static readonly Color SlicerOrange = new Color(1f, 0.3f, 0.05f);
+
+        // Original Spectre VR shape ids (CENTRAL.MAT) and the scale that maps their units to metres
+        const int PlayerShape = 10011, RoverShape = 10010, TurretShape = 10034, OrbiterShape = 10017, SlicerShape = 10039, FlagShape = 10086;
+        const float ShapeScale = 0.13f;
+        const float EdgeThickness = 0.07f;
 
         static Material floorMat, bodyMat, wallMat, blockMat, dotMat, cyanMat, flagMat, poleMat, dumpMat;
         static Material roverMat, turretMat, orbiterMat, slicerMat, enemyBoltMat;
         static readonly List<Vector3> obstacleCentres = new List<Vector3>();
+        static Bounds playerBounds;
 
         [MenuItem("SpectreEX/Build Arena Scene")]
         public static void Build()
@@ -70,7 +78,7 @@ namespace SpectreEX.EditorTools
             gm.orbiterPrefab = prefabs.orbiter;
             gm.slicerPrefab = prefabs.slicer;
             gmGo.AddComponent<MusicPlayer>();
-            gmGo.AddComponent<SpectreHud>();
+            gmGo.AddComponent<SpectreHud>().segmentFont = AssetDatabase.LoadAssetAtPath<Font>(HudFontPath);
 
             BuildCamera(player.transform);
 
@@ -119,10 +127,11 @@ namespace SpectreEX.EditorTools
             flagMat = GlowMaterial("FlagRed", Red, 12f);
             poleMat = GlowMaterial("FlagPole", Color.white, 10.5f);
             dumpMat = GlowMaterial("AmmoDumpWhite", Color.white, 11f);
-            roverMat = SolidMaterial("RoverPink", RoverPink, 9.5f);
-            turretMat = SolidMaterial("TurretRed", Red, 9.5f);
-            orbiterMat = SolidMaterial("OrbiterBlue", OrbiterBlue, 10f);
-            slicerMat = SolidMaterial("SlicerRed", Red, 10f);
+            // Robots share the player's look: black panels, edges glowing in their own colour
+            roverMat = GlowMaterial("RoverPink", RoverPink, 12.5f);
+            turretMat = GlowMaterial("TurretRed", Red, 12.5f);
+            orbiterMat = GlowMaterial("OrbiterBlue", OrbiterBlue, 13f);
+            slicerMat = GlowMaterial("SlicerRed", SlicerOrange, 12.5f);
             enemyBoltMat = GlowMaterial("EnemyBolt", new Color(1f, 0.3f, 0.2f), 12.5f);
             AssetDatabase.SaveAssets();
         }
@@ -158,20 +167,11 @@ namespace SpectreEX.EditorTools
             mat.SetFloat("_Smoothness", 0.5f);
             mat.SetFloat("_Metallic", 0f);
             mat.SetTexture("_EmissiveColorMap", emissiveMap);
+            mat.SetFloat("_DoubleSidedEnable", 1f);
             HDMaterial.SetUseEmissiveIntensity(mat, true);
             HDMaterial.SetEmissiveColor(mat, color);
             HDMaterial.SetEmissiveIntensity(mat, ev100, EmissiveIntensityUnit.EV100);
             HDMaterial.ValidateMaterial(mat);
-            EditorUtility.SetDirty(mat);
-            return mat;
-        }
-
-        // Flat-coloured robot polygons: lit colour plus enough self-glow to read in the dark.
-        static Material SolidMaterial(string name, Color color, float ev100)
-        {
-            var mat = GlowMaterial(name, color, ev100);
-            mat.SetColor("_BaseColor", color * 0.6f);
-            mat.SetFloat("_Smoothness", 0.35f);
             EditorUtility.SetDirty(mat);
             return mat;
         }
@@ -215,6 +215,7 @@ namespace SpectreEX.EditorTools
         static Mesh SaveMesh(Mesh mesh, string name)
         {
             string path = $"{MeshDir}/{name}.asset";
+            mesh.name = name;
             var existing = AssetDatabase.LoadAssetAtPath<Mesh>(path);
             if (existing != null)
             {
@@ -224,25 +225,6 @@ namespace SpectreEX.EditorTools
             }
             AssetDatabase.CreateAsset(mesh, path);
             return mesh;
-        }
-
-        static Mesh Pyramid()
-        {
-            var v = new[] { new Vector3(-0.5f, 0, -0.5f), new Vector3(0.5f, 0, -0.5f), new Vector3(0.5f, 0, 0.5f), new Vector3(-0.5f, 0, 0.5f), new Vector3(0, 1, 0) };
-            return FlatMesh("Pyramid", v, new[] { 0, 4, 1, 1, 4, 2, 2, 4, 3, 3, 4, 0, 0, 1, 2, 0, 2, 3 });
-        }
-
-        static Mesh Octahedron()
-        {
-            var v = new[] { new Vector3(0, 1, 0), new Vector3(0, -1, 0), new Vector3(1, 0, 0), new Vector3(-1, 0, 0), new Vector3(0, 0, 1), new Vector3(0, 0, -1) };
-            return FlatMesh("Octahedron", v, new[] { 0, 4, 2, 0, 2, 5, 0, 5, 3, 0, 3, 4, 1, 2, 4, 1, 5, 2, 1, 3, 5, 1, 4, 3 });
-        }
-
-        // Thin crystal shard used for slicer blades
-        static Mesh Shard()
-        {
-            var v = new[] { new Vector3(0, 0, 0), new Vector3(1, 0.35f, 0), new Vector3(0.35f, 1, 0), new Vector3(0.35f, 0.35f, 0.25f), new Vector3(0.35f, 0.35f, -0.25f) };
-            return FlatMesh("Shard", v, new[] { 0, 3, 1, 1, 3, 2, 2, 3, 0, 0, 1, 4, 1, 2, 4, 2, 0, 4 });
         }
 
         static Mesh Pennant()
@@ -355,19 +337,31 @@ namespace SpectreEX.EditorTools
 
         static Prefabs BuildPrefabs()
         {
-            var pyramid = Pyramid();
-            var octa = Octahedron();
-            var shard = Shard();
             var pennant = Pennant();
 
             var p = new Prefabs();
             p.flag = SavePrefab(BuildFlag(pennant)).GetComponent<Flag>();
             p.dump = SavePrefab(BuildAmmoDump()).GetComponent<AmmoDump>();
-            p.rover = SavePrefab(BuildRover(pyramid));
+            p.rover = SavePrefab(BuildRover());
             p.turret = SavePrefab(BuildTurret());
-            p.orbiter = SavePrefab(BuildOrbiter(octa));
-            p.slicer = SavePrefab(BuildSlicer(shard));
+            p.orbiter = SavePrefab(BuildOrbiter());
+            p.slicer = SavePrefab(BuildSlicer());
             return p;
+        }
+
+        // An original Spectre VR shape in the SpectreEX style: black panels with glowing edges.
+        static Transform SpectreModel(string name, Transform parent, int shapeId, float scale, Material glow, out Bounds bounds)
+        {
+            string key = $"Spectre_{shapeId}_{Mathf.RoundToInt(scale * 1000)}";
+            var body = SaveMesh(ShapeLibrary.BodyMesh(shapeId, scale), key + "_Body");
+            var edges = SaveMesh(ShapeLibrary.EdgeMesh(shapeId, scale, EdgeThickness), key + "_Edges");
+            var model = new GameObject(name).transform;
+            model.SetParent(parent, false);
+            MeshObj("Panels", model, body, bodyMat, Vector3.zero, Vector3.one, Quaternion.identity);
+            var e = MeshObj("Edges", model, edges, glow, Vector3.zero, Vector3.one, Quaternion.identity);
+            e.GetComponent<MeshRenderer>().shadowCastingMode = ShadowCastingMode.Off;
+            bounds = body.bounds;
+            return model;
         }
 
         static GameObject BuildFlag(Mesh pennant)
@@ -378,11 +372,12 @@ namespace SpectreEX.EditorTools
             trigger.radius = 3f;
             trigger.center = new Vector3(0f, 1.5f, 0f);
 
+            // Original flag stand (pole on a base plate) with a red pennant at the top of the pole
             var visual = new GameObject("Visual").transform;
             visual.SetParent(f.transform, false);
             visual.localPosition = Vector3.zero;
-            Box("Pole", visual, new Vector3(0f, 1.6f, 0f), new Vector3(0.12f, 3.2f, 0.12f), poleMat, false);
-            MeshObj("Pennant", visual, pennant, flagMat, new Vector3(0.06f, 2.0f, 0f), new Vector3(1f, 1.2f, 1f), Quaternion.identity);
+            SpectreModel("Stand", visual, FlagShape, 0.15f, poleMat, out var b);
+            MeshObj("Pennant", visual, pennant, flagMat, new Vector3(0.05f, b.max.y - 1.1f, 0f), new Vector3(1f, 1f, 1f), Quaternion.identity);
             NoShadows(f);
 
             var flag = f.AddComponent<Flag>();
@@ -439,23 +434,24 @@ namespace SpectreEX.EditorTools
             return m;
         }
 
-        static GameObject BuildRover(Mesh pyramid)
+        static BoxCollider FitCollider(GameObject root, Bounds b)
+        {
+            var col = root.AddComponent<BoxCollider>();
+            col.center = b.center;
+            col.size = Vector3.Max(b.size, new Vector3(0.6f, 0.6f, 0.6f));
+            return col;
+        }
+
+        // Rover: the original's finned robot tank
+        static GameObject BuildRover()
         {
             var root = new GameObject("Rover");
             var rb = root.AddComponent<Rigidbody>();
             rb.mass = 50f;
-            var col = root.AddComponent<BoxCollider>();
-            col.center = new Vector3(0f, 0.9f, 0f);
-            col.size = new Vector3(3f, 1.8f, 3.6f);
-            col.sharedMaterial = NoFriction();
+            SpectreModel("Model", root.transform, RoverShape, ShapeScale, roverMat, out var b);
+            FitCollider(root, b).sharedMaterial = NoFriction();
 
-            var model = new GameObject("Model").transform;
-            model.SetParent(root.transform, false);
-            Box("Hull", model, new Vector3(0f, 0.45f, 0f), new Vector3(3f, 0.8f, 3.6f), roverMat, false);
-            MeshObj("Turret", model, pyramid, roverMat, new Vector3(0f, 0.85f, -0.2f), new Vector3(2.4f, 1.3f, 2.6f), Quaternion.identity);
-            Box("Barrel", model, new Vector3(0f, 1.2f, 1.5f), new Vector3(0.25f, 0.25f, 2f), roverMat, false);
-
-            var muzzle = Muzzle(root.transform, new Vector3(0f, 1.2f, 2.8f));
+            var muzzle = Muzzle(root.transform, new Vector3(0f, b.center.y + 0.2f, b.max.z + 0.4f));
             root.AddComponent<TankMotor>().maxSpeed = 16f;
             AddEnemyWeapon(root, muzzle, 1.5f, 55f);
             AddHealth(root, 1, 250, roverMat);
@@ -463,21 +459,17 @@ namespace SpectreEX.EditorTools
             return root;
         }
 
+        // Gun turret: the original column, widened; the whole column swivels to aim
         static GameObject BuildTurret()
         {
             var root = new GameObject("Turret");
+            var head = SpectreModel("Head", root.transform, TurretShape, ShapeScale, turretMat, out var b);
+            head.localScale = new Vector3(1.8f, 1f, 1.8f);
             var col = root.AddComponent<CapsuleCollider>();
-            col.center = new Vector3(0f, 2f, 0f);
-            col.height = 4f;
-            col.radius = 1.4f;
-
-            Prim(PrimitiveType.Cylinder, "Base", root.transform, new Vector3(0f, 1.4f, 0f), new Vector3(2.4f, 1.4f, 2.4f), turretMat);
-            var head = new GameObject("Head").transform;
-            head.SetParent(root.transform, false);
-            head.localPosition = new Vector3(0f, 3.2f, 0f);
-            Box("Dome", head, Vector3.zero, new Vector3(1.8f, 1f, 1.8f), turretMat, false);
-            Box("Barrel", head, new Vector3(0f, 0f, 1.4f), new Vector3(0.3f, 0.3f, 1.8f), turretMat, false);
-            var muzzle = Muzzle(head, new Vector3(0f, 0f, 2.5f));
+            col.center = new Vector3(0f, b.size.y * 0.5f, 0f);
+            col.height = b.size.y;
+            col.radius = Mathf.Max(b.extents.x, b.extents.z) * 1.8f;
+            var muzzle = Muzzle(head, new Vector3(0f, b.max.y * 0.8f, b.max.z + 0.6f));
 
             AddEnemyWeapon(root, muzzle, 1.8f, 60f);
             AddHealth(root, 3, 500, turretMat);
@@ -485,14 +477,15 @@ namespace SpectreEX.EditorTools
             return root;
         }
 
-        static GameObject BuildOrbiter(Mesh octa)
+        // Orbiter: the original spinning-top gem, hovering
+        static GameObject BuildOrbiter()
         {
             var root = new GameObject("Orbiter");
             root.AddComponent<Rigidbody>();
+            var body = SpectreModel("Body", root.transform, OrbiterShape, 0.18f, orbiterMat, out var b);
+            body.localPosition = -b.center;   // spin about its own middle
             var col = root.AddComponent<SphereCollider>();
-            col.radius = 1.4f;
-
-            var body = MeshObj("Body", root.transform, octa, orbiterMat, Vector3.zero, new Vector3(1.3f, 2f, 1.3f), Quaternion.identity).transform;
+            col.radius = Mathf.Max(b.extents.x, b.extents.y, b.extents.z);
             var muzzle = Muzzle(root.transform, Vector3.zero);
             AddEnemyWeapon(root, muzzle, 2.6f, 50f);
             AddHealth(root, 2, 400, orbiterMat);
@@ -501,21 +494,29 @@ namespace SpectreEX.EditorTools
             return root;
         }
 
-        static GameObject BuildSlicer(Mesh shard)
+        // Slicer: two of the original's long blades crossed, spinning flat like a rotor
+        static GameObject BuildSlicer()
         {
             var root = new GameObject("Slicer");
             var rb = root.AddComponent<Rigidbody>();
             rb.mass = 20f;
-            var col = root.AddComponent<SphereCollider>();
-            col.center = new Vector3(0f, 1.3f, 0f);
-            col.radius = 1.4f;
-            col.sharedMaterial = NoFriction();
 
             var blades = new GameObject("Blades").transform;
             blades.SetParent(root.transform, false);
-            blades.localPosition = new Vector3(0f, 1.3f, 0f);
-            for (int i = 0; i < 3; i++)
-                MeshObj("Blade", blades, shard, slicerMat, Vector3.zero, new Vector3(2.4f, 1.6f, 1f), Quaternion.Euler(0f, i * 120f, 0f));
+            blades.localPosition = new Vector3(0f, 1.2f, 0f);
+            Bounds b = default;
+            for (int i = 0; i < 2; i++)
+            {
+                var pivot = new GameObject("BladePivot").transform;
+                pivot.SetParent(blades, false);
+                pivot.localRotation = Quaternion.Euler(0f, i * 90f, 0f);
+                var blade = SpectreModel("Blade", pivot, SlicerShape, ShapeScale, slicerMat, out b);
+                blade.localPosition = -b.center;
+            }
+            var col = root.AddComponent<SphereCollider>();
+            col.center = blades.localPosition;
+            col.radius = b.extents.z;
+            col.sharedMaterial = NoFriction();
 
             AddHealth(root, 1, 300, slicerMat);
             var ai = root.AddComponent<SlicerAI>();
@@ -563,12 +564,29 @@ namespace SpectreEX.EditorTools
                 (new Vector3(ArenaHalfSize + 1f, WallHeight / 2f, 0f), new Vector3(2f, WallHeight, len)),
                 (new Vector3(-ArenaHalfSize - 1f, WallHeight / 2f, 0f), new Vector3(2f, WallHeight, len)),
             };
+            // The cube primitive's UVs run upside down on some faces, flipping the gradient. So each wall is
+            // an invisible box collider plus an inward-facing quad whose UVs always put the bright end at the floor.
+            var faceYaw = new[] { 0f, 180f, 90f, -90f };   // quad front (-Z) turned to face the arena centre
             var renderers = new List<Renderer>();
-            foreach (var (pos, size) in defs)
+            for (int i = 0; i < defs.Length; i++)
             {
+                var (pos, size) = defs[i];
                 var w = Box("Wall", walls, pos, size, wallMat);
-                w.GetComponent<MeshRenderer>().shadowCastingMode = ShadowCastingMode.Off;
-                renderers.Add(w.GetComponent<Renderer>());
+                Object.DestroyImmediate(w.GetComponent<MeshRenderer>());
+                Object.DestroyImmediate(w.GetComponent<MeshFilter>());
+
+                var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                q.name = "Glow";
+                Object.DestroyImmediate(q.GetComponent<Collider>());
+                q.transform.SetParent(walls, false);
+                Vector3 inward = -new Vector3(Mathf.Sign(pos.x) * (Mathf.Abs(pos.x) > 1f ? 1f : 0f), 0f, Mathf.Sign(pos.z) * (Mathf.Abs(pos.z) > 1f ? 1f : 0f));
+                q.transform.localPosition = new Vector3(pos.x, WallHeight / 2f, pos.z) + inward * 1.01f;
+                q.transform.localRotation = Quaternion.Euler(0f, faceYaw[i], 0f);
+                q.transform.localScale = new Vector3(len, WallHeight, 1f);
+                var r = q.GetComponent<MeshRenderer>();
+                r.sharedMaterial = wallMat;
+                r.shadowCastingMode = ShadowCastingMode.Off;
+                renderers.Add(r);
             }
             return renderers.ToArray();
         }
@@ -611,27 +629,16 @@ namespace SpectreEX.EditorTools
 
             var rb = root.AddComponent<Rigidbody>();
             rb.mass = 50f;
-            var col = root.AddComponent<BoxCollider>();
-            col.center = new Vector3(0f, 0.75f, 0f);
-            col.size = new Vector3(3f, 1.5f, 4.4f);
-            col.sharedMaterial = NoFriction();
 
-            var model = new GameObject("Model").transform;
-            model.SetParent(root.transform, false);
-            var hullSize = new Vector3(3f, 0.9f, 4.4f);
-            var hullPos = new Vector3(0f, 0.55f, 0f);
-            Box("Hull", model, hullPos, hullSize, bodyMat, false);
-            AddEdges(model, hullPos, hullSize, 0.09f, cyanMat);
-            var turretSize = new Vector3(1.8f, 0.6f, 2f);
-            var turretPos = new Vector3(0f, 1.3f, -0.3f);
-            Box("Turret", model, turretPos, turretSize, bodyMat, false);
-            AddEdges(model, turretPos, turretSize, 0.07f, cyanMat);
-            Box("Barrel", model, new Vector3(0f, 1.3f, 1.7f), new Vector3(0.22f, 0.22f, 2.4f), cyanMat, false);
+            // Default "Balance" Spectre: the original's low wedge hull with its raised canopy
+            var model = SpectreModel("Model", root.transform, PlayerShape, 0.25f, cyanMat, out var b);
+            FitCollider(root, b).sharedMaterial = NoFriction();
             NoShadows(model.gameObject);
             int layer = LayerMask.NameToLayer(PlayerLayer);
             if (layer >= 0) SetLayerRecursive(model.gameObject, layer);
+            playerBounds = b;
 
-            var muzzle = Muzzle(root.transform, new Vector3(0f, 1.3f, 3.2f));
+            var muzzle = Muzzle(root.transform, new Vector3(0f, b.center.y + 0.2f, b.max.z + 0.4f));
 
             // "Balance" Spectre: middling speed, 5 shields, 30 rounds
             root.AddComponent<TankMotor>().maxSpeed = 18f;
@@ -668,6 +675,8 @@ namespace SpectreEX.EditorTools
             hd.backgroundColorHDR = Color.black;
             var view = camGo.AddComponent<ViewCamera>();
             view.target = player;
+            // Sit just above the canopy, a little forward of the hull's middle
+            view.cockpitOffset = new Vector3(0f, playerBounds.max.y + 0.35f, playerBounds.center.z + 0.5f);
             camGo.transform.SetPositionAndRotation(player.position + view.cockpitOffset, player.rotation);
         }
 
