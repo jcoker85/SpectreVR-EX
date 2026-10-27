@@ -69,7 +69,11 @@ namespace SpectreEX
 
         void SetAlive(bool alive)
         {
-            foreach (var r in GetComponentsInChildren<Renderer>()) r.enabled = alive;
+            foreach (var r in GetComponentsInChildren<Renderer>())
+            {
+                r.enabled = alive;
+                if (alive) GameManager.ApplyFilled(r);   // honour the Options "Filled" setting
+            }
             foreach (var c in GetComponentsInChildren<Collider>()) c.enabled = alive;
             if (rb != null)
             {

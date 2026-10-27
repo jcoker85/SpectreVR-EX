@@ -43,6 +43,7 @@ namespace SpectreEX.EditorTools
         const float ShapeScale = 0.13f;
         const float EdgeThickness = 0.07f;
         const float FlagHeightStretch = 3f;
+        const float FlagBaseScale = 0.35f;   // keeps the base pyramid small next to the craft
 
         static Material floorMat, bodyMat, wallMat, blockMat, dotMat, cyanMat, flagMat, poleMat, dumpMat;
         static Material roverMat, turretMat, orbiterMat, slicerMat, enemyBoltMat;
@@ -54,6 +55,8 @@ namespace SpectreEX.EditorTools
         {
             foreach (var d in new[] { MaterialDir, MeshDir, TextureDir, PrefabDir, "Assets/Scenes" }) Directory.CreateDirectory(d);
             EnsureLayer(PlayerLayer);
+            ConfigurePixelArt("Assets/Resources/Menu");
+            ConfigurePixelArt("Assets/Resources/HUD");
             CreateMaterials();
 
             var prefabs = BuildPrefabs();
@@ -79,7 +82,10 @@ namespace SpectreEX.EditorTools
             gm.orbiterPrefab = prefabs.orbiter;
             gm.slicerPrefab = prefabs.slicer;
             gmGo.AddComponent<MusicPlayer>();
-            gmGo.AddComponent<SpectreHud>().segmentFont = AssetDatabase.LoadAssetAtPath<Font>(HudFontPath);
+            var hudFont = AssetDatabase.LoadAssetAtPath<Font>(HudFontPath);
+            gmGo.AddComponent<SpectreHud>().segmentFont = hudFont;
+            gmGo.AddComponent<SpectreEX.Menu.MainMenu>().segmentFont = hudFont;
+            gm.floorDots = GameObject.Find("FloorDots").GetComponent<Renderer>();
 
             BuildCamera(player.transform);
 
@@ -107,6 +113,26 @@ namespace SpectreEX.EditorTools
                 }
             }
             Debug.LogWarning("SpectreEX: no free layer for " + name);
+        }
+
+        // Original 1993 artwork: keep exact pixels (no resize to power of two, no mips, no compression)
+        static void ConfigurePixelArt(string folder)
+        {
+            foreach (var guid in AssetDatabase.FindAssets("t:Texture2D", new[] { folder }))
+            {
+                var path = AssetDatabase.GUIDToAssetPath(guid);
+                var imp = (TextureImporter)AssetImporter.GetAtPath(path);
+                if (imp == null) continue;
+                bool changed = imp.npotScale != TextureImporterNPOTScale.None || imp.mipmapEnabled || imp.filterMode != FilterMode.Point
+                               || imp.textureCompression != TextureImporterCompression.Uncompressed || imp.wrapMode != TextureWrapMode.Clamp;
+                if (!changed) continue;
+                imp.npotScale = TextureImporterNPOTScale.None;
+                imp.mipmapEnabled = false;
+                imp.filterMode = FilterMode.Point;
+                imp.wrapMode = TextureWrapMode.Clamp;
+                imp.textureCompression = TextureImporterCompression.Uncompressed;
+                imp.SaveAndReimport();
+            }
         }
 
         static void SetLayerRecursive(GameObject go, int layer)
@@ -379,7 +405,7 @@ namespace SpectreEX.EditorTools
             visual.SetParent(f.transform, false);
             visual.localPosition = Vector3.zero;
             var stand = SpectreModel("Stand", visual, FlagShape, 0.15f, poleMat, out var b);
-            stand.localScale = new Vector3(1f, FlagHeightStretch, 1f);
+            stand.localScale = new Vector3(FlagBaseScale, FlagHeightStretch, FlagBaseScale);
             float poleTop = b.max.y * FlagHeightStretch;
             MeshObj("Pennant", visual, pennant, flagMat, new Vector3(0.05f, poleTop - 1.7f, 0f), new Vector3(1.5f, 1.5f, 1f), Quaternion.identity);
             NoShadows(f);

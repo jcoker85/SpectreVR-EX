@@ -1,10 +1,12 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
 namespace SpectreEX
 {
-    // Plays the original Spectre VR MIDI soundtrack (pre-rendered to OGG by Tools/midisynth.py,
-    // stored in Assets/Resources/Music). M toggles music, N skips to the next track.
+    // Plays the original Spectre VR MIDI soundtrack (rendered to OGG through GeneralUser GS by
+    // Tools/fluid_render.py, stored in Assets/Resources/Music). Levels draw from the music styles
+    // ticked in Options; the menu plays the Spectre theme. M toggles music, N skips the track.
     public class MusicPlayer : MonoBehaviour
     {
         static MusicPlayer instance;
@@ -19,13 +21,10 @@ namespace SpectreEX
         }
 
         public float volume = 0.45f;
-        public string[] levelPlaylist =
-        {
-            "LEVEL1", "LEVEL2", "LEVEL3", "HOUSEVR", "4FLYING1", "RAVER20", "CW", "FUNKY0",
-            "SPACEWA", "JAWS22", "GUITAR33", "HENDRIX", "MARCH11", "VRGUITA",
-        };
+        public string menuTheme = "SPECTRE";
 
         AudioSource source;
+        List<string> playlist = new List<string>();
         int trackIndex;
         bool muted;
 
@@ -36,12 +35,21 @@ namespace SpectreEX
             source.spatialBlend = 0f;
             source.loop = true;
             source.volume = volume;
+            source.ignoreListenerPause = true;
         }
 
-        public void PlayForLevel(int level) => PlayIndex(level - 1);
+        public void PlayMenuTheme() => PlayTrack(menuTheme);
+
+        public void PlayForLevel(int level)
+        {
+            playlist = GameSettings.Playlist();
+            if (playlist.Count == 0) { source.Stop(); return; }
+            PlayIndex(level - 1);
+        }
 
         public void PlayTrack(string name, bool loop = true)
         {
+            if (!GameSettings.MusicOn) { source.Stop(); return; }
             var clip = Resources.Load<AudioClip>("Music/" + name);
             if (clip == null) { Debug.LogWarning("SpectreEX: missing music " + name); return; }
             source.clip = clip;
@@ -51,8 +59,9 @@ namespace SpectreEX
 
         void PlayIndex(int i)
         {
-            trackIndex = ((i % levelPlaylist.Length) + levelPlaylist.Length) % levelPlaylist.Length;
-            PlayTrack(levelPlaylist[trackIndex]);
+            if (playlist.Count == 0) return;
+            trackIndex = ((i % playlist.Count) + playlist.Count) % playlist.Count;
+            PlayTrack(playlist[trackIndex]);
         }
 
         void Update()
@@ -65,8 +74,7 @@ namespace SpectreEX
                 if (muted) source.Pause(); else source.UnPause();
                 if (!muted && !source.isPlaying) source.Play();
             }
-            if (k.nKey.wasPressedThisFrame) PlayIndex(trackIndex + 1);
-            if (k.sKey.wasPressedThisFrame && k.ctrlKey.isPressed) Sfx.Enabled = !Sfx.Enabled;
+            if (k.nKey.wasPressedThisFrame && playlist.Count > 0) PlayIndex(trackIndex + 1);
         }
     }
 }

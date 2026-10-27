@@ -41,7 +41,8 @@ namespace SpectreEX
         void Update()
         {
             var gm = GameManager.Instance;
-            bool canAct = !Health.IsDead && (gm == null || gm.Playing);
+            if (gm != null && gm.Demo) return;   // DemoPilot is driving
+            bool canAct = !Health.IsDead && (gm == null || gm.Playing) && (gm == null || !gm.Paused);
             if (!canAct) { Motor.SetInput(0f, 0f); return; }
 
             HyperspaceEnergy = Mathf.Min(1f, HyperspaceEnergy + Time.deltaTime / hyperspaceRechargeSeconds);
@@ -64,7 +65,7 @@ namespace SpectreEX
             var m = Mouse.current;
             if (m != null) fire |= m.leftButton.isPressed;
 
-            var g = Gamepad.current;
+            var g = GameSettings.Joystick ? Gamepad.current : null;
             if (g != null)
             {
                 Vector2 stick = g.leftStick.ReadValue();

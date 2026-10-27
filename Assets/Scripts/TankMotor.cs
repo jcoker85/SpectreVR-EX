@@ -40,6 +40,10 @@ namespace SpectreEX
             flat = Vector3.MoveTowards(flat, target, acceleration * dt);
             rb.linearVelocity = new Vector3(flat.x, vel.y, flat.z);
 
+            // Collisions hand the body spin around Y that nothing else removes, so the craft would keep
+            // turning on its own after a bump. Steering is entirely ours: drop any physics spin each step.
+            rb.angularVelocity = Vector3.zero;
+
             // Reverse steering like a real tank when backing up
             float steer = throttle < -0.1f ? -turn : turn;
             rb.MoveRotation(rb.rotation * Quaternion.Euler(0f, steer * turnSpeed * dt, 0f));

@@ -1,11 +1,15 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.InputSystem;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.HighDefinition;
 
 namespace SpectreEX
 {
     // Spectre VR session rules: lives, score, levels, the level clock and its time bonus,
-    // spawning each level's flags, ammo dumps and robots, and respawns.
+    // spawning each level's flags, ammo dumps and robots, and respawns. Games are started from
+    // the main menu (StartGame); Esc returns to it, P pauses, and demo mode ends on any key.
     public class GameManager : MonoBehaviour
     {
         // Re-found on demand so a script recompile during Play mode doesn't strand everything
@@ -23,6 +27,7 @@ namespace SpectreEX
         [Header("Scene")]
         public PlayerTank player;
         public Renderer[] wallRenderers;
+        public Renderer floorDots;
         public float arenaHalfSize = 120f;
 
         [Header("Prefabs")]
@@ -45,6 +50,9 @@ namespace SpectreEX
         public int FlagsTotal { get; private set; }
         public int FlagsCollected { get; private set; }
         public bool Playing { get; private set; }
+        public bool InGame { get; private set; }
+        public bool Paused { get; private set; }
+        public bool Demo { get; private set; }
         public LevelPlan Plan { get; private set; }
 
         public readonly List<Flag> Flags = new List<Flag>();
@@ -54,27 +62,106 @@ namespace SpectreEX
         public System.Action<string, string> ShowBanner;           // big title, red tip
         public System.Action<string[], string[]> ShowStats;         // label rows, value rows
         public System.Action HideOverlays;
+        public System.Action<int, int> ReturnedToMenu;              // final score and level (0 if abandoned)
 
         readonly Dictionary<GameObject, GameObject> prefabOf = new Dictionary<GameObject, GameObject>();
         int nextExtraLife;
         float wallNits = -1f;
+        Coroutine session;
+        DemoPilot demoPilot;
 
-        void Awake() => Instance = this;
-
-        // Wait a frame so the HUD has subscribed before the first banner goes up
-        IEnumerator Start()
+        void Awake()
         {
-            yield return null;
-            yield return NewGame();
+            Instance = this;
+            GameSettings.Load();
+            demoPilot = player.GetComponent<DemoPilot>();
+            if (demoPilot == null) demoPilot = player.gameObject.AddComponent<DemoPilot>();
+            demoPilot.enabled = false;
         }
 
-        IEnumerator NewGame()
+        void Start()
+        {
+            ApplySettings();
+            ClearLevel();
+        }
+
+        // ---------- session control (called by the main menu) ----------
+
+        public void StartGame(VehicleSpec vehicle, int startLevel, bool demo)
+        {
+            if (session != null) StopCoroutine(session);
+            Time.timeScale = 1f;
+            Paused = false;
+            Demo = demo;
+            demoPilot.enabled = demo;
+            ApplyVehicle(vehicle);
+            ApplySettings();
+            InGame = true;
+            session = StartCoroutine(NewGame(Mathf.Max(1, startLevel)));
+        }
+
+        public void QuitToMenu() => EndSession(0, 0);
+
+        void EndSession(int finalScore, int finalLevel)
+        {
+            StopAllCoroutines();
+            session = null;
+            Time.timeScale = 1f;
+            Paused = false;
+            Playing = false;
+            InGame = false;
+            Demo = false;
+            demoPilot.enabled = false;
+            player.Motor.SetInput(0f, 0f);
+            ClearLevel();
+            HideOverlays?.Invoke();
+            ReturnedToMenu?.Invoke(finalScore, finalLevel);
+        }
+
+        void ApplyVehicle(VehicleSpec v)
+        {
+            player.Motor.maxSpeed = v.MaxSpeed;
+            player.Motor.turnSpeed = v.TurnSpeed;
+            player.Health.SetMaxShields(v.MaxShields);
+            player.Weapon.maxAmmo = v.MaxAmmo;
+            player.Weapon.Refill();
+        }
+
+        // Options-dialog settings that affect the running scene
+        public void ApplySettings()
+        {
+            Sfx.Enabled = GameSettings.SoundEffectsOn;
+
+            var vol = FindFirstObjectByType<Volume>();
+            if (vol != null)
+            {
+                var profile = vol.profile;   // runtime instance, so the asset on disk is untouched
+                if (profile.TryGet<ScreenSpaceReflection>(out var ssr)) ssr.active = GameSettings.DisplayComplex;
+                if (profile.TryGet<GlobalIllumination>(out var gi)) gi.active = GameSettings.DisplayComplex;
+                if (profile.TryGet<ScreenSpaceAmbientOcclusion>(out var ao)) ao.active = GameSettings.DisplayComplex;
+            }
+            if (floorDots != null) floorDots.enabled = GameSettings.DisplayTextures;
+            foreach (var r in wallRenderers) if (r != null) r.enabled = GameSettings.DisplayTextures;
+            foreach (var r in FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None)) ApplyFilled(r);
+        }
+
+        public static void ApplyFilled(Renderer r)
+        {
+            if (r != null && r.name == "Panels") r.enabled = GameSettings.DisplayFilled;
+        }
+
+        static void ApplyFilled(GameObject go)
+        {
+            foreach (var r in go.GetComponentsInChildren<MeshRenderer>()) ApplyFilled(r);
+        }
+
+        IEnumerator NewGame(int startLevel)
         {
             Score = 0;
             Lives = startingLives;
             nextExtraLife = extraLifeEvery;
-            Level = 0;
-            Sfx.Play(Snd.Welcome);
+            Level = startLevel - 1;
+            if (!Demo) Sfx.Play(Snd.Welcome);
             yield return NextLevel();
         }
 
@@ -85,7 +172,7 @@ namespace SpectreEX
             BuildLevel(Plan);
             if (MusicPlayer.Instance != null) MusicPlayer.Instance.PlayForLevel(Level);
 
-            ShowBanner?.Invoke($"LEVEL {Level}", Plan.tip);
+            ShowBanner?.Invoke(Demo ? "DEMO" : $"LEVEL {Level}", Plan.tip);
             yield return new WaitForSeconds(3f);
             HideOverlays?.Invoke();
             Playing = true;
@@ -93,21 +180,48 @@ namespace SpectreEX
 
         void Update()
         {
-            if (!Playing) return;
+            if (!InGame) return;
+            var k = Keyboard.current;
+
+            if (Demo)
+            {
+                bool anyKey = (k != null && k.anyKey.wasPressedThisFrame) || (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame);
+                if (anyKey) { QuitToMenu(); return; }
+            }
+            else if (k != null)
+            {
+                if (k.escapeKey.wasPressedThisFrame) { QuitToMenu(); return; }
+                if (k.pKey.wasPressedThisFrame) TogglePause();
+            }
+
+            if (!Playing || Paused) return;
             float before = TimeRemaining;
             TimeRemaining = Mathf.Max(0f, TimeRemaining - Time.deltaTime);
             if (before > 10f && TimeRemaining <= 10f) Sfx.Play(Snd.TimeTick);
         }
 
+        void TogglePause()
+        {
+            Paused = !Paused;
+            Time.timeScale = Paused ? 0f : 1f;
+            if (Paused) ShowBanner?.Invoke("PAUSED", "PRESS P TO CONTINUE");
+            else HideOverlays?.Invoke();
+        }
+
         // ---------- level construction ----------
 
-        void BuildLevel(LevelPlan plan)
+        void ClearLevel()
         {
             foreach (var f in Flags) if (f != null) Destroy(f.gameObject);
             foreach (var d in Dumps) if (d != null) Destroy(d.gameObject);
             foreach (var r in Robots) if (r != null) Destroy(r.gameObject);
             Flags.Clear(); Dumps.Clear(); Robots.Clear(); prefabOf.Clear();
+            FlagsTotal = FlagsCollected = 0;
+        }
 
+        void BuildLevel(LevelPlan plan)
+        {
+            ClearLevel();
             SetWallColor(plan.wallColor);
 
             // Player starts each level near the middle, fully stocked
@@ -125,9 +239,9 @@ namespace SpectreEX
             player.ResetForLife();
 
             for (int i = 0; i < plan.flags; i++)
-                if (TryFindSpawnPoint(out var p, 25f)) Flags.Add(Instantiate(flagPrefab, p, Quaternion.identity));
+                if (TryFindSpawnPoint(out var p, 25f)) Flags.Add(Spawn(flagPrefab, p, Quaternion.identity));
             for (int i = 0; i < plan.ammoDumps; i++)
-                if (TryFindSpawnPoint(out var p, 25f)) Dumps.Add(Instantiate(ammoDumpPrefab, p - Vector3.up * p.y, Quaternion.identity));
+                if (TryFindSpawnPoint(out var p, 25f)) Dumps.Add(Spawn(ammoDumpPrefab, p - Vector3.up * p.y, Quaternion.identity));
 
             FlagsTotal = Flags.Count;
             FlagsCollected = 0;
@@ -139,15 +253,23 @@ namespace SpectreEX
             for (int i = 0; i < plan.slicers; i++) SpawnRobot(slicerPrefab, 60f);
         }
 
+        T Spawn<T>(T prefab, Vector3 pos, Quaternion rot) where T : Component
+        {
+            var c = Instantiate(prefab, pos, rot);
+            ApplyFilled(c.gameObject);
+            return c;
+        }
+
         void SpawnRobot(GameObject prefab, float minDistance)
         {
             if (prefab == null || !TryFindSpawnPoint(out var p, minDistance)) return;
             var go = Instantiate(prefab, p, Quaternion.Euler(0f, Random.Range(0f, 360f), 0f));
+            ApplyFilled(go);
             prefabOf[go] = prefab;
             var h = go.GetComponent<Health>();
             h.SetMaxShields(prefab.GetComponent<Health>().maxShields + Plan.robotShields - 1);
             var ai = go.GetComponent<EnemyBase>();
-            if (ai != null) ai.difficulty = Plan.difficulty;
+            if (ai != null) ai.difficulty = Plan.difficulty * GameSettings.DifficultyMultiplier;
             Robots.Add(h);
         }
 
@@ -203,7 +325,7 @@ namespace SpectreEX
             Sfx.Play(Snd.FlagPickup);
             int left = FlagsTotal - FlagsCollected;
             if (left == 1) Sfx.Play(Snd.OneMoreFlag);
-            if (left == 0 && Playing) StartCoroutine(LevelComplete());
+            if (left == 0 && Playing) session = StartCoroutine(LevelComplete());
         }
 
         IEnumerator LevelComplete()
@@ -226,6 +348,7 @@ namespace SpectreEX
 
         public void OnDestroyed(Health h)
         {
+            if (!InGame) return;
             if (h.team == Team.Player)
             {
                 StartCoroutine(PlayerDown());
@@ -259,8 +382,8 @@ namespace SpectreEX
                 Sfx.Play(Snd.GameOver);
                 ShowBanner?.Invoke("GAME OVER", $"FINAL SCORE {Score}");
                 yield return new WaitForSeconds(5f);
-                HideOverlays?.Invoke();
-                yield return NewGame();
+                // Demo games don't go on the score table
+                EndSession(Demo ? 0 : Score, Level);
                 yield break;
             }
 
