@@ -51,7 +51,6 @@ namespace SpectreEX.Menu
 
         Canvas canvas;
         RectTransform canvasRoot;
-        Font uiFont;
         Texture2D buttonsTex;
         Sprite dotSprite;
         int scale = 1;
@@ -73,8 +72,7 @@ namespace SpectreEX.Menu
         {
             gm = GameManager.Instance;
             GameSettings.Load();
-            uiFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            if (segmentFont == null) segmentFont = uiFont;
+            if (segmentFont == null) segmentFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             buttonsTex = LoadTex("Buttons");
             dotSprite = MakeDotSprite();
             BuildCanvas();
@@ -213,7 +211,7 @@ namespace SpectreEX.Menu
         {
             main = ImageScreen("Main", "MainMenu");
             Tile(main, 377, 25, 1, 0, () => Push(vehicles), Key.P);
-            Tile(main, 449, 25, 3, 0, () => ShowNotice("CYBERNET NETWORK PLAY IS NOT AVAILABLE IN THIS VERSION."), Key.C);
+            Tile(main, 449, 25, 3, 0, () => ShowNotice("CYBERNET NETWORK PLAY\nIS NOT AVAILABLE\nIN THIS VERSION"), Key.C);
             Tile(main, 377, 93, 1, 1, () => Push(options), Key.O);
             Tile(main, 449, 93, 3, 1, () => { enteringName = false; Push(scores); }, Key.S);
             Tile(main, 377, 161, 1, 2, () => Push(help), Key.H);
@@ -338,38 +336,39 @@ namespace SpectreEX.Menu
             options = ImageScreen("Options", "Options");
             var refreshers = new List<System.Action>();
 
+            // (x, y) is the top-left of each control's 11x11 interior, measured from Options.png
             void Check(int x, int y, System.Func<bool> get, System.Action toggle, bool enabled = true)
             {
                 var mark = CheckMark(options, x, y);
-                Button(options, new Rect(x - 2, y - 3, 128, 17), enabled ? () => { toggle(); options.refresh(); } : (System.Action)null);
+                Button(options, new Rect(x - 3, y - 3, 128, 17), enabled ? () => { toggle(); options.refresh(); } : (System.Action)null);
                 refreshers.Add(() => mark.SetActive(get()));
             }
             void Radio(int x, int y, System.Func<bool> get, System.Action select)
             {
-                var dot = AddImage(options, new Rect(x + 3, y + 3, 6, 6), Color.black, dotSprite);
-                Button(options, new Rect(x - 2, y - 3, 128, 17), () => { select(); options.refresh(); });
+                var dot = AddImage(options, new Rect(x + 3, y + 3, 5, 5), Color.black, dotSprite);
+                Button(options, new Rect(x - 3, y - 3, 128, 17), () => { select(); options.refresh(); });
                 refreshers.Add(() => dot.enabled = get());
             }
 
-            Check(20, 39, () => GameSettings.Joystick, () => GameSettings.Joystick = !GameSettings.Joystick);
-            Radio(19, 93, () => GameSettings.Sound == SoundCard.PCSpeaker, () => GameSettings.Sound = SoundCard.PCSpeaker);
-            Radio(19, 113, () => GameSettings.Sound == SoundCard.AdLib, () => GameSettings.Sound = SoundCard.AdLib);
-            Radio(19, 133, () => GameSettings.Sound == SoundCard.SoundBlaster, () => GameSettings.Sound = SoundCard.SoundBlaster);
-            int[] musicY = { 175, 203, 231, 258 };
+            Check(19, 38, () => GameSettings.Joystick, () => GameSettings.Joystick = !GameSettings.Joystick);
+            Radio(19, 92, () => GameSettings.Sound == SoundCard.PCSpeaker, () => GameSettings.Sound = SoundCard.PCSpeaker);
+            Radio(19, 112, () => GameSettings.Sound == SoundCard.AdLib, () => GameSettings.Sound = SoundCard.AdLib);
+            Radio(19, 132, () => GameSettings.Sound == SoundCard.SoundBlaster, () => GameSettings.Sound = SoundCard.SoundBlaster);
+            int[] musicY = { 174, 202, 230, 258 };
             for (int i = 0; i < 4; i++)
             {
                 int idx = i;
-                Check(19, musicY[i], () => GameSettings.Music[idx], () => GameSettings.Music[idx] = !GameSettings.Music[idx]);
+                Check(21, musicY[i], () => GameSettings.Music[idx], () => GameSettings.Music[idx] = !GameSettings.Music[idx]);
             }
-            Radio(167, 39, () => GameSettings.Difficulty == Difficulty.Easy, () => GameSettings.Difficulty = Difficulty.Easy);
-            Radio(167, 63, () => GameSettings.Difficulty == Difficulty.Normal, () => GameSettings.Difficulty = Difficulty.Normal);
-            Radio(167, 87, () => GameSettings.Difficulty == Difficulty.Hard, () => GameSettings.Difficulty = Difficulty.Hard);
-            Check(167, 111, () => false, null, enabled: false);   // Use Custom Matrix Files: only Central Systems exists
-            Check(168, 175, () => GameSettings.DisplayComplex, () => GameSettings.DisplayComplex = !GameSettings.DisplayComplex);
-            Check(168, 203, () => GameSettings.DisplayFilled, () => GameSettings.DisplayFilled = !GameSettings.DisplayFilled);
-            Check(168, 231, () => GameSettings.DisplayTextures, () => GameSettings.DisplayTextures = !GameSettings.DisplayTextures);
+            Radio(167, 38, () => GameSettings.Difficulty == Difficulty.Easy, () => GameSettings.Difficulty = Difficulty.Easy);
+            Radio(167, 62, () => GameSettings.Difficulty == Difficulty.Normal, () => GameSettings.Difficulty = Difficulty.Normal);
+            Radio(167, 86, () => GameSettings.Difficulty == Difficulty.Hard, () => GameSettings.Difficulty = Difficulty.Hard);
+            Check(167, 110, () => false, null, enabled: false);   // Use Custom Matrix Files: only Central Systems exists
+            Check(169, 174, () => GameSettings.DisplayComplex, () => GameSettings.DisplayComplex = !GameSettings.DisplayComplex);
+            Check(169, 202, () => GameSettings.DisplayFilled, () => GameSettings.DisplayFilled = !GameSettings.DisplayFilled);
+            Check(169, 230, () => GameSettings.DisplayTextures, () => GameSettings.DisplayTextures = !GameSettings.DisplayTextures);
 
-            Button(options, new Rect(11, 287, 170, 41), () => ShowNotice("NETWORK PLAY IS NOT AVAILABLE IN THIS VERSION."));
+            Button(options, new Rect(11, 287, 170, 41), () => ShowNotice("NETWORK PLAY\nIS NOT AVAILABLE\nIN THIS VERSION"));
             System.Action done = () =>
             {
                 GameSettings.Save();
@@ -395,22 +394,27 @@ namespace SpectreEX.Menu
         void BuildControls()
         {
             controls = Panel("Controls", new Vector2(510, 292));
-            var t = AddText(controls, new Rect(24, 16, 462, 262), 11, Color.black, TextAnchor.UpperLeft);
-            t.text =
-                "SpectreEX Controls\n\n" +
-                "Drive:  Arrow keys, WASD or the numeric keypad (7/9 turn while moving)\n" +
-                "Fire cannon:  Space, keypad 0 or left mouse button\n" +
-                "Hyperspace:  Backspace or ~  (wait for the H gauge - launching early is risky)\n" +
-                "Jump:  keypad 5 or J  (uses hyperspace energy)\n" +
-                "Change view:  Tab or keypad *   (cockpit, behind, overhead)\n" +
-                "Zoom view:  + and -\n" +
-                "Pause:  P          Main menu:  Esc\n" +
-                "Music on/off:  M          Next track:  N\n" +
-                "Gamepad:  left stick drive, RT or A fire, Y hyperspace, B jump\n\n" +
-                "Collect every flag to finish a level. Drive over the rippling white\n" +
-                "ammo dumps to repair shields and refill the cannon.\n\n" +
-                "At the main menu press D for demo mode, and hold Alt while starting\n" +
-                "a game to begin at a higher level.";
+            var t = AddText(controls, new Rect(22, 14, 470, 268), 9, Color.black, TextAnchor.UpperLeft);
+            t.horizontalOverflow = HorizontalWrapMode.Overflow;
+            t.lineSpacing = 1.15f;
+            t.text = Seg(
+                "SPECTREEX CONTROLS\n\n" +
+                "DRIVE        ARROWS, WASD OR KEYPAD\n" +
+                "FIRE         SPACE, KEYPAD 0 OR MOUSE\n" +
+                "HYPERSPACE   BACKSPACE OR TILDE\n" +
+                "JUMP         KEYPAD 5 OR J\n" +
+                "VIEW         TAB OR KEYPAD *\n" +
+                "ZOOM         + AND -\n" +
+                "PAUSE        P\n" +
+                "MAIN MENU    ESC\n" +
+                "MUSIC        M ON-OFF, N NEXT TRACK\n" +
+                "GAMEPAD      STICK, RT OR A FIRE\n" +
+                "             Y HYPERSPACE, B JUMP\n\n" +
+                "COLLECT EVERY FLAG TO FINISH A LEVEL.\n" +
+                "DRIVE OVER AMMO DUMPS TO REPAIR AND REARM.\n" +
+                "WAIT FOR THE H GAUGE BEFORE HYPERSPACE.\n\n" +
+                "MAIN MENU: D FOR DEMO, HOLD ALT WHILE\n" +
+                "STARTING TO BEGIN AT A HIGHER LEVEL.");
             controls.onAnyClick = controls.onEscape = controls.onEnter = Pop;
         }
 
@@ -469,11 +473,12 @@ namespace SpectreEX.Menu
         void BuildNotice()
         {
             notice = Panel("Notice", new Vector2(300, 110));
-            noticeText = AddText(notice, new Rect(20, 16, 260, 50), 12, Color.black, TextAnchor.MiddleCenter);
+            noticeText = AddText(notice, new Rect(14, 14, 272, 52), 9, Color.black, TextAnchor.MiddleCenter);
+            noticeText.horizontalOverflow = HorizontalWrapMode.Overflow;
             var ok = new Rect(110, 72, 80, 26);
             AddRect(notice, ok, Color.black);
             AddRect(notice, new Rect(ok.x + 2, ok.y + 2, ok.width - 4, ok.height - 4), new Color(0.75f, 0.75f, 0.75f));
-            AddText(notice, ok, 12, Color.black, TextAnchor.MiddleCenter).text = "OK";
+            AddText(notice, ok, 10, Color.black, TextAnchor.MiddleCenter).text = "OK";
             Button(notice, ok, Pop);
             notice.onAnyClick = null;
             notice.onEscape = notice.onEnter = Pop;
@@ -481,7 +486,7 @@ namespace SpectreEX.Menu
 
         void ShowNotice(string text)
         {
-            noticeText.text = text;
+            noticeText.text = Seg(text);
             Push(notice);
         }
 
@@ -534,7 +539,7 @@ namespace SpectreEX.Menu
             };
         }
 
-        // Mac checkbox "X" inside the 11x11 box at (x, y)
+        // Mac checkbox "X" across the 11x11 interior whose top-left is (x, y)
         GameObject CheckMark(MenuScreen s, int x, int y)
         {
             var holder = new GameObject("Check", typeof(RectTransform));
@@ -561,8 +566,8 @@ namespace SpectreEX.Menu
             var go = new GameObject("Text", typeof(RectTransform));
             go.transform.SetParent(s.root, false);
             var t = go.AddComponent<Text>();
-            t.font = font != null ? font : uiFont;
-            t.fontStyle = font == null ? FontStyle.Bold : FontStyle.Normal;
+            t.font = font != null ? font : segmentFont;
+            t.fontStyle = FontStyle.Normal;
             t.color = c;
             t.alignment = anchor;
             t.horizontalOverflow = HorizontalWrapMode.Wrap;
@@ -573,7 +578,9 @@ namespace SpectreEX.Menu
             return t;
         }
 
-        static string Seg(string s) => s.Replace(' ', '!');
+        // DSEG14: uppercase only, '!' is its full-width blank (a plain space is a narrow gap),
+        // and '~' lights every segment, so never show a literal tilde
+        static string Seg(string s) => s.ToUpperInvariant().Replace(' ', '!');
 
         static Texture2D LoadTex(string name)
         {
@@ -614,8 +621,9 @@ namespace SpectreEX.Menu
                 }
                 foreach (var (t, size) in s.texts) t.fontSize = size * scale;
             }
+            // Corner to corner of the 11x11 interior: 11 * sqrt(2)
             foreach (var (stroke, box) in strokes)
-                stroke.sizeDelta = new Vector2(13f * scale, Mathf.Max(1, scale));
+                stroke.sizeDelta = new Vector2(15.5f * scale, Mathf.Max(1, scale));
         }
 
         // ---------- navigation and input ----------

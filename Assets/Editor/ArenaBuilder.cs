@@ -26,6 +26,7 @@ namespace SpectreEX.EditorTools
         const string VolumePath = "Assets/Settings/ArenaVolume.asset";
         const string PlayerLayer = "PlayerModel";
         const string HudFontPath = "Assets/Fonts/DSEG14Classic-Light.ttf";
+        const string MenuFontPath = "Assets/Fonts/DSEG14Classic-Regular.ttf";   // heavier strokes read better on the white dialogs
 
         public const float ArenaHalfSize = 120f;
         const float DotSpacing = 6f;
@@ -84,7 +85,7 @@ namespace SpectreEX.EditorTools
             gmGo.AddComponent<MusicPlayer>();
             var hudFont = AssetDatabase.LoadAssetAtPath<Font>(HudFontPath);
             gmGo.AddComponent<SpectreHud>().segmentFont = hudFont;
-            gmGo.AddComponent<SpectreEX.Menu.MainMenu>().segmentFont = hudFont;
+            gmGo.AddComponent<SpectreEX.Menu.MainMenu>().segmentFont = AssetDatabase.LoadAssetAtPath<Font>(MenuFontPath);
             gm.floorDots = GameObject.Find("FloorDots").GetComponent<Renderer>();
 
             BuildCamera(player.transform);
