@@ -629,11 +629,25 @@ namespace SpectreEX.Menu
                     rt.anchoredPosition = new Vector2(r.x, -r.y) * scale;
                     rt.sizeDelta = r.size * scale;
                 }
-                foreach (var (t, size) in s.texts) t.fontSize = size * scale;
+                foreach (var (t, size) in s.texts) t.fontSize = EvenSegmentSize(size * scale);
             }
             // Corner to corner of the 11x11 interior: 11 * sqrt(2)
             foreach (var (stroke, box) in strokes)
                 stroke.sizeDelta = new Vector2(15.5f * scale, Mathf.Max(1, scale));
+        }
+
+        // Pixel sizes at which DSEG14 rasterises with every segment the same thickness (measured with
+        // FreeType: 1px strokes at 10-16, 2px at 20-26, 3px at 30-37, 4px at 41-48). Sizes in between,
+        // such as 18, mix 1px and 2px segments and look uneven.
+        static readonly int[] EvenSizes = { 10, 11, 12, 13, 14, 15, 16, 20, 21, 22, 23, 24, 26, 30, 31, 32, 34, 36, 37, 41, 42, 44, 46, 47, 48 };
+
+        static int EvenSegmentSize(int wanted)
+        {
+            if (wanted > EvenSizes[EvenSizes.Length - 1]) return wanted;
+            int best = EvenSizes[0];
+            foreach (int s in EvenSizes)
+                if (Mathf.Abs(s - wanted) <= Mathf.Abs(best - wanted)) best = s;   // ties go to the larger size
+            return best;
         }
 
         // ---------- navigation and input ----------
