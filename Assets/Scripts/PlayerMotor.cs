@@ -162,8 +162,11 @@ namespace SpectreEX
             if (hyperRequested)
             {
                 hyperRequested = false;
-                // Succeeds with a chance equal to the charge; a failed try costs nothing
+                // Succeeds with a chance equal to the charge. A failed roll destroys the ship, as the
+                // manual warns ("If you launch before fully charged the ship might explode"); the
+                // Windows build's code just ignores it, but the owner chose the manual's rule.
                 if (Random.Range(0, HyperMax + 1) <= Hyper) Hyperspace();
+                else HyperspaceFailed();
             }
 
             long dx = (long)Sin[heading] * speed;
@@ -364,6 +367,13 @@ namespace SpectreEX
             Sfx.Play(Snd.Warp);
             Snap();
             Derez.Burst(Position() + Vector3.up, mat, 30, 6f);
+        }
+
+        void HyperspaceFailed()
+        {
+            Hyper = 0;
+            Sfx.Play(Snd.Warp);
+            if (health != null) health.TakeRawDamage(health.Shields, true);
         }
 
         // ---------- collision query ----------

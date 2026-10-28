@@ -65,9 +65,10 @@ because this app sandboxes `AppData\Local`, which breaks Ghidra's Felix bundle c
   `rand(0..0x1900) <= _HYPER`, i.e. **probability = charge**. On success: random spot
   (`_PLACE_XY`), random heading, but facing the centre if beyond 0x38000 on both axes; height
   0x5000 (drops in); vz 0; `_HYPER = 0`; sound 0x3C; enemies re-pick their chase targets.
-  **On failure nothing happens** - no explosion, no energy spent. (The manual says an
-  under-charged hyperspace "might explode"; this build doesn't. Our `PlayerTank` kills you -
-  decide which to follow.)
+  **On failure nothing happens** - no explosion, no energy spent. The manual (SVR.TXT) says an
+  under-charged hyperspace "might explode"; this build doesn't. **Decision (owner, 2026-10-28):
+  follow the manual** - in Spectre VR-EX a failed roll destroys the ship (`PlayerMotor.HyperspaceFailed`).
+  The DOS `SVR.EXE` hasn't been checked.
 - **Hyperspace charge:** max 0x1900 (6400), +0xB per tick (full in 582 ticks ≈ 32 s).
   The H gauge shows it.
 - **Fire:** cannon on Space / numpad 0; holding fires every `_MAX_FIRE_TIMER + 1` ticks
@@ -195,8 +196,8 @@ etc. - not read yet.
 2. **Done:** player damage in original units (`Health.hitMultiplier` 10, capacity shields × 10,
    collisions/acid raw via `TakeRawDamage`); per-tick robot contact in the motor
    (`EnemyBase.matrixType` / `collideDamage` / `hasMatrixData`; robots default to 7 / 20 / 21+3 /
-   35+6 without a matrix). Vehicle presets fixed. Hyperspace follows the code (a failed roll does
-   nothing) - owner may prefer the manual's explosion.
+   35+6 without a matrix). Vehicle presets fixed. Hyperspace: success chance = charge, and a
+   failed roll destroys the ship (the manual's rule, by the owner's choice).
    Deviation: robot contact sounds play at most every 4 ticks and only when damage > 0.
 3. **Done:** obstacle behaviours by the corrected types (`ObstacleBehaviour.Kind` Ice/Slow/
    Teleport/Pusher...), heading byte stored per obstacle, model yaw = -degrees (shapes face
