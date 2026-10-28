@@ -23,7 +23,7 @@ namespace SpectreEX
         void Update()
         {
             if (!Active || !PlayerAlive || head == null) return;
-            weapon.cooldown = baseCooldown / difficulty;
+            weapon.cooldown = Cooldown(baseCooldown);
 
             Vector3 to = Flat(Player.transform.position - head.position);
             if (to.sqrMagnitude < 0.01f) return;

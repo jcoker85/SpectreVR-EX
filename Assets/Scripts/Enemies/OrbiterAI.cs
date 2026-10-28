@@ -37,7 +37,7 @@ namespace SpectreEX
         void FixedUpdate()
         {
             if (!Active || !PlayerAlive) return;
-            weapon.cooldown = baseCooldown / difficulty;
+            weapon.cooldown = Cooldown(baseCooldown);
 
             angle += orbitSpeed * difficulty * Time.fixedDeltaTime;
             Vector3 centre = Player.transform.position;

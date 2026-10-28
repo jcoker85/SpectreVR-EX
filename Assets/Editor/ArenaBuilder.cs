@@ -10,7 +10,7 @@ using SpectreEX.Hud;
 namespace SpectreEX.EditorTools
 {
     // Builds the arena scene and the robot / pickup prefabs from scratch so the whole look is
-    // reproducible: SpectreEX > Build Arena Scene. Re-running overwrites Assets/Scenes/Arena.unity,
+    // reproducible: Spectre VR-EX > Build Arena Scene. Re-running overwrites Assets/Scenes/Arena.unity,
     // the prefabs in Assets/Prefabs and the generated meshes/textures.
     //
     // Look: Spectre VR's black void with tall glowing gradient walls (recoloured per level at runtime)
@@ -27,8 +27,10 @@ namespace SpectreEX.EditorTools
         const string PlayerLayer = "PlayerModel";
         const string HudFontPath = "Assets/Fonts/DSEG14Classic-Light.ttf";
 
-        public const float ArenaHalfSize = 120f;
-        const float DotSpacing = 6f;
+        // The arena is exactly an original game grid: 1024 units at GameManager.GridScale metres each,
+        // so matrix layouts land where their designers put them. Floor dots every 32 units.
+        public const float ArenaHalfSize = 512f * GameManager.GridScale;
+        const float DotSpacing = 32f * GameManager.GridScale;
         const float WallHeight = 24f;
 
         static readonly Color Cyan = new Color(0.1f, 0.85f, 1f);
@@ -48,10 +50,11 @@ namespace SpectreEX.EditorTools
 
         static Material floorMat, bodyMat, wallMat, blockMat, dotMat, cyanMat, flagMat, poleMat, dumpMat;
         static Material roverMat, turretMat, orbiterMat, slicerMat, enemyBoltMat;
-        static readonly List<Vector3> obstacleCentres = new List<Vector3>();
+        static Material playerPanel, roverPanel, turretPanel, orbiterPanel, slicerPanel;
+        static Material acidMat, teleportMat, pusherMat, transportMat;
         static Bounds playerBounds;
 
-        [MenuItem("SpectreEX/Build Arena Scene")]
+        [MenuItem("Spectre VR-EX/Build Arena Scene")]
         public static void Build()
         {
             foreach (var d in new[] { MaterialDir, MeshDir, TextureDir, PrefabDir, "Assets/Scenes" }) Directory.CreateDirectory(d);
@@ -67,7 +70,6 @@ namespace SpectreEX.EditorTools
             var arena = new GameObject("Arena").transform;
             BuildFloor(arena);
             var walls = BuildWalls(arena);
-            BuildObstacles(arena);
             BuildLightingAndVolume();
 
             var player = BuildPlayer(new Vector3(0f, 0.1f, 0f));
@@ -83,6 +85,7 @@ namespace SpectreEX.EditorTools
             gm.turretPrefab = prefabs.turret;
             gm.orbiterPrefab = prefabs.orbiter;
             gm.slicerPrefab = prefabs.slicer;
+            gm.obstacleKinds = BuildObstaclePrefabs();
             gmGo.AddComponent<MusicPlayer>();
             var hudFont = AssetDatabase.LoadAssetAtPath<Font>(HudFontPath);
             gmGo.AddComponent<SpectreHud>().segmentFont = hudFont;
@@ -94,7 +97,7 @@ namespace SpectreEX.EditorTools
             EditorSceneManager.SaveScene(scene, ScenePath);
             EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
             AssetDatabase.SaveAssets();
-            Debug.Log("SpectreEX: arena scene built at " + ScenePath);
+            Debug.Log("Spectre VR-EX: arena scene built at " + ScenePath);
         }
 
         // ---------- project setup ----------
@@ -114,7 +117,7 @@ namespace SpectreEX.EditorTools
                     return;
                 }
             }
-            Debug.LogWarning("SpectreEX: no free layer for " + name);
+            Debug.LogWarning("Spectre VR-EX: no free layer for " + name);
         }
 
         // Original 1993 artwork: keep exact pixels (no resize to power of two, no mips, no compression)
@@ -162,7 +165,31 @@ namespace SpectreEX.EditorTools
             orbiterMat = GlowMaterial("OrbiterBlue", OrbiterBlue, 13f);
             slicerMat = GlowMaterial("SlicerRed", SlicerOrange, 12.5f);
             enemyBoltMat = GlowMaterial("EnemyBolt", new Color(1f, 0.3f, 0.2f), 12.5f);
+
+            // Craft panels take the craft's own colour (Options "Filled"), dimmer than the edges
+            playerPanel = PanelMaterial("PanelCyan", Cyan);
+            roverPanel = PanelMaterial("PanelPink", RoverPink);
+            turretPanel = PanelMaterial("PanelRed", Red);
+            orbiterPanel = PanelMaterial("PanelBlue", OrbiterBlue);
+            slicerPanel = PanelMaterial("PanelOrange", SlicerOrange);
+
+            // Matrix floor features
+            acidMat = GlowMaterial("GlowAcid", new Color(0.3f, 1f, 0.15f), 12f);
+            teleportMat = GlowMaterial("GlowTeleport", new Color(0.3f, 0.5f, 1f), 12f);
+            pusherMat = GlowMaterial("GlowPusher", new Color(1f, 0.6f, 0.1f), 12f);
+            transportMat = GlowMaterial("GlowTransport", new Color(0.75f, 0.3f, 1f), 12.5f);
             AssetDatabase.SaveAssets();
+        }
+
+        // A solid face in a craft's colour: lit, slightly self-lit so it reads in the dark arena
+        static Material PanelMaterial(string name, Color color)
+        {
+            var mat = GlowMaterial(name, color, 8.5f);
+            mat.SetColor("_BaseColor", color * 0.35f);
+            mat.SetFloat("_Smoothness", 0.6f);
+            mat.SetFloat("_Metallic", 0.3f);
+            EditorUtility.SetDirty(mat);
+            return mat;
         }
 
         static Material GetOrCreate(string name)
@@ -378,16 +405,17 @@ namespace SpectreEX.EditorTools
             return p;
         }
 
-        // An original Spectre VR shape in the SpectreEX style: black panels with glowing edges.
+        // An original Spectre VR shape in the Spectre VR-EX style: solid panels (black, or a craft's
+        // own colour) with glowing edges.
         static Transform SpectreModel(string name, Transform parent, int shapeId, float scale, Material glow, out Bounds bounds,
-                                      System.Func<Vector3, Vector3> warp = null, string variant = "")
+                                      System.Func<Vector3, Vector3> warp = null, string variant = "", Material panel = null)
         {
             string key = $"Spectre_{shapeId}_{Mathf.RoundToInt(scale * 1000)}{variant}";
             var body = SaveMesh(ShapeLibrary.BodyMesh(shapeId, scale, warp), key + "_Body");
             var edges = SaveMesh(ShapeLibrary.EdgeMesh(shapeId, scale, EdgeThickness, warp), key + "_Edges");
             var model = new GameObject(name).transform;
             model.SetParent(parent, false);
-            MeshObj("Panels", model, body, bodyMat, Vector3.zero, Vector3.one, Quaternion.identity);
+            MeshObj("Panels", model, body, panel != null ? panel : bodyMat, Vector3.zero, Vector3.one, Quaternion.identity);
             var e = MeshObj("Edges", model, edges, glow, Vector3.zero, Vector3.one, Quaternion.identity);
             e.GetComponent<MeshRenderer>().shadowCastingMode = ShadowCastingMode.Off;
             bounds = body.bounds;
@@ -489,7 +517,7 @@ namespace SpectreEX.EditorTools
             var root = new GameObject("Rover");
             var rb = root.AddComponent<Rigidbody>();
             rb.mass = 50f;
-            SpectreModel("Model", root.transform, RoverShape, ShapeScale, roverMat, out var b);
+            SpectreModel("Model", root.transform, RoverShape, ShapeScale, roverMat, out var b, panel: roverPanel);
             FitCollider(root, b).sharedMaterial = NoFriction();
 
             var muzzle = Muzzle(root.transform, new Vector3(0f, b.center.y + 0.2f, b.max.z + 0.4f));
@@ -504,7 +532,7 @@ namespace SpectreEX.EditorTools
         static GameObject BuildTurret()
         {
             var root = new GameObject("Turret");
-            var head = SpectreModel("Head", root.transform, TurretShape, ShapeScale, turretMat, out var b);
+            var head = SpectreModel("Head", root.transform, TurretShape, ShapeScale, turretMat, out var b, panel: turretPanel);
             head.localScale = new Vector3(1.8f, 1f, 1.8f);
             var col = root.AddComponent<CapsuleCollider>();
             col.center = new Vector3(0f, b.size.y * 0.5f, 0f);
@@ -523,7 +551,7 @@ namespace SpectreEX.EditorTools
         {
             var root = new GameObject("Orbiter");
             root.AddComponent<Rigidbody>();
-            var body = SpectreModel("Body", root.transform, OrbiterShape, 0.18f, orbiterMat, out var b);
+            var body = SpectreModel("Body", root.transform, OrbiterShape, 0.18f, orbiterMat, out var b, panel: orbiterPanel);
             body.localPosition = -b.center;   // spin about its own middle
             var col = root.AddComponent<SphereCollider>();
             col.radius = Mathf.Max(b.extents.x, b.extents.y, b.extents.z);
@@ -551,7 +579,7 @@ namespace SpectreEX.EditorTools
                 var pivot = new GameObject("BladePivot").transform;
                 pivot.SetParent(blades, false);
                 pivot.localRotation = Quaternion.Euler(0f, i * 90f, 0f);
-                var blade = SpectreModel("Blade", pivot, SlicerShape, ShapeScale, slicerMat, out b);
+                var blade = SpectreModel("Blade", pivot, SlicerShape, ShapeScale, slicerMat, out b, panel: slicerPanel);
                 blade.localPosition = -b.center;
             }
             var col = root.AddComponent<SphereCollider>();
@@ -632,34 +660,116 @@ namespace SpectreEX.EditorTools
             return renderers.ToArray();
         }
 
-        static void BuildObstacles(Transform arena)
-        {
-            var root = new GameObject("Obstacles").transform;
-            root.SetParent(arena, false);
-            var rng = new System.Random(1991);
-            obstacleCentres.Clear();
-            int attempts = 0;
-            while (obstacleCentres.Count < 14 && attempts++ < 500)
-            {
-                var pos = new Vector3(Range(rng, -95f, 95f), 0f, Range(rng, -95f, 95f));
-                if (pos.magnitude < 30f) continue; // keep the player start clear
-                bool crowded = false;
-                foreach (var p in obstacleCentres) if (Vector3.Distance(p, pos) < 28f) { crowded = true; break; }
-                if (crowded) continue;
-                obstacleCentres.Add(pos);
+        // ---------- matrix obstacles ----------
 
-                var size = new Vector3(Range(rng, 4f, 12f), Range(rng, 3f, 14f), Range(rng, 4f, 12f));
-                var o = new GameObject("Block").transform;
-                o.SetParent(root, false);
-                o.localPosition = pos + Vector3.up * size.y / 2f;
-                o.localRotation = Quaternion.Euler(0f, Range(rng, 0f, 90f), 0f);
-                Box("Panels", o, Vector3.zero, size, blockMat);   // "Panels" = hidden when Options Filled is off
-                AddEdges(o, Vector3.zero, size, 0.15f, cyanMat);
-                NoShadows(o.Find("Edges").gameObject);
-            }
+        // One prefab per original obstacle shape, grouped by matrix obstacle type (VRchitect's palette).
+        // Where the original picked a random shape (its "rshp" lists), every candidate becomes a variant.
+        static GameManager.ObstacleKind[] BuildObstaclePrefabs()
+        {
+            const float s = GameManager.GridScale;
+            var kinds = new List<GameManager.ObstacleKind>();
+
+            void Kind(int type, params GameObject[] variants) => kinds.Add(new GameManager.ObstacleKind { type = type, variants = variants });
+            GameObject Shape(int type, int shape, Material glow = null) => SavePrefab(SolidObstacle($"Obstacle_{type}_{shape}", shape, s, glow ?? cyanMat));
+            GameObject[] Shapes(int type, params int[] shapes) => System.Array.ConvertAll(shapes, id => Shape(type, id));
+
+            Kind(0, Shape(0, 10032));                                      // pyramid
+            Kind(1, Shape(1, 10034));                                      // column
+            Kind(2, Shapes(2, 10034, 10004, 10088));                       // random tower
+            Kind(3, Shapes(3, 10097, 10005, 10006, 10007, 10014, 10018, 10019, 10063, 10084, 10085));   // billboards
+            Kind(4, Shape(4, 10020));                                      // rock
+            Kind(15, Shapes(15, 10008, 10013, 10009, 10000, 10020));       // cube (and its random variants)
+            Kind(16, SavePrefab(FloorPad("Obstacle_16_Acid", 10024, s, acidMat, Matrix.ObstacleBehaviour.Kind.Acid)));
+            Kind(17, SavePrefab(FloorPad("Obstacle_17_Teleport", 10094, s, teleportMat, Matrix.ObstacleBehaviour.Kind.Teleport)));
+            Kind(18, SavePrefab(FloorPad("Obstacle_18_Pusher", 10095, s, pusherMat, Matrix.ObstacleBehaviour.Kind.Pusher)));
+            Kind(19, SavePrefab(Windmill("Obstacle_19_Windmill", s)));
+            Kind(36, SavePrefab(Transport("Obstacle_36_UpTransport", 10017, s, Matrix.ObstacleBehaviour.Kind.UpTransport)));
+            Kind(37, SavePrefab(Transport("Obstacle_37_DownTransport", 10016, s, Matrix.ObstacleBehaviour.Kind.DownTransport)));
+            Kind(39, SavePrefab(WallSegment("Obstacle_39_Wall", new Vector3(4f, 16f, 32f) * s)));      // wall: one 32-unit run of a drawn line
+            Kind(40, SavePrefab(WallSegment("Obstacle_40_FlatWall", new Vector3(1f, 16f, 32f) * s)));  // flat wall: thin panel
+            return kinds.ToArray();
         }
 
-        static float Range(System.Random rng, float min, float max) => min + (float)rng.NextDouble() * (max - min);
+        static GameObject SolidObstacle(string name, int shape, float scale, Material glow)
+        {
+            var root = new GameObject(name);
+            var model = SpectreModel("Model", root.transform, shape, scale, glow, out var b, panel: blockMat);
+            NoShadows(model.Find("Edges").gameObject);
+            var col = root.AddComponent<BoxCollider>();
+            col.center = b.center;
+            col.size = Vector3.Max(b.size, new Vector3(0.6f, 0.6f, 0.6f));   // billboards are flat
+            return root;
+        }
+
+        // Flat floor features (acid, teleport and pusher pads): drawn just above the floor, a trigger to drive over
+        static GameObject FloorPad(string name, int shape, float scale, Material glow, Matrix.ObstacleBehaviour.Kind kind)
+        {
+            var root = new GameObject(name);
+            var model = SpectreModel("Model", root.transform, shape, scale, glow, out var b, panel: glow);
+            model.localPosition = Vector3.up * 0.04f;
+            NoShadows(model.gameObject);
+            var col = root.AddComponent<BoxCollider>();
+            col.isTrigger = true;
+            col.center = new Vector3(b.center.x, 1.5f, b.center.z);
+            col.size = new Vector3(Mathf.Max(1.5f, b.size.x), 3f, Mathf.Max(1.5f, b.size.z));
+            root.AddComponent<Matrix.ObstacleBehaviour>().kind = kind;
+            return root;
+        }
+
+        static GameObject Windmill(string name, float scale)
+        {
+            var root = new GameObject(name);
+            var pivot = new GameObject("Sails").transform;
+            pivot.SetParent(root.transform, false);
+            var model = SpectreModel("Model", pivot, 10030, scale, cyanMat, out var b, panel: blockMat);
+            model.localPosition = new Vector3(-b.center.x, 0f, -b.center.z);   // turn about its own middle
+            NoShadows(model.Find("Edges").gameObject);
+            var col = root.AddComponent<CapsuleCollider>();
+            col.center = new Vector3(0f, b.size.y * 0.5f, 0f);
+            col.height = b.size.y;
+            col.radius = 0.6f;
+            var beh = root.AddComponent<Matrix.ObstacleBehaviour>();
+            beh.kind = Matrix.ObstacleBehaviour.Kind.Windmill;
+            beh.spinner = pivot;
+            beh.spinSpeed = 60f;
+            return root;
+        }
+
+        // Up / down transports: a hovering, spinning gem you drive under
+        static GameObject Transport(string name, int shape, float scale, Matrix.ObstacleBehaviour.Kind kind)
+        {
+            var root = new GameObject(name);
+            var pivot = new GameObject("Gem").transform;
+            pivot.SetParent(root.transform, false);
+            pivot.localPosition = Vector3.up * 1.2f;
+            var model = SpectreModel("Model", pivot, shape, scale * 1.6f, transportMat, out var b, panel: blockMat);
+            model.localPosition = -b.center;
+            NoShadows(model.gameObject);
+            var col = root.AddComponent<BoxCollider>();
+            col.isTrigger = true;
+            col.center = new Vector3(0f, 1.5f, 0f);
+            col.size = new Vector3(3f, 3f, 3f);
+            var beh = root.AddComponent<Matrix.ObstacleBehaviour>();
+            beh.kind = kind;
+            beh.spinner = pivot;
+            beh.spinSpeed = 120f;
+            return root;
+        }
+
+        // Walls are drawn as lines in VRchitect: each entry is one 32-unit segment along its heading
+        static GameObject WallSegment(string name, Vector3 size)
+        {
+            var root = new GameObject(name);
+            var center = Vector3.up * size.y * 0.5f;
+            var box = Box("Panels", root.transform, center, size, blockMat);   // "Panels" = hidden when Filled is off
+            Object.DestroyImmediate(box.GetComponent<Collider>());
+            AddEdges(root.transform, center, size, EdgeThickness, cyanMat);
+            NoShadows(root.transform.Find("Edges").gameObject);
+            var col = root.AddComponent<BoxCollider>();
+            col.center = center;
+            col.size = Vector3.Max(size, new Vector3(0.6f, 0.6f, 0.6f));
+            return root;
+        }
 
         // ---------- player ----------
 
@@ -672,7 +782,7 @@ namespace SpectreEX.EditorTools
             rb.mass = 50f;
 
             // Default "Balance" Spectre: the original's low wedge hull with its raised canopy
-            var model = SpectreModel("Model", root.transform, PlayerShape, 0.25f, cyanMat, out var b);
+            var model = SpectreModel("Model", root.transform, PlayerShape, 0.25f, cyanMat, out var b, panel: playerPanel);
             FitCollider(root, b).sharedMaterial = NoFriction();
             NoShadows(model.gameObject);
             int layer = LayerMask.NameToLayer(PlayerLayer);

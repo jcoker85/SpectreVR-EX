@@ -13,6 +13,7 @@ namespace SpectreEX
         public Material derezMaterial;
         public string hitSound = Snd.EnemyHit;
         public string deathSound = Snd.Explosion;
+        public bool hiddenFromRadar;   // Cloaked Tanks
 
         public int Shields { get; private set; }
         public bool IsDead { get; private set; }

@@ -41,7 +41,7 @@ namespace SpectreEX
             rb.linearVelocity = new Vector3(flat.x, rb.linearVelocity.y, flat.z);
         }
 
-        void OnCollisionEnter(Collision c)
+        protected override void OnCollisionEnter(Collision c)
         {
             if (health.IsDead) return;
             var victim = c.collider.GetComponentInParent<PlayerTank>();

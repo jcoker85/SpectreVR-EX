@@ -47,11 +47,26 @@ namespace SpectreEX
             PlayIndex(level - 1);
         }
 
+        // A matrix level's song (null = the level has none, or no ticked style covers it)
+        public void PlayTrackOrStop(string name)
+        {
+            if (string.IsNullOrEmpty(name)) source.Stop();
+            else PlayTrack(name);
+        }
+
+        // Esc menu over a running game: hold the level's song where it is
+        public void PauseGameMusic() => source.Pause();
+        public void ResumeGameMusic()
+        {
+            if (!GameSettings.MusicOn) { source.Stop(); return; }
+            if (!muted) source.UnPause();
+        }
+
         public void PlayTrack(string name, bool loop = true)
         {
             if (!GameSettings.MusicOn) { source.Stop(); return; }
             var clip = Resources.Load<AudioClip>("Music/" + name);
-            if (clip == null) { Debug.LogWarning("SpectreEX: missing music " + name); return; }
+            if (clip == null) { Debug.LogWarning("Spectre VR-EX: missing music " + name); return; }
             source.clip = clip;
             source.loop = loop;
             if (!muted) source.Play();

@@ -75,7 +75,11 @@ namespace SpectreEX.Menu
             dotSprite = MakeDotSprite();
             BuildCanvas();
             BuildScreens();
-            if (gm != null) gm.ReturnedToMenu += OnReturnedToMenu;
+            if (gm != null)
+            {
+                gm.ReturnedToMenu += OnReturnedToMenu;
+                gm.Suspend += () => Open(keepMusic: true);
+            }
             if (Keyboard.current != null) Keyboard.current.onTextInput += OnTextInput;
             Open();
         }
@@ -87,13 +91,24 @@ namespace SpectreEX.Menu
 
         // ---------- open / close ----------
 
-        public void Open()
+        // keepMusic: opened over a paused game (Esc), so leave the level's song paused rather than switching
+        public void Open(bool keepMusic = false)
         {
             canvas.enabled = true;
             stack.Clear();
             foreach (var s in AllScreens()) s.root.gameObject.SetActive(false);
             Push(main);
-            if (MusicPlayer.Instance != null) MusicPlayer.Instance.PlayMenuTheme();
+            if (!keepMusic && MusicPlayer.Instance != null) MusicPlayer.Instance.PlayMenuTheme();
+        }
+
+        bool GameSuspended => gm != null && gm.InGame && gm.Suspended;
+
+        // Esc on the main menu while a game is paused behind it: straight back into the game
+        void ResumeGame()
+        {
+            if (!GameSuspended) return;
+            Close();
+            gm.Resume();
         }
 
         // Jump straight to a dialog by name ("Vehicles", "Options", "Scores", ...), over the main menu
@@ -218,6 +233,7 @@ namespace SpectreEX.Menu
             Tile(main, 449, 229, 3, 3, Quit, Key.Q);
             Button(main, new Rect(0, 0, 0, 0), () => StartGame(true), Key.D);   // demo: keyboard only, as in the original
             main.onEnter = () => Push(vehicles);
+            main.onEscape = ResumeGame;
         }
 
         // A main-menu button: hovering swaps in the original's highlighted tile from Buttons.png
@@ -361,7 +377,7 @@ namespace SpectreEX.Menu
             Radio(167, 38, () => GameSettings.Difficulty == Difficulty.Easy, () => GameSettings.Difficulty = Difficulty.Easy);
             Radio(167, 62, () => GameSettings.Difficulty == Difficulty.Normal, () => GameSettings.Difficulty = Difficulty.Normal);
             Radio(167, 86, () => GameSettings.Difficulty == Difficulty.Hard, () => GameSettings.Difficulty = Difficulty.Hard);
-            Check(167, 110, () => false, null, enabled: false);   // Use Custom Matrix Files: only Central Systems exists
+            Check(167, 110, () => GameSettings.UseCustomMatrices, () => GameSettings.UseCustomMatrices = !GameSettings.UseCustomMatrices);
             Check(169, 174, () => GameSettings.DisplayComplex, () => GameSettings.DisplayComplex = !GameSettings.DisplayComplex);
             Check(169, 202, () => GameSettings.DisplayFilled, () => GameSettings.DisplayFilled = !GameSettings.DisplayFilled);
             Check(169, 230, () => GameSettings.DisplayTextures, () => GameSettings.DisplayTextures = !GameSettings.DisplayTextures);
@@ -371,7 +387,8 @@ namespace SpectreEX.Menu
             {
                 GameSettings.Save();
                 if (gm != null) gm.ApplySettings();
-                if (MusicPlayer.Instance != null) MusicPlayer.Instance.PlayMenuTheme();
+                // Over a paused game the level's song stays paused; otherwise restart the theme (music settings may have changed)
+                if (!GameSuspended && MusicPlayer.Instance != null) MusicPlayer.Instance.PlayMenuTheme();
                 Pop();
             };
             Button(options, new Rect(199, 287, 170, 41), done);
@@ -379,14 +396,49 @@ namespace SpectreEX.Menu
             options.refresh = () => { foreach (var r in refreshers) r(); };
         }
 
+        // Choose Matrix: Previous / Next step through the playable .MAT files (the bundled CENTRAL and
+        // BASIC, plus custom ones when Options "Use Custom Matrix Files" is ticked); Choose plays it
         void BuildMatrix()
         {
             matrix = ImageScreen("Matrix", "Matrix");
-            // Only the Central Systems matrix ships with SpectreEX, so Previous / Next have nowhere to go
-            Button(matrix, new Rect(15, 83, 77, 29), () => Sfx.Play(Snd.Collision));
-            Button(matrix, new Rect(203, 83, 77, 29), () => Sfx.Play(Snd.Collision));
-            Button(matrix, new Rect(108, 136, 77, 29), Pop);
-            matrix.onEscape = matrix.onEnter = Pop;
+            var name = AddText(matrix, new Rect(20, 29, 256, 12), 9, Color.black, TextAnchor.MiddleCenter);
+            var files = new List<string>();
+            int index = 0;
+
+            void Show()
+            {
+                if (files.Count == 0) { name.Text = Seg("NO MATRICES FOUND"); return; }
+                var m = Matrix.MatrixLibrary.Load(files[index]);
+                string label = m != null ? m.Name : System.IO.Path.GetFileNameWithoutExtension(files[index]) + " (UNREADABLE)";
+                name.Text = Seg(label);
+            }
+            void Step(int delta)
+            {
+                if (files.Count < 2) { Sfx.Play(Snd.Collision); return; }
+                index = (index + delta + files.Count) % files.Count;
+                Show();
+            }
+            void Choose()
+            {
+                if (files.Count > 0 && Matrix.MatrixLibrary.Load(files[index]) != null)
+                {
+                    GameSettings.SelectedMatrix = System.IO.Path.GetFileName(files[index]);
+                    GameSettings.Save();
+                }
+                Pop();
+            }
+
+            Button(matrix, new Rect(15, 83, 77, 29), () => Step(-1), Key.LeftArrow);
+            Button(matrix, new Rect(203, 83, 77, 29), () => Step(1), Key.RightArrow);
+            Button(matrix, new Rect(108, 136, 77, 29), Choose);
+            matrix.onEnter = Choose;
+            matrix.onEscape = Pop;
+            matrix.refresh = () =>
+            {
+                files = Matrix.MatrixLibrary.Available(GameSettings.UseCustomMatrices);
+                index = Mathf.Max(0, files.FindIndex(p => string.Equals(System.IO.Path.GetFileName(p), GameSettings.SelectedMatrix, System.StringComparison.OrdinalIgnoreCase)));
+                Show();
+            };
         }
 
         void BuildControls()
@@ -394,7 +446,7 @@ namespace SpectreEX.Menu
             controls = Panel("Controls", new Vector2(510, 292));
             var t = AddText(controls, new Rect(22, 12, 470, 270), 9, SegGreen, TextAnchor.UpperLeft);
             t.Text = Seg(
-                "SPECTREEX CONTROLS\n\n" +
+                "SPECTRE VR-EX CONTROLS\n\n" +
                 "DRIVE        ARROWS, WASD OR KEYPAD\n" +
                 "FIRE         SPACE, KEYPAD 0 OR MOUSE\n" +
                 "HYPERSPACE   BACKSPACE OR TILDE\n" +
@@ -696,7 +748,8 @@ namespace SpectreEX.Menu
                 if (k.escapeKey.wasPressedThisFrame) top.onEscape?.Invoke();
                 return;
             }
-            if (k.escapeKey.wasPressedThisFrame) { top.onEscape?.Invoke(); return; }
+            // (not on the frame a screen opened: the in-game Esc that brought the menu up mustn't also close it)
+            if (k.escapeKey.wasPressedThisFrame && Time.frameCount != ignoreClickFrame) { top.onEscape?.Invoke(); return; }
             if (k.enterKey.wasPressedThisFrame || k.numpadEnterKey.wasPressedThisFrame) { top.onEnter?.Invoke(); return; }
             foreach (var h in top.hotspots)
                 if (h.key != Key.None && h.action != null && k[h.key].wasPressedThisFrame) { h.action(); return; }

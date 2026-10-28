@@ -16,10 +16,16 @@ namespace SpectreEX
         public float externalHeight = 4.5f;
         public float overheadHeight = 90f;
         public float followSharpness = 8f;
+        public float cockpitSharpness = 30f;   // high: feels locked on, but filters per-physics-step judder
+        public float overheadSharpness = 10f;
+        public float snapDistance = 12f;       // bigger jumps (hyperspace, teleports) cut instantly
         public string playerModelLayer = "PlayerModel";
 
         Camera cam;
         int playerMask;
+        Vector3 smoothPos;
+        float smoothYaw;
+        bool hasSmooth;
 
         void Awake()
         {
@@ -50,10 +56,27 @@ namespace SpectreEX
 
             Quaternion yaw = Quaternion.Euler(0f, target.eulerAngles.y, 0f);
             float t = 1f - Mathf.Exp(-followSharpness * Time.deltaTime);
+
+            // Smoothed target position and heading for the cockpit and overhead views
+            float sharp = mode == ViewMode.Overhead ? overheadSharpness : cockpitSharpness;
+            float st = 1f - Mathf.Exp(-sharp * Time.unscaledDeltaTime);
+            if (!hasSmooth || Vector3.Distance(smoothPos, target.position) > snapDistance)
+            {
+                smoothPos = target.position;
+                smoothYaw = target.eulerAngles.y;
+                hasSmooth = true;
+            }
+            else
+            {
+                smoothPos = Vector3.Lerp(smoothPos, target.position, st);
+                smoothYaw = Mathf.LerpAngle(smoothYaw, target.eulerAngles.y, st);
+            }
+            Quaternion smoothRot = Quaternion.Euler(0f, smoothYaw, 0f);
+
             switch (mode)
             {
                 case ViewMode.Internal:
-                    transform.SetPositionAndRotation(target.position + yaw * cockpitOffset, yaw);
+                    transform.SetPositionAndRotation(smoothPos + smoothRot * cockpitOffset, smoothRot);
                     break;
                 case ViewMode.External:
                 {
@@ -64,7 +87,7 @@ namespace SpectreEX
                     break;
                 }
                 case ViewMode.Overhead:
-                    transform.SetPositionAndRotation(target.position + Vector3.up * overheadHeight, Quaternion.Euler(90f, target.eulerAngles.y, 0f));
+                    transform.SetPositionAndRotation(smoothPos + Vector3.up * overheadHeight, Quaternion.Euler(90f, smoothYaw, 0f));
                     break;
             }
         }

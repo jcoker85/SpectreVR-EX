@@ -4,14 +4,14 @@ using UnityEngine;
 
 namespace SpectreEX.EditorTools
 {
-    // SpectreEX > Build Windows EXE: a standalone 64-bit Windows build of the arena scene into
+    // Spectre VR-EX > Build Windows EXE: a standalone 64-bit Windows build of the arena scene into
     // Builds/Windows (git-ignored). The result is written to the console and Builds/Windows/build.log.
     public static class BuildTools
     {
         public const string OutputDir = "Builds/Windows";
-        public const string ExePath = OutputDir + "/SpectreEX.exe";
+        public const string ExePath = OutputDir + "/Spectre VR-EX.exe";
 
-        [MenuItem("SpectreEX/Build Windows EXE")]
+        [MenuItem("Spectre VR-EX/Build Windows EXE")]
         public static void BuildWindows()
         {
             var options = new BuildPlayerOptions
@@ -24,7 +24,7 @@ namespace SpectreEX.EditorTools
             };
             var report = BuildPipeline.BuildPlayer(options);
             var s = report.summary;
-            string line = $"SpectreEX build {s.result}: {s.outputPath}  size {s.totalSize / (1024 * 1024)} MB  " +
+            string line = $"Spectre VR-EX build {s.result}: {s.outputPath}  size {s.totalSize / (1024 * 1024)} MB  " +
                           $"time {s.totalTime.TotalMinutes:F1} min  errors {s.totalErrors}  warnings {s.totalWarnings}";
             System.IO.Directory.CreateDirectory(OutputDir);
             System.IO.File.WriteAllText(OutputDir + "/build.log", line + "\n");

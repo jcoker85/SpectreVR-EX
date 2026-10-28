@@ -44,7 +44,7 @@ namespace SpectreEX
             if (!cache.TryGetValue(name, out var clip))
             {
                 clip = Resources.Load<AudioClip>("Sounds/" + name);
-                if (clip == null) Debug.LogWarning("SpectreEX: missing sound " + name);
+                if (clip == null) Debug.LogWarning("Spectre VR-EX: missing sound " + name);
                 cache[name] = clip;
             }
             return clip;

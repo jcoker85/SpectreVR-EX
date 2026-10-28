@@ -33,15 +33,9 @@ namespace SpectreEX
     // Everything the Options dialog controls, persisted in PlayerPrefs.
     public static class GameSettings
     {
-        // Music styles from the original's Options dialog, and which MIDI tracks belong to each
+        // Music styles from the original's Options dialog; their tracks follow the original's own song
+        // groupings (Matrix.MatrixMusic), as the matrices name them
         public static readonly string[] MusicStyles = { "Cyber/Techno", "New Age", "Rock/Rave", "VRBach" };
-        public static readonly string[][] StyleTracks =
-        {
-            new[] { "LEVEL1", "LEVEL2", "LEVEL3", "HOUSEVR", "4FLYING1", "CW", "SPACEWA", "CHANT", "SUBMERG1" },
-            new[] { "MELLOW1", "SITARSH", "JAWS", "JAWS22", "5THEME" },
-            new[] { "RAVER20", "FUNKY0", "GUITAR33", "HENDRIX", "VRGUITA", "MARCH11", "MARKY" },
-            new[] { "FUGUE1", "FUGUE2", "FUGUE3", "FUGUE4", "FUGUE5", "FUGUE7", "FUGUE8", "FUGUE9", "CANON", "BACHIN", "JBSON" },
-        };
 
         public static bool Joystick = true;
         public static SoundCard Sound = SoundCard.SoundBlaster;
@@ -52,6 +46,8 @@ namespace SpectreEX
         public static bool DisplayTextures = true;   // floor dots and wall glow
         public static VehicleSpec Custom = new VehicleSpec("CUSTOM", 5, 5, 5);
         public static int SelectedVehicle;           // 0 Balance, 1 Speedy, 2 Strong, 3 Custom
+        public static string SelectedMatrix = "CENTRAL.MAT";   // file name chosen in the MATRIX dialog
+        public static bool UseCustomMatrices;        // also offer .MAT files from the Matrices folders
 
         public static bool SoundEffectsOn => Sound != SoundCard.AdLib;
         public static bool MusicOn => Sound != SoundCard.PCSpeaker;
@@ -75,7 +71,7 @@ namespace SpectreEX
         {
             var list = new List<string>();
             for (int i = 0; i < Music.Length; i++)
-                if (Music[i]) list.AddRange(StyleTracks[i]);
+                if (Music[i]) list.AddRange(Matrix.MatrixMusic.StyleTracks(i));
             return list;
         }
 
@@ -94,6 +90,8 @@ namespace SpectreEX
             DisplayTextures = PlayerPrefs.GetInt("opt.textures", 1) == 1;
             Custom = new VehicleSpec("CUSTOM", PlayerPrefs.GetInt("custom.speed", 5), PlayerPrefs.GetInt("custom.shields", 5), PlayerPrefs.GetInt("custom.ammo", 5));
             SelectedVehicle = PlayerPrefs.GetInt("vehicle", 0);
+            SelectedMatrix = PlayerPrefs.GetString("matrix", "CENTRAL.MAT");
+            UseCustomMatrices = PlayerPrefs.GetInt("opt.custommatrix", 0) == 1;
         }
 
         public static void Save()
@@ -109,6 +107,8 @@ namespace SpectreEX
             PlayerPrefs.SetInt("custom.shields", Custom.shields);
             PlayerPrefs.SetInt("custom.ammo", Custom.ammo);
             PlayerPrefs.SetInt("vehicle", SelectedVehicle);
+            PlayerPrefs.SetString("matrix", SelectedMatrix);
+            PlayerPrefs.SetInt("opt.custommatrix", UseCustomMatrices ? 1 : 0);
             PlayerPrefs.Save();
         }
     }

@@ -26,6 +26,8 @@ namespace SpectreEX
             new Color(1f, 0.85f, 0.2f),     // gold
         };
 
+        public static Color WallColor(int level) => WallColors[(Mathf.Max(1, level) - 1) % WallColors.Length];
+
         public static LevelPlan For(int level)
         {
             var p = new LevelPlan { level = level };

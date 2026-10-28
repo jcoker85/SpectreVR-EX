@@ -5,7 +5,7 @@ using UnityEngine;
 namespace SpectreEX.EditorTools
 {
     // The original Spectre VR 3D shapes (exported from CENTRAL.MAT by Tools/export_shapes.py),
-    // turned into SpectreEX's look: solid black panels plus glowing strips along every polygon edge.
+    // turned into Spectre VR-EX's look: solid black panels plus glowing strips along every polygon edge.
     public static class ShapeLibrary
     {
         public const string JsonPath = "Assets/Editor/Data/SpectreShapes.json";

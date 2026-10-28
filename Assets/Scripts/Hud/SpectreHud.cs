@@ -352,7 +352,7 @@ namespace SpectreEX.Hud
             bool blink = (Time.time * 4f) % 1f < 0.55f;
 
             foreach (var h in gm.Robots)
-                if (h != null && !h.IsDead) Dot(ref used, me, inv, h.transform.position, AlertRed, 3f);
+                if (h != null && !h.IsDead && !h.hiddenFromRadar) Dot(ref used, me, inv, h.transform.position, AlertRed, 3f);
             foreach (var f in gm.Flags)
                 if (f != null && blink) Dot(ref used, me, inv, f.transform.position, new Color(1f, 0.9f, 0.3f), 3f);
             foreach (var d in gm.Dumps)

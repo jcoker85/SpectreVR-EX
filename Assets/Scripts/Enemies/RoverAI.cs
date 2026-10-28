@@ -8,6 +8,7 @@ namespace SpectreEX
     public class RoverAI : EnemyBase
     {
         public float fireRange = 80f;
+        public float attackRange = 1000f;   // starts hunting the player inside this distance (matrix enemy data)
         public float aimTolerance = 5f;
         public float preferredDistance = 18f;
 
@@ -38,9 +39,9 @@ namespace SpectreEX
             if (!Active) { motor.SetInput(0f, 0f); return; }
 
             motor.speedMultiplier = Mathf.Lerp(0.7f, 1.1f, Mathf.InverseLerp(1f, 3f, difficulty));
-            weapon.cooldown = baseCooldown / difficulty;
+            weapon.cooldown = Cooldown(baseCooldown);
 
-            bool hunting = PlayerAlive;
+            bool hunting = PlayerAlive && Vector3.Distance(Player.transform.position, transform.position) < attackRange;
             Vector3 goal = hunting ? Player.transform.position : wanderPoint;
             Vector3 to = Flat(goal - transform.position);
             float dist = to.magnitude;
