@@ -82,7 +82,8 @@ Order each tick: move -> `_CHECK_TANK_COLLIDE` (robots) -> `_CHECK_OBJ_COLLIDE` 
 
 - **Blocked** (`_DO_COLLIDE_DAMAGE` returns 0 and not floating): the whole tick's move is undone
   **including the heading change**; if on the ground, `_DO_BOUNCE(vz, 7)` and pushed away from the
-  object's centre by **1/32 of the offset** (`pos -= (pos - obj) >> 5`).
+  object's centre by **1/32 of the offset** (the code subtracts in its negated coordinates; in
+  plain coordinates `pos += (pos - obj) >> 5`).
 - **`_DO_COLLIDE_DAMAGE`** (object type at +0x5C, enemy data at +0x67, collide damage at data+4):
   - no enemy data (plain obstacle): block.
   - type 7 Robot Tank, 8 Super Tank, 25 Cyber Mud, 27 Cloaked Tank: damage **and block**.
@@ -185,17 +186,23 @@ etc. - not read yet.
 
 ## Port plan (single player)
 
-1. **Next:** replace the player's physics `TankMotor` with a `PlayerMotor` that simulates the
-   original in its own units at 18.2065 ticks/s and interpolates the transform between ticks.
-   Kinematic Rigidbody (projectile raycasts and dump/flag triggers keep working). Collisions by
-   `Physics.OverlapBox` of the player collider at the candidate pose: roots in
-   `GameManager.Obstacles` = obstacles, `EnemyBase` parents = robots (needs a `matrixType`
-   field), arena walls ignored (the clamp is the wall). Keep `SetInput` so `DemoPilot` and
-   `GameManager` still work; update `ArenaBuilder.BuildPlayer` (it adds `TankMotor`).
-2. Player damage in original units (capacity = shields × 10, shots × 10, collisions/acid raw);
-   drop `EnemyBase.OnCollisionEnter`/`SlicerAI` contact damage in favour of per-tick contact
-   damage in the motor. Fix the vehicle presets. Hyperspace per the rules above.
-3. Obstacle behaviours by the corrected types; `yaw = 180 - deg`.
+1. **Done:** `PlayerMotor` simulates the player in the original's units at 18.2065 ticks/s and
+   interpolates the transform between ticks; kinematic Rigidbody; collisions by
+   `Physics.OverlapBox` at the candidate pose (roots in `GameManager.Obstacles` = obstacles,
+   `EnemyBase` = robots, walls/floor ignored - the clamp is the wall).
+   Measured in Play mode: Balance 11.4 m/s, turn 49°/s, jump 6.2 m, hyperspace drop-in, solid
+   obstacles block with the hop, acid 18 points/s at damage 3, slow pad, ice, pusher, teleport.
+2. **Done:** player damage in original units (`Health.hitMultiplier` 10, capacity shields × 10,
+   collisions/acid raw via `TakeRawDamage`); per-tick robot contact in the motor
+   (`EnemyBase.matrixType` / `collideDamage` / `hasMatrixData`; robots default to 7 / 20 / 21+3 /
+   35+6 without a matrix). Vehicle presets fixed. Hyperspace follows the code (a failed roll does
+   nothing) - owner may prefer the manual's explosion.
+   Deviation: robot contact sounds play at most every 4 ticks and only when damage > 0.
+3. **Done:** obstacle behaviours by the corrected types (`ObstacleBehaviour.Kind` Ice/Slow/
+   Teleport/Pusher...), heading byte stored per obstacle, model yaw = -degrees (shapes face
+   opposite their travel direction, as the tank's +0x80 shows). Windmill tower/sails are a
+   stand-in (built-in shapes 5 and the fans aren't decoded). Under-floor transports are wired
+   but not seen in a real matrix yet.
 4. Ammo dump kinds and relocation; floating.
 5. Shapes from `shps` (decode the built-in shapes at DS:0x9B8).
 6. Robots (all 13), then weapons (7 alt weapons), then the remaining fidelity pass.

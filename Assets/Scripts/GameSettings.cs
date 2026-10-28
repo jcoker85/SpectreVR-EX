@@ -17,14 +17,15 @@ namespace SpectreEX
             this.name = name; this.speed = speed; this.shields = shields; this.ammo = ammo;
         }
 
-        public float MaxSpeed => 10f + speed * 1.6f;          // 5 points = 18, the old default
-        public float TurnSpeed => 80f + speed * 4f;
-        public int MaxShields => Mathf.Clamp(shields, 1, 10);
+        // The original's units (_SET_TANK_SETTINGS / _EDIT_CUSTOM_TANK): speed 1-9, damage capacity
+        // 10-100 in steps of 10, ammo 10-50 in steps of 10
+        public int Speed => Mathf.Clamp(speed, 1, 9);
+        public int DamagePoints => Mathf.Clamp(shields, 1, 10) * 10;
         public int MaxAmmo => Mathf.Clamp(ammo, 1, 5) * 10;
 
         public static readonly VehicleSpec Balance = new VehicleSpec("BALANCE", 5, 6, 4);
-        public static readonly VehicleSpec Speedy = new VehicleSpec("SPEEDY", 9, 3, 3);
-        public static readonly VehicleSpec Strong = new VehicleSpec("STRONG", 3, 9, 3);
+        public static readonly VehicleSpec Speedy = new VehicleSpec("SPEEDY", 8, 4, 3);
+        public static readonly VehicleSpec Strong = new VehicleSpec("STRONG", 3, 8, 4);
     }
 
     public enum Difficulty { Easy, Normal, Hard }

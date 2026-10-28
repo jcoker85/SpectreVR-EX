@@ -16,6 +16,7 @@ namespace SpectreEX
         protected override void Awake()
         {
             base.Awake();
+            matrixType = 20;
             weapon = GetComponent<TankWeapon>();
             baseCooldown = weapon.cooldown;
         }

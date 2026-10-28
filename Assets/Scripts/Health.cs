@@ -14,6 +14,7 @@ namespace SpectreEX
         public string hitSound = Snd.EnemyHit;
         public string deathSound = Snd.Explosion;
         public bool hiddenFromRadar;   // Cloaked Tanks
+        public int hitMultiplier = 1;  // player: 10 (weapon damage counts x 10 against its points)
 
         public int Shields { get; private set; }
         public bool IsDead { get; private set; }
@@ -40,14 +41,23 @@ namespace SpectreEX
             return true;
         }
 
-        public void TakeDamage(int amount)
+        // Weapon hits. The player counts damage in the original's points: a hit costs weapon damage x 10
+        // against a capacity of shield points x 10 (Balance: 60, so six cannon rounds).
+        public void TakeDamage(int amount) => TakeRawDamage(amount * hitMultiplier, true);
+
+        // Damage in raw points - collisions and acid, which the original doesn't scale
+        public void TakeRawDamage(int points, bool sound)
         {
-            if (IsDead) return;
-            Shields -= amount;
+            if (IsDead || points <= 0) return;
+            Shields -= points;
             if (Shields <= 0) { Die(); return; }
-            if (team == Team.Player) Sfx.Play(hitSound);
+            if (!sound) return;
+            if (team == Team.Player) Sfx.Play(Shields <= DangerPoints && hitMultiplier > 1 ? Snd.Danger : hitSound);
             else Sfx.PlayAt(hitSound, transform.position);
         }
+
+        // The original swaps the hit sound for the warning once you're within 20 points of destruction
+        const int DangerPoints = 20;
 
         void Die()
         {
@@ -79,7 +89,6 @@ namespace SpectreEX
             if (rb != null)
             {
                 if (!alive && !rb.isKinematic) rb.linearVelocity = Vector3.zero;
-                if (team == Team.Player) rb.isKinematic = !alive;
             }
         }
     }

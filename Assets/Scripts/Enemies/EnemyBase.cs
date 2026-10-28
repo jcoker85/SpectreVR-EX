@@ -8,22 +8,20 @@ namespace SpectreEX
     {
         public float difficulty = 1f;
         public float fireInterval = -1f;   // seconds between shots from the matrix's enemy data (-1: prefab default)
-        public int collideDamage;          // shields lost by the player on contact (matrix enemy data)
+        // Contact rules (PlayerMotor, after the original's _DO_COLLIDE_DAMAGE): the player takes
+        // collideDamage raw points every tick it touches the robot, and is blocked or drives through
+        // depending on the robot's matrix type. These defaults stand in when no matrix supplies them.
+        public int matrixType = 7;          // VRchitect enemy type (7 Robot Tank, 20 Turret, 21 Slicer, 35 Orbiter...)
+        public int collideDamage;           // raw damage points per tick of contact (matrix enemy data)
+        public bool hasMatrixData = true;   // false: plain obstacle as far as contact goes
 
         protected Health health;
+        public Health Health => health;
 
         protected virtual void Awake() => health = GetComponent<Health>();
 
         // Shot spacing: the matrix's firing interval if given, else the weapon's own, faster on harder levels
         protected float Cooldown(float baseCooldown) => (fireInterval > 0f ? fireInterval : baseCooldown) / Mathf.Max(0.1f, difficulty);
-
-        // Ramming damage for robots with collision damage in their enemy data (slicers handle their own)
-        protected virtual void OnCollisionEnter(Collision c)
-        {
-            if (collideDamage <= 0 || health.IsDead) return;
-            var victim = c.collider.GetComponentInParent<PlayerTank>();
-            if (victim != null) victim.Health.TakeDamage(collideDamage);
-        }
 
         protected PlayerTank Player => GameManager.Instance != null ? GameManager.Instance.player : null;
         protected bool Active => !health.IsDead && GameManager.Instance != null && GameManager.Instance.Playing;

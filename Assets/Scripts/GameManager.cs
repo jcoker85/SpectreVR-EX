@@ -77,6 +77,7 @@ namespace SpectreEX
         public readonly List<AmmoDump> Dumps = new List<AmmoDump>();
         public readonly List<Health> Robots = new List<Health>();
         public readonly List<GameObject> Obstacles = new List<GameObject>();
+        public int AcidDamage { get; private set; } = 10;   // raw points every third tick in acid
 
         public System.Action<string, string> ShowBanner;           // big title, red tip
         public System.Action<string[], string[]> ShowStats;         // label rows, value rows
@@ -168,9 +169,9 @@ namespace SpectreEX
 
         void ApplyVehicle(VehicleSpec v)
         {
-            player.Motor.maxSpeed = v.MaxSpeed;
-            player.Motor.turnSpeed = v.TurnSpeed;
-            player.Health.SetMaxShields(v.MaxShields);
+            player.Motor.speedPoints = v.Speed;
+            player.Health.hitMultiplier = 10;
+            player.Health.SetMaxShields(v.DamagePoints);
             player.Weapon.maxAmmo = v.MaxAmmo;
             player.Weapon.Refill();
         }
@@ -362,6 +363,9 @@ namespace SpectreEX
                 }
             }
 
+            // Acid burns for the level's Smart Acid collision damage, or 10 (_LOAD_BVAL)
+            AcidDamage = m.TryGetEnemyData(lv.enemyData, 23, out var acid) ? acid.collideDamage : 10;
+
             if (MusicPlayer.Instance != null) MusicPlayer.Instance.PlayTrackOrStop(MatrixMusic.TrackFor(lv.song));
             return m.Tip(lv.tip);
         }
@@ -396,16 +400,12 @@ namespace SpectreEX
             Add(slicerPrefab, plan.slicers);
         }
 
+        // The original starts every level 15 grid units south of the middle, facing north, dropping in
         void PlacePlayerAtStart()
         {
-            if (!TryFindSpawnPoint(out var start, 0f, nearCentre: true)) return;
+            var start = new Vector3(0f, 0f, -15f * GridScale);
             if (player.Health.IsDead) player.Health.Revive(start, Quaternion.identity);
-            else
-            {
-                player.transform.SetPositionAndRotation(start, Quaternion.identity);
-                var rb = player.GetComponent<Rigidbody>();
-                rb.position = start; rb.rotation = Quaternion.identity; rb.linearVelocity = Vector3.zero;
-            }
+            player.Motor.Place(start, 0f, dropIn: true);
             player.Health.Restore(player.Health.maxShields);
             player.ResetForLife();
         }
@@ -414,7 +414,15 @@ namespace SpectreEX
         {
             var prefab = PickObstaclePrefab(type) ?? PickObstaclePrefab(fallbackObstacleType);
             if (prefab == null) return;
-            var go = Instantiate(prefab, pos, Quaternion.Euler(0f, heading, 0f));
+            // The original's heading byte; its shapes face the opposite way to how its tanks travel,
+            // which puts the model at yaw -degrees here
+            var go = Instantiate(prefab, pos, Quaternion.Euler(0f, -heading, 0f));
+            var beh = go.GetComponent<ObstacleBehaviour>();
+            if (beh != null)
+            {
+                beh.type = type;
+                beh.heading = Mathf.RoundToInt(heading * 256f / 360f) & 0xFF;
+            }
             ApplyFilled(go);
             Obstacles.Add(go);
         }
@@ -455,6 +463,7 @@ namespace SpectreEX
             if (ai != null) ai.difficulty = levelDifficulty * GameSettings.DifficultyMultiplier;
 
             if (spawn.hasData) ApplyEnemyData(go, spawn.type, spawn.data);
+            else if (ai != null && spawn.type > 0) { ai.matrixType = spawn.type; ai.hasMatrixData = false; }
             else if (CurrentMatrix == null) h.SetMaxShields(spawn.prefab.GetComponent<Health>().maxShields + Plan.robotShields - 1);
 
             if (spawn.type == 26)   // Invisible Tank: shows on radar only
@@ -475,6 +484,8 @@ namespace SpectreEX
             {
                 ai.fireInterval = d.firingInterval > 0 ? d.firingInterval / 60f : -1f;
                 ai.collideDamage = Mathf.Max(0, d.collideDamage);
+                ai.matrixType = type;
+                ai.hasMatrixData = true;
             }
 
             var weapon = go.GetComponent<TankWeapon>();
@@ -503,7 +514,6 @@ namespace SpectreEX
                     break;
                 case SlicerAI slicer:
                     if (d.speed > 0) slicer.speed = d.speed * 2.2f;
-                    slicer.contactDamage = Mathf.Max(1, d.collideDamage);
                     break;
                 case OrbiterAI orbiter:
                     if (d.speed > 0) orbiter.moveSpeed = d.speed * 2.2f;

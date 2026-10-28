@@ -9,7 +9,6 @@ namespace SpectreEX
     {
         public float speed = 16f;
         public float spinSpeed = 720f;
-        public int contactDamage = 1;
         public Transform blades;
 
         Rigidbody rb;
@@ -18,6 +17,8 @@ namespace SpectreEX
         protected override void Awake()
         {
             base.Awake();
+            matrixType = 21;
+            collideDamage = 3;
             rb = GetComponent<Rigidbody>();
             rb.constraints = RigidbodyConstraints.FreezeRotation;
             rb.interpolation = RigidbodyInterpolation.Interpolate;
@@ -41,12 +42,12 @@ namespace SpectreEX
             rb.linearVelocity = new Vector3(flat.x, rb.linearVelocity.y, flat.z);
         }
 
-        protected override void OnCollisionEnter(Collision c)
+        // The cut itself (damage every tick of contact) is PlayerMotor's; the slicer just reels back
+        void OnCollisionEnter(Collision c)
         {
             if (health.IsDead) return;
             var victim = c.collider.GetComponentInParent<PlayerTank>();
             if (victim == null) return;
-            victim.Health.TakeDamage(contactDamage);
             Sfx.PlayAt(Snd.SlicerSpin, transform.position);
             Vector3 back = Flat(transform.position - victim.transform.position).normalized;
             rb.linearVelocity = back * speed;

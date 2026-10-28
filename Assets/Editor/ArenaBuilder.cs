@@ -182,8 +182,11 @@ namespace SpectreEX.EditorTools
         }
 
         // A solid face in a craft's colour: lit, slightly self-lit so it reads in the dark arena
+        // Ship-coloured panels are only made once: the owner tunes them by hand, so a rebuild keeps them
         static Material PanelMaterial(string name, Color color)
         {
+            var existing = AssetDatabase.LoadAssetAtPath<Material>($"{MaterialDir}/{name}.mat");
+            if (existing != null) return existing;
             var mat = GlowMaterial(name, color, 8.5f);
             mat.SetColor("_BaseColor", color * 0.35f);
             mat.SetFloat("_Smoothness", 0.6f);
@@ -673,20 +676,25 @@ namespace SpectreEX.EditorTools
             GameObject Shape(int type, int shape, Material glow = null) => SavePrefab(SolidObstacle($"Obstacle_{type}_{shape}", shape, s, glow ?? cyanMat));
             GameObject[] Shapes(int type, params int[] shapes) => System.Array.ConvertAll(shapes, id => Shape(type, id));
 
-            Kind(0, Shape(0, 10032));                                      // pyramid
-            Kind(1, Shape(1, 10034));                                      // column
-            Kind(2, Shapes(2, 10034, 10004, 10088));                       // random tower
-            Kind(3, Shapes(3, 10097, 10005, 10006, 10007, 10014, 10018, 10019, 10063, 10084, 10085));   // billboards
-            Kind(4, Shape(4, 10020));                                      // rock
-            Kind(15, Shapes(15, 10008, 10013, 10009, 10000, 10020));       // cube (and its random variants)
+            // Types and shapes from the matrix "shps" table and the game's _HIT_A_GATE / _LOAD_WRLD (see
+            // docs/original-mechanics.md). Shapes under id 1000 are built into SVRWIN.EXE and not decoded
+            // yet, so those types (0, 1, 2's plain form, 4, 19) use the nearest matrix shape.
+            Kind(0, Shape(0, 10032));                                      // pyramid (built-in 1)
+            Kind(1, Shape(1, 10034));                                      // column (built-in 2)
+            Kind(2, Shapes(2, 10034, 10004, 10086));                       // random tower: rshp 1000
+            Kind(3, Shapes(3, 10097, 10005, 10006, 10007, 10014, 10018, 10019, 10063, 10084, 10085, 10105, 10106, 10107, 10108));   // billboards: rshp 1001
+            Kind(4, SavePrefab(Windmill("Obstacle_4_Windmill", s)));      // windmill (built-in 5 + fans)
+            Kind(13, Shape(13, 10088));
+            Kind(15, Shapes(15, 10008, 10013, 10009, 10000, 10020));       // cube: rshp 1002
             Kind(16, SavePrefab(FloorPad("Obstacle_16_Acid", 10024, s, acidMat, Matrix.ObstacleBehaviour.Kind.Acid)));
-            Kind(17, SavePrefab(FloorPad("Obstacle_17_Teleport", 10094, s, teleportMat, Matrix.ObstacleBehaviour.Kind.Teleport)));
-            Kind(18, SavePrefab(FloorPad("Obstacle_18_Pusher", 10095, s, pusherMat, Matrix.ObstacleBehaviour.Kind.Pusher)));
-            Kind(19, SavePrefab(Windmill("Obstacle_19_Windmill", s)));
+            Kind(17, SavePrefab(FloorPad("Obstacle_17_Ice", 10094, s, teleportMat, Matrix.ObstacleBehaviour.Kind.Ice)));
+            Kind(18, SavePrefab(FloorPad("Obstacle_18_Slow", 10095, s, pusherMat, Matrix.ObstacleBehaviour.Kind.Slow)));
+            Kind(19, SavePrefab(Gate("Obstacle_19_Teleport", 10030, s, teleportMat, Matrix.ObstacleBehaviour.Kind.Teleport)));
             Kind(36, SavePrefab(Transport("Obstacle_36_UpTransport", 10017, s, Matrix.ObstacleBehaviour.Kind.UpTransport)));
             Kind(37, SavePrefab(Transport("Obstacle_37_DownTransport", 10016, s, Matrix.ObstacleBehaviour.Kind.DownTransport)));
-            Kind(39, SavePrefab(WallSegment("Obstacle_39_Wall", new Vector3(4f, 16f, 32f) * s)));      // wall: one 32-unit run of a drawn line
-            Kind(40, SavePrefab(WallSegment("Obstacle_40_FlatWall", new Vector3(1f, 16f, 32f) * s)));  // flat wall: thin panel
+            Kind(38, Shape(38, 10098));
+            Kind(39, SavePrefab(FloorPad("Obstacle_39_Pusher", 10025, s, pusherMat, Matrix.ObstacleBehaviour.Kind.Pusher)));
+            Kind(40, Shape(40, 10026));
             return kinds.ToArray();
         }
 
@@ -716,18 +724,51 @@ namespace SpectreEX.EditorTools
             return root;
         }
 
+        // Standing gates you drive into (teleport): the shape at full height, a trigger round it
+        static GameObject Gate(string name, int shape, float scale, Material glow, Matrix.ObstacleBehaviour.Kind kind)
+        {
+            var root = new GameObject(name);
+            var model = SpectreModel("Model", root.transform, shape, scale, glow, out var b, panel: blockMat);
+            NoShadows(model.Find("Edges").gameObject);
+            var col = root.AddComponent<BoxCollider>();
+            col.isTrigger = true;
+            col.center = b.center;
+            col.size = Vector3.Max(b.size, new Vector3(1.5f, 1.5f, 1.5f));
+            root.AddComponent<Matrix.ObstacleBehaviour>().kind = kind;
+            return root;
+        }
+
+        // The windmill's tower and fans are built-in shapes of SVRWIN.EXE (5 and _WINDMILL_FANS, not
+        // decoded yet): a stand-in tower with four sails turning on top. 0x1D00 units up, 8 table-steps out.
         static GameObject Windmill(string name, float scale)
         {
             var root = new GameObject(name);
+            float height = 0x1D00 * scale / 0x200;
+            var towerSize = new Vector3(1.2f, height, 1.2f);
+            var tower = Box("Panels", root.transform, Vector3.up * height * 0.5f, towerSize, blockMat);
+            Object.DestroyImmediate(tower.GetComponent<Collider>());
+            AddEdges(root.transform, Vector3.up * height * 0.5f, towerSize, EdgeThickness, cyanMat);
+            NoShadows(root.transform.Find("Edges").gameObject);
+
             var pivot = new GameObject("Sails").transform;
             pivot.SetParent(root.transform, false);
-            var model = SpectreModel("Model", pivot, 10030, scale, cyanMat, out var b, panel: blockMat);
-            model.localPosition = new Vector3(-b.center.x, 0f, -b.center.z);   // turn about its own middle
-            NoShadows(model.Find("Edges").gameObject);
-            var col = root.AddComponent<CapsuleCollider>();
-            col.center = new Vector3(0f, b.size.y * 0.5f, 0f);
-            col.height = b.size.y;
-            col.radius = 0.6f;
+            pivot.localPosition = new Vector3(0f, height, 0.8f);
+            pivot.localRotation = Quaternion.Euler(90f, 0f, 0f);   // spin axis (local Y) along the windmill's facing
+            var sailCentre = new Vector3(1.6f, 0f, 0f);
+            var sailSize = new Vector3(3f, 0.08f, 0.5f);
+            for (int i = 0; i < 4; i++)
+            {
+                var arm = new GameObject("Sail").transform;
+                arm.SetParent(pivot, false);
+                arm.localRotation = Quaternion.Euler(0f, i * 90f, 0f);
+                var sail = Box("Panels", arm, sailCentre, sailSize, blockMat);
+                Object.DestroyImmediate(sail.GetComponent<Collider>());
+                AddEdges(arm, sailCentre, sailSize, EdgeThickness, cyanMat);
+            }
+
+            var col = root.AddComponent<BoxCollider>();
+            col.center = Vector3.up * height * 0.5f;
+            col.size = towerSize;
             var beh = root.AddComponent<Matrix.ObstacleBehaviour>();
             beh.kind = Matrix.ObstacleBehaviour.Kind.Windmill;
             beh.spinner = pivot;
@@ -778,8 +819,10 @@ namespace SpectreEX.EditorTools
             var root = new GameObject("Player");
             root.transform.position = pos;
 
+            // PlayerMotor moves the craft itself, the original's way; the body is only for contacts
             var rb = root.AddComponent<Rigidbody>();
             rb.mass = 50f;
+            rb.isKinematic = true;
 
             // Default "Balance" Spectre: the original's low wedge hull with its raised canopy
             var model = SpectreModel("Model", root.transform, PlayerShape, 0.25f, cyanMat, out var b, panel: playerPanel);
@@ -791,8 +834,8 @@ namespace SpectreEX.EditorTools
 
             var muzzle = Muzzle(root.transform, new Vector3(0f, b.center.y + 0.2f, b.max.z + 0.4f));
 
-            // "Balance" Spectre: middling speed, 5 shields, 30 rounds
-            root.AddComponent<TankMotor>().maxSpeed = 18f;
+            // "Balance" Spectre (the original's _SET_TANK_SETTINGS): speed 5, 60 damage points, 40 rounds
+            root.AddComponent<PlayerMotor>().speedPoints = 5;
             var weapon = root.AddComponent<TankWeapon>();
             weapon.muzzle = muzzle;
             weapon.projectileMaterial = cyanMat;
@@ -800,11 +843,12 @@ namespace SpectreEX.EditorTools
             weapon.cooldown = 0.3f;
             weapon.projectileSpeed = 80f;
             weapon.infiniteAmmo = false;
-            weapon.maxAmmo = 30;
+            weapon.maxAmmo = 40;
             weapon.fireSound = Snd.PlayerShot;
             var health = root.AddComponent<Health>();
             health.team = Team.Player;
-            health.maxShields = 5;
+            health.maxShields = 60;
+            health.hitMultiplier = 10;
             health.derezMaterial = cyanMat;
             health.hitSound = Snd.PlayerHit;
             return root.AddComponent<PlayerTank>();

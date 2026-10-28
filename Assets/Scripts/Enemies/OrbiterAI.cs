@@ -21,6 +21,8 @@ namespace SpectreEX
         protected override void Awake()
         {
             base.Awake();
+            matrixType = 35;
+            collideDamage = 6;
             rb = GetComponent<Rigidbody>();
             rb.isKinematic = true;
             rb.interpolation = RigidbodyInterpolation.Interpolate;
