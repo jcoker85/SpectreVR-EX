@@ -63,6 +63,7 @@ namespace SpectreEX.EditorTools
             var prefabs = BuildPrefabs();
 
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            RenderSettings.skybox = null;   // black void; no legacy skybox
             var arena = new GameObject("Arena").transform;
             BuildFloor(arena);
             var walls = BuildWalls(arena);
@@ -652,7 +653,7 @@ namespace SpectreEX.EditorTools
                 o.SetParent(root, false);
                 o.localPosition = pos + Vector3.up * size.y / 2f;
                 o.localRotation = Quaternion.Euler(0f, Range(rng, 0f, 90f), 0f);
-                Box("Body", o, Vector3.zero, size, blockMat);
+                Box("Panels", o, Vector3.zero, size, blockMat);   // "Panels" = hidden when Options Filled is off
                 AddEdges(o, Vector3.zero, size, 0.15f, cyanMat);
                 NoShadows(o.Find("Edges").gameObject);
             }
@@ -713,6 +714,9 @@ namespace SpectreEX.EditorTools
             hd.antialiasing = HDAdditionalCameraData.AntialiasingMode.TemporalAntialiasing;
             hd.clearColorMode = HDAdditionalCameraData.ClearColorMode.Color;
             hd.backgroundColorHDR = Color.black;
+            // DLSS runs through HDRP dynamic resolution
+            cam.allowDynamicResolution = true;
+            hd.allowDynamicResolution = true;
             var view = camGo.AddComponent<ViewCamera>();
             view.target = player;
             // Sit just above the canopy, a little forward of the hull's middle
@@ -733,14 +737,21 @@ namespace SpectreEX.EditorTools
             var hdLight = lightGo.AddComponent<HDAdditionalLightData>();
             hdLight.useRayTracedShadows = true;
 
+            // The arena profile is hand-tuned in the editor (ray tracing quality, samples, DLSS-friendly
+            // settings), so only create it when it's missing - never overwrite an existing one.
             var profile = AssetDatabase.LoadAssetAtPath<VolumeProfile>(VolumePath);
-            if (profile == null)
-            {
-                profile = ScriptableObject.CreateInstance<VolumeProfile>();
-                AssetDatabase.CreateAsset(profile, VolumePath);
-            }
-            foreach (var c in profile.components.ToArray()) Object.DestroyImmediate(c, true);
-            profile.components.Clear();
+            if (profile == null) profile = CreateDefaultVolumeProfile();
+
+            var volGo = new GameObject("Global Volume");
+            var vol = volGo.AddComponent<Volume>();
+            vol.isGlobal = true;
+            vol.sharedProfile = profile;
+        }
+
+        static VolumeProfile CreateDefaultVolumeProfile()
+        {
+            var profile = ScriptableObject.CreateInstance<VolumeProfile>();
+            AssetDatabase.CreateAsset(profile, VolumePath);
 
             var env = Add<VisualEnvironment>(profile);
             env.skyType.Override(0); // no sky: pure black void
@@ -772,19 +783,9 @@ namespace SpectreEX.EditorTools
 
             Add<RayTracingSettings>(profile);
 
-            var vignette = Add<Vignette>(profile);
-            vignette.intensity.Override(0.3f);
-
-            var chroma = Add<ChromaticAberration>(profile);
-            chroma.intensity.Override(0.15f);
-
             EditorUtility.SetDirty(profile);
             AssetDatabase.SaveAssets();
-
-            var volGo = new GameObject("Global Volume");
-            var vol = volGo.AddComponent<Volume>();
-            vol.isGlobal = true;
-            vol.sharedProfile = profile;
+            return profile;
         }
 
         static T Add<T>(VolumeProfile profile) where T : VolumeComponent

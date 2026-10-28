@@ -238,13 +238,13 @@ namespace SpectreEX.Menu
             s.hotspots.Add(h);
         }
 
-        // A dialog button: hovering darkens it slightly, like a pressed Mac button
-        Hotspot Button(MenuScreen s, Rect r, System.Action action, Key key = Key.None)
+        // A dialog button: hovering darkens it slightly, like a pressed Mac button (or brightens it, on our dark panels)
+        Hotspot Button(MenuScreen s, Rect r, System.Action action, Key key = Key.None, Color? tint = null)
         {
             var h = new Hotspot { rect = r, action = action, key = key };
             if (r.width > 0)
             {
-                h.tint = AddRect(s, r, new Color(0f, 0f, 0f, 0.18f));
+                h.tint = AddRect(s, r, tint ?? new Color(0f, 0f, 0f, 0.18f));
                 h.tint.enabled = false;
             }
             s.hotspots.Add(h);
@@ -392,7 +392,7 @@ namespace SpectreEX.Menu
         void BuildControls()
         {
             controls = Panel("Controls", new Vector2(510, 292));
-            var t = AddText(controls, new Rect(22, 12, 470, 270), 9, Color.black, TextAnchor.UpperLeft);
+            var t = AddText(controls, new Rect(22, 12, 470, 270), 9, SegGreen, TextAnchor.UpperLeft);
             t.Text = Seg(
                 "SPECTREEX CONTROLS\n\n" +
                 "DRIVE        ARROWS, WASD OR KEYPAD\n" +
@@ -469,12 +469,11 @@ namespace SpectreEX.Menu
         void BuildNotice()
         {
             notice = Panel("Notice", new Vector2(300, 110));
-            noticeText = AddText(notice, new Rect(14, 14, 272, 52), 9, Color.black, TextAnchor.MiddleCenter);
+            noticeText = AddText(notice, new Rect(14, 14, 272, 52), 9, SegGreen, TextAnchor.MiddleCenter);
             var ok = new Rect(110, 72, 80, 26);
-            AddRect(notice, ok, Color.black);
-            AddRect(notice, new Rect(ok.x + 2, ok.y + 2, ok.width - 4, ok.height - 4), new Color(0.75f, 0.75f, 0.75f));
-            AddText(notice, ok, 10, Color.black, TextAnchor.MiddleCenter).Text = "OK";
-            Button(notice, ok, Pop);
+            Frame(notice, ok, DimGreen, 1);
+            AddText(notice, ok, 10, SegGreen, TextAnchor.MiddleCenter).Text = "OK";
+            Button(notice, ok, Pop, tint: new Color(SegGreen.r, SegGreen.g, SegGreen.b, 0.2f));
             notice.onAnyClick = null;
             notice.onEscape = notice.onEnter = Pop;
         }
@@ -485,13 +484,15 @@ namespace SpectreEX.Menu
             Push(notice);
         }
 
-        // A plain Mac-style dialog panel: white with a black and purple border like the originals
+        // Our own dialogs (controls, notices) use the high-score table's look: black with green segment text
+        static readonly Color SegGreen = new Color(0.25f, 0.78f, 0.27f);
+        static readonly Color DimGreen = new Color(0.2f, 0.6f, 0.22f);
+
         MenuScreen Panel(string name, Vector2 size)
         {
             var s = NewScreen(name, size);
-            AddRect(s, new Rect(0, 0, size.x, size.y), new Color(0.25f, 0.1f, 0.45f));
-            AddRect(s, new Rect(3, 3, size.x - 6, size.y - 6), Color.black);
-            AddRect(s, new Rect(4, 4, size.x - 8, size.y - 8), Color.white);
+            AddRect(s, new Rect(0, 0, size.x, size.y), Color.black);
+            Frame(s, new Rect(3, 3, size.x - 6, size.y - 6), DimGreen, 1);
             return s;
         }
 

@@ -132,17 +132,34 @@ namespace SpectreEX
         {
             Sfx.Enabled = GameSettings.SoundEffectsOn;
 
-            var vol = FindFirstObjectByType<Volume>();
-            if (vol != null)
-            {
-                var profile = vol.profile;   // runtime instance, so the asset on disk is untouched
-                if (profile.TryGet<ScreenSpaceReflection>(out var ssr)) ssr.active = GameSettings.DisplayComplex;
-                if (profile.TryGet<GlobalIllumination>(out var gi)) gi.active = GameSettings.DisplayComplex;
-                if (profile.TryGet<ScreenSpaceAmbientOcclusion>(out var ao)) ao.active = GameSettings.DisplayComplex;
-            }
+            ApplyComplex(GameSettings.DisplayComplex);
             if (floorDots != null) floorDots.enabled = GameSettings.DisplayTextures;
             foreach (var r in wallRenderers) if (r != null) r.enabled = GameSettings.DisplayTextures;
             foreach (var r in FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None)) ApplyFilled(r);
+        }
+
+        float aoIntensity = -1f;
+
+        // Options "Complex": ray-traced reflections, global illumination, ambient occlusion and shadows.
+        // Off forces each effect off in the arena profile rather than deactivating it, because a
+        // deactivated component falls back to HDRP's default profile (which has screen-space reflections on).
+        void ApplyComplex(bool on)
+        {
+            var vol = FindFirstObjectByType<Volume>();
+            if (vol != null)
+            {
+                var profile = vol.profile;   // runtime instance, so the hand-tuned asset on disk is untouched
+                if (profile.TryGet<ScreenSpaceReflection>(out var ssr)) { ssr.active = true; ssr.enabled.Override(on); }
+                if (profile.TryGet<GlobalIllumination>(out var gi)) { gi.active = true; gi.enable.Override(on); }
+                if (profile.TryGet<ScreenSpaceAmbientOcclusion>(out var ao))
+                {
+                    if (aoIntensity < 0f) aoIntensity = ao.intensity.value;
+                    ao.active = true;
+                    ao.intensity.Override(on ? aoIntensity : 0f);
+                }
+            }
+            foreach (var light in FindObjectsByType<HDAdditionalLightData>(FindObjectsSortMode.None))
+                light.useRayTracedShadows = on;
         }
 
         public static void ApplyFilled(Renderer r)
