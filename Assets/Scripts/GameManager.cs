@@ -340,8 +340,11 @@ namespace SpectreEX
             if (Flags.Count == 0)
                 for (int i = 0; i < 5 + levelNumber; i++)
                     if (TryFindSpawnPoint(out var p, 25f)) Flags.Add(Spawn(flagPrefab, p, Quaternion.identity));
-            for (int i = 0; i < 2; i++)
-                if (TryFindSpawnPoint(out var p, 20f)) Dumps.Add(Spawn(ammoDumpPrefab, p - Vector3.up * p.y, Quaternion.identity));
+            // Ten ammo dumps, their kinds weighted by the enemy data's type-5 entry (_LOAD_BVAL)
+            DumpOdds = m.TryGetEnemyData(lv.enemyData, 5, out var fuel)
+                ? new[] { fuel.strength, fuel.collideDamage, fuel.attackRange / 7, fuel.firingRange / 7 }
+                : DefaultDumpOdds;
+            for (int i = 0; i < DumpsPerLevel; i++) SpawnDump();
 
             FlagsTotal = Flags.Count;
             FlagsCollected = 0;
@@ -386,8 +389,8 @@ namespace SpectreEX
 
             for (int i = 0; i < plan.flags; i++)
                 if (TryFindSpawnPoint(out var p, 25f)) Flags.Add(Spawn(flagPrefab, p, Quaternion.identity));
-            for (int i = 0; i < plan.ammoDumps; i++)
-                if (TryFindSpawnPoint(out var p, 25f)) Dumps.Add(Spawn(ammoDumpPrefab, p - Vector3.up * p.y, Quaternion.identity));
+            DumpOdds = DefaultDumpOdds;
+            for (int i = 0; i < plan.ammoDumps; i++) SpawnDump();
 
             FlagsTotal = Flags.Count;
             FlagsCollected = 0;
@@ -401,6 +404,51 @@ namespace SpectreEX
         }
 
         // The original starts every level 15 grid units south of the middle, facing north, dropping in
+        // ---------- ammo dumps ----------
+
+        const int DumpsPerLevel = 10;
+        // Out of ten: green (ammo), white (repair), orange (shield), blue (wings) - the original's defaults
+        static readonly int[] DefaultDumpOdds = { 5, 2, 1, 2 };
+        int[] DumpOdds = DefaultDumpOdds;
+
+        void SpawnDump()
+        {
+            if (!TryFindSpawnPoint(out var p, 0f)) return;
+            var d = Spawn(ammoDumpPrefab, p - Vector3.up * p.y, Quaternion.identity);
+            d.SetKind(PickDumpKind());
+            Dumps.Add(d);
+        }
+
+        // _PICK_FUEL_TYPE: a roll of 0-9 against the green / white / orange counts, blue otherwise
+        AmmoDump.Kind PickDumpKind()
+        {
+            int roll = Random.Range(0, 10);
+            for (int k = 0; k < 3; k++)
+            {
+                if (roll < DumpOdds[k]) return (AmmoDump.Kind)k;
+                roll -= DumpOdds[k];
+            }
+            return AmmoDump.Kind.Blue;
+        }
+
+        // A used dump re-rolls its kind and moves somewhere at least 0x26000 units (~49 m) from the
+        // player on both axes, clear of everything else (_INVISIBLE_PLACE_XY)
+        public void RelocateDump(AmmoDump d)
+        {
+            const float away = 0x26000 * PlayerMotor.UnitsToMetres;
+            Vector3 me = player.transform.position;
+            Vector3 spot = Vector3.zero;
+            bool found = false;
+            for (int i = 0; i < 200 && !found; i++)
+            {
+                if (!TryFindSpawnPoint(out spot, 0f)) continue;
+                found = Mathf.Abs(spot.x - me.x) >= away && Mathf.Abs(spot.z - me.z) >= away;
+            }
+            if (!found && !TryFindSpawnPoint(out spot, away)) return;
+            d.transform.position = spot - Vector3.up * spot.y;
+            d.SetKind(PickDumpKind());
+        }
+
         void PlacePlayerAtStart()
         {
             var start = new Vector3(0f, 0f, -15f * GridScale);

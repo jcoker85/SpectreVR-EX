@@ -30,6 +30,13 @@ namespace SpectreEX
         public const string TimeTick = "TMTICK";
         public const string SlicerSpin = "SPINNER";
         public const string GameOver = "URDMD";
+        // Names from SVRWIN.EXE's own sound table, matched to where the code plays them
+        public const string Repair = "REPPCKP";      // full repair / wings dump
+        public const string Gate = "GATE";           // teleport gate
+        public const string IceSlide = "ICESLD";     // driving onto ice
+        public const string Goo = "GOOSQ";           // slow pads
+        public const string Acid = "ACIDD";          // acid burn
+        public const string HitEdge = "HTEDGE";      // arena edge
     }
 
     public static class Sfx

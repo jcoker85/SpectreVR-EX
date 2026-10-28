@@ -104,7 +104,7 @@ namespace SpectreEX.Hud
             Line(radarCorner, cx - rr, cy, cx - rr + 6, cy, FrameWhite);
             Line(radarCorner, cx + rr - 6, cy, cx + rr, cy, FrameWhite);
 
-            // Top-right corner: WEAPON box flush right, H / F gauges to its left
+            // Top-right corner: WEAPON box flush right, H (hyperspace) / F (floating) gauges to its left
             var right = Group("Right", new Vector2(1f, 1f), new Vector2(-Margin, -Margin));
             float wx = -38;
             MakeText(right, "WEAPON", 0, r1, LabelSize, LabelGreen, TextAnchor.MiddleRight);
@@ -334,7 +334,7 @@ namespace SpectreEX.Hud
             ammoValue.color = lowAmmo ? AlertRed : DigitGreen;
 
             SetFill(hFill, p.HyperspaceEnergy, false);
-            SetFill(fFill, gm.FlagsTotal > 0 ? (float)gm.FlagsCollected / gm.FlagsTotal : 0f, false);
+            SetFill(fFill, p.Motor.Floating01, false);   // F: wings time left, as the original draws it
 
             if (ammo == 0 && gm.Playing && !p.Health.IsDead) Flash("OUT OF AMMO - FIND AN AMMO DUMP", 0.2f);
 

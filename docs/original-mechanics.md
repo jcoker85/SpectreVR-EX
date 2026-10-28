@@ -204,7 +204,17 @@ etc. - not read yet.
    opposite their travel direction, as the tank's +0x80 shows). Windmill tower/sails are a
    stand-in (built-in shapes 5 and the fans aren't decoded). Under-floor transports are wired
    but not seen in a real matrix yet.
-4. Ammo dump kinds and relocation; floating.
+4. **Done:** 10 dumps per matrix level (all ten `_FUEL_OBJ` slots are placed by `_BUILD_WORLD`),
+   kind rolled 0-9 against green/white/orange counts (default 5/2/1, blue the rest; a level's
+   type-5 enemy data overrides: strength, collideDamage, attackRange/7, firingRange/7), used up on
+   touch and moved ≥0x26000 from the player on both axes with a new kind. Wings in `PlayerMotor`
+   (`Floating`, hover toward 0x2D00, speed ×1.25, never blocked); the HUD F gauge shows it, as the
+   original does (it showed flags before). Orbit shields (`PlayerShields`/`OrbitShield`): 4 slots
+   at 4.8 m, spin after a fifth pickup, hit robots for wval 7 damage (8), absorb enemy bolts.
+   Measured: green +10/+10, white full, orange +1 shield, blue ~15 s of hover at ~2-2.6 m.
+   Not done: wings visuals on the model, alt weapon 8 from blue dumps, level-0 "jump" pads
+   (`_CHECK_JUMP_COLLIDE`: skip to level 3 or 8), the original's bonus counter on the HUD
+   (ours shows TIME; `_BONUS` falls by 4 a second).
 5. Shapes from `shps` (decode the built-in shapes at DS:0x9B8).
 6. Robots (all 13), then weapons (7 alt weapons), then the remaining fidelity pass.
 

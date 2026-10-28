@@ -21,6 +21,8 @@ namespace SpectreEX
         const int GroundZ = 0x500, UnderZ = -0xF00, DropZ = 0x5000;
         const int Gravity = 0x100, JumpVz = 0xC00, HardLanding = -0xF00;
         const int PushSpeed = 0x12;
+        public const int FloatMax = 0x546;
+        const int FloatGain = 0x10E, FloatHeight = 0x2D00;   // a wings dump: 270 ticks (~15 s) of hover, up to 1350
         const int MaxTicksPerFrame = 8;
 
         // The original's tables: 256 * cos / sin of heading * 2pi/256, truncated
@@ -41,6 +43,8 @@ namespace SpectreEX
 
         public int Hyper { get; private set; } = HyperMax;
         public float Hyper01 => Hyper / (float)HyperMax;
+        public int Floating { get; private set; }
+        public float Floating01 => Floating / (float)FloatMax;
         public bool OnGround => z <= minZ;
         public bool Under => under;
         int ThisSpeed => Mathf.Clamp(speedPoints, 1, 9) * 8 / 5;
@@ -88,6 +92,12 @@ namespace SpectreEX
         public void RequestHyperspace() => hyperRequested = true;
         public void ResetHyper() => Hyper = HyperMax;
 
+        // Wings (blue ammo dump): hover a while, faster and over everything
+        public void AddFloating()
+        {
+            if (!under) Floating = Mathf.Min(FloatMax, Floating + FloatGain);
+        }
+
         // Put the craft somewhere (level start, respawn). dropIn starts it high up, falling, as the original does.
         public void Place(Vector3 position, float yaw, bool dropIn)
         {
@@ -98,6 +108,7 @@ namespace SpectreEX
             minZ = GroundZ;
             z = dropIn ? DropZ : GroundZ + System.Math.Max(0, ToUnits(position.y));
             vz = 0;
+            Floating = 0;
             bounceI = turningTimer = acidTimer = 0;
             onIce = false;
             lastGate = null;
@@ -139,9 +150,14 @@ namespace SpectreEX
         {
             // The ground sinks while under the floor (down transport) and rises back afterwards
             if (!under) { if (minZ < GroundZ) minZ += 0x100; }
-            else if (minZ > UnderZ) minZ -= 0x100;
+            else
+            {
+                if (minZ > UnderZ) minZ -= 0x100;
+                Floating = 0;
+            }
 
             int speed = throttle > 0.3f ? ThisSpeed : throttle < -0.3f ? -ThisSpeed : 0;
+            if (Floating > 0) speed += speed >> 2;
             int turnStep = 0;
             if (Mathf.Abs(turn) > 0.3f)
             {
@@ -202,7 +218,7 @@ namespace SpectreEX
                         {
                             onIce = true;
                             iceDx = dx; iceDy = dy; iceHeading = heading;
-                            Sfx.Play(Snd.Collision);
+                            Sfx.Play(Snd.IceSlide);
                         }
                         else
                         {
@@ -213,7 +229,7 @@ namespace SpectreEX
                     case ObstacleBehaviour.Kind.Slow:
                         nx = x + dx / 4; ny = y + dy / 4;
                         onIce = false;
-                        if (acidTimer-- < 1) { acidTimer = 8; Sfx.Play(Snd.Collision); }
+                        if (acidTimer-- < 1) { acidTimer = 8; Sfx.Play(Snd.Goo); }
                         break;
                     case ObstacleBehaviour.Kind.Acid:
                         onIce = false;
@@ -221,7 +237,11 @@ namespace SpectreEX
                         {
                             acidTimer = 2;
                             var gm = GameManager.Instance;
-                            DamageSelf(gm != null ? gm.AcidDamage : 10, true);
+                            if (health != null)
+                            {
+                                health.TakeRawDamage(gm != null ? gm.AcidDamage : 10, false);
+                                if (!health.IsDead) Sfx.Play(health.Shields <= 20 ? Snd.Danger : Snd.Acid);
+                            }
                         }
                         break;
                     case ObstacleBehaviour.Kind.DownTransport:
@@ -240,6 +260,7 @@ namespace SpectreEX
                 blockerAt = solid.position;
             }
             if (gate == null) { lastGate = null; onIce = false; acidTimer = 0; }
+            if (Floating > 0) blocked = false;   // wings carry you over anything
 
             // Blocked: the whole tick's move is undone, turn included, and on the ground you're
             // nudged 1/32 of the way out from the thing you hit with a little hop
@@ -257,10 +278,10 @@ namespace SpectreEX
             x = nx; y = ny;
 
             // The arena edge is a clamp, not a collider
-            if (x > Arena) { x = Arena; Bounce(Snd.Collision); }
-            if (x < -Arena) { x = -Arena; Bounce(Snd.Collision); }
-            if (y > Arena) { y = Arena; Bounce(Snd.Collision); }
-            if (y < -Arena) { y = -Arena; Bounce(Snd.Collision); }
+            if (x > Arena) { x = Arena; Bounce(Snd.HitEdge); }
+            if (x < -Arena) { x = -Arena; Bounce(Snd.HitEdge); }
+            if (y > Arena) { y = Arena; Bounce(Snd.HitEdge); }
+            if (y < -Arena) { y = -Arena; Bounce(Snd.HitEdge); }
 
             // Bounce hop: a run of upward kicks shaped by the cosine table
             if (bounceI != 0)
@@ -282,6 +303,16 @@ namespace SpectreEX
                 vz = 0;
             }
             else vz -= Gravity;
+
+            // Wings: lift toward hover height (a little lower while moving), with a wobble and drag
+            if (Floating > 0)
+            {
+                long lift = ((FloatHeight - z) >> 4) - (speed != 0 ? 0x100 : 0);
+                if (lift < 0) lift = 0;
+                vz += lift + Random.Range(0, 0x60);
+                vz -= vz >> 4;
+                Floating--;
+            }
 
             if (Hyper < HyperMax) Hyper = Mathf.Min(HyperMax, Hyper + HyperRecharge);
             if (contactSoundTimer > 0) contactSoundTimer--;
@@ -337,7 +368,7 @@ namespace SpectreEX
                 y = ToUnits(o.transform.position.z);
                 heading = (target.heading + 0x40) & 0xFF;
                 lastGate = target;
-                Sfx.Play(Snd.Warp);
+                Sfx.Play(Snd.Gate);
                 Snap();
                 return true;
             }

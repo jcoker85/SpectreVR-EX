@@ -13,12 +13,15 @@ namespace SpectreEX
         public PlayerMotor Motor { get; private set; }
         public TankWeapon Weapon { get; private set; }
         public Health Health { get; private set; }
+        public PlayerShields Shields { get; private set; }
 
         void Awake()
         {
             Motor = GetComponent<PlayerMotor>();
             Weapon = GetComponent<TankWeapon>();
             Health = GetComponent<Health>();
+            Shields = GetComponent<PlayerShields>();
+            if (Shields == null) Shields = gameObject.AddComponent<PlayerShields>();
         }
 
         public void ResetForLife()

@@ -24,6 +24,7 @@ namespace SpectreEX
         void Awake() => Ammo = maxAmmo;
 
         public void Refill() => Ammo = maxAmmo;
+        public void AddAmmo(int rounds) => Ammo = Mathf.Clamp(Ammo + rounds, 0, maxAmmo);
         public bool NeedsAmmo => !infiniteAmmo && Ammo < maxAmmo;
 
         public bool TryFire()

@@ -35,11 +35,21 @@ namespace SpectreEX
             if (Time.time >= dieAt) { Destroy(gameObject); return; }
 
             Vector3 step = velocity * Time.deltaTime;
-            var hits = Physics.RaycastAll(transform.position, step.normalized, step.magnitude, ~0, QueryTriggerInteraction.Ignore);
+            var hits = Physics.RaycastAll(transform.position, step.normalized, step.magnitude, ~0, QueryTriggerInteraction.Collide);
             System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
             foreach (var hit in hits)
             {
                 if (owner != null && hit.collider.transform.IsChildOf(owner.transform)) continue;
+
+                // Triggers are see-through, except the other side's orbiting shields, which soak up a bolt
+                if (hit.collider.isTrigger)
+                {
+                    var shield = hit.collider.GetComponent<OrbitShield>();
+                    if (shield == null || shield.team == team) continue;
+                    shield.Absorb();
+                    Destroy(gameObject);
+                    return;
+                }
 
                 var health = hit.collider.GetComponentInParent<Health>();
                 if (health != null && health.team == team) continue; // no friendly fire between robots
