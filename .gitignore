@@ -117,3 +117,10 @@ InitTestScene*.unity*
 /Tools/SpectreVR/
 /Tools/GeneralUser-GS/
 /Tools/fluidsynth/
+/Tools/_dl/
+/Tools/jdk25/
+/Tools/ghidra/
+/Tools/dosbox-x/
+/Tools/ghidra_projects/
+/Tools/ghidra_out/
+/Tools/ghidra_home/
