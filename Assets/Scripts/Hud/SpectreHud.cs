@@ -28,6 +28,8 @@ namespace SpectreEX.Hud
 
         RectTransform screenRoot;
         Text livesValue, ammoValue, scoreValue, levelValue, timeValue;
+        Image weaponIcon;
+        int shownWeapon;
         RectTransform damageFill, ammoFill, hFill, fFill;
         Image ammoFillImg;
         RectTransform radarRoot;
@@ -113,8 +115,9 @@ namespace SpectreEX.Hud
             Place(icon, wx + 7, 24, 24, 24);
             var img = icon.gameObject.AddComponent<Image>();
             img.raycastTarget = false;
-            img.sprite = LoadWeaponIcon(0);
+            img.sprite = LoadWeaponIcon(TankWeapon.IconCell[0]);
             img.color = img.sprite != null ? Color.white : Color.clear;
+            weaponIcon = img;
 
             float fx = wx - 24, hx = wx - 44;
             Frame(right, hx, 2, 12, 46, FrameWhite);
@@ -337,6 +340,16 @@ namespace SpectreEX.Hud
             SetFill(fFill, p.Motor.Floating01, false);   // F: wings time left, as the original draws it
 
             if (ammo == 0 && gm.Playing && !p.Health.IsDead) Flash("OUT OF AMMO - FIND AN AMMO DUMP", 0.2f);
+
+            // The heavy weapon's icon, and "<name> Online" for three seconds after a change, as the original shows
+            if (weaponIcon != null && shownWeapon != p.Weapon.AltWeapon)
+            {
+                shownWeapon = p.Weapon.AltWeapon;
+                weaponIcon.sprite = LoadWeaponIcon(TankWeapon.IconCell[shownWeapon]);
+            }
+            float banner = p.Weapon.BannerUntil - Time.time;
+            if (banner > 0f && gm.Playing)
+                Flash(p.Weapon.AltWeapon == 0 ? "HEAVY WEAPONS OFFLINE" : TankWeapon.Names[p.Weapon.AltWeapon].ToUpperInvariant() + " ONLINE", banner);
 
             message.enabled = Time.time < messageUntil;
             hint.enabled = Time.time < hintUntil;

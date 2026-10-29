@@ -461,14 +461,6 @@ namespace SpectreEX.EditorTools
             return d;
         }
 
-        static Transform Muzzle(Transform parent, Vector3 pos)
-        {
-            var m = new GameObject("Muzzle").transform;
-            m.SetParent(parent, false);
-            m.localPosition = pos;
-            return m;
-        }
-
         static BoxCollider FitCollider(GameObject root, Bounds b)
         {
             var col = root.AddComponent<BoxCollider>();
@@ -564,19 +556,11 @@ namespace SpectreEX.EditorTools
             if (layer >= 0) SetLayerRecursive(model.gameObject, layer);
             playerBounds = b;
 
-            var muzzle = Muzzle(root.transform, new Vector3(0f, b.center.y + 0.2f, b.max.z + 0.4f));
-
             // "Balance" Spectre (the original's _SET_TANK_SETTINGS): speed 5, 60 damage points, 40 rounds
             root.AddComponent<PlayerMotor>().speedPoints = 5;
             var weapon = root.AddComponent<TankWeapon>();
-            weapon.muzzle = muzzle;
             weapon.projectileMaterial = cyanMat;
-            weapon.team = Team.Player;
-            weapon.cooldown = 0.3f;
-            weapon.projectileSpeed = 80f;
-            weapon.infiniteAmmo = false;
             weapon.maxAmmo = 40;
-            weapon.fireSound = Snd.PlayerShot;
             var health = root.AddComponent<Health>();
             health.team = Team.Player;
             health.maxShields = 60;

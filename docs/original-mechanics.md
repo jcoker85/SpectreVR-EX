@@ -297,6 +297,30 @@ paid when the last one dies, `_EXPLODE_TANK` throws 5 debris shots. Weapons 1 an
 robots within `_QFIND_DIST` 0x0E / 0x40 / 0x80 lose 5 / 2 / 2, the player takes 10 per band
 (0x40 / 0x80 / 0xC4). A shot touching an obstacle dies; a weapon-11 shot spins that obstacle.
 
+### The player's weapons (`_DO_PLAYER_MOVE` @1050:5663, `_KEY_WEAPON`, `_ADD_ALT_WEAPON`)
+
+- Cannon (Space / Ins / fire button): fires when pressed, then while held every
+  `_MAX_FIRE_TIMER` + 1 ticks (`4 - level/16`, level 0-based: 5 ticks at first). Costs wval 0's ammo
+  (1); sound PLYRSHT, LOONSHT with under 6 rounds, OUTOFAM when empty.
+- Eight heavy weapons (`_ALT_WEAPON` 1-8): Grenades (shot type 1, GRSHOT), Scatter Shots (5,
+  TRPLSHT), Seekers (9, SEKRSHT), Missiles (10, MISSL2), Spinners (11, SPNSHT), Mines (2, MINDRP),
+  Bombs (17, MINBM), Pulse Bursts (13, DBLSTCY). Ctrl (scancode 0x1D) cycles to the next unlocked
+  one (CHGWEPN; past the last unlocked comes 0, none); Alt (0x38) fires the selected one; keys 1-8
+  select that weapon and fire it at once (CHGWEPN if short of ammo). Each costs its wval ammo
+  (Central Systems: 10 / 1 / 2 / 6 / 1 / 3 / 10 / 1). Selecting shows "<name> Online" (or "Heavy
+  Weapons Offline") for 0x36 ticks; the HUD icon is cell `_WEAPON_X[w] / 16` of SPCP36
+  (cannon 6, then 0, 3, 2, 1, 5, 4, 7, 8).
+- Unlocking: a game starts with the cannon only (`_ALLOW_ALT_WEAPONS = 1`). Each level's third wave
+  word - the same number that picks its tip from STR# 1007 - is passed to `_ADD_ALT_WEAPON` the
+  first time round (not on later laps): `_ALLOW_ALT_WEAPON_STRS` maps 3/12 → Missiles, 4/13 → Mines,
+  10 → Grenades, 11 → Seekers, 14 → Spinners, 15 → Scatter, 16 → all, 17 → Bombs, 18 → Pulse;
+  the tips themselves describe the weapon. Starting at a later level unlocks every earlier
+  level's weapon (`_CATCHUP_HINT`). A wings dump selects Pulse Bursts if nothing is selected and
+  they're unlocked.
+- `_MY_SHOOT`: shots start at the craft, at its height, along its heading (Scatter: ±0x10). The
+  player's homing shots chase the robot closest to the shot (`_FIND_CLOSEST_TANK`), held at the
+  middle of its collision box; Seekers turn only 2 a tick, so they curve wide.
+
 ## Port plan (single player)
 
 1. **Done:** `PlayerMotor` simulates the player in the original's units at 18.2065 ticks/s and
@@ -353,6 +377,14 @@ robots within `_QFIND_DIST` 0x0E / 0x40 / 0x80 lose 5 / 2 / 2, the player takes 
    changes (Slicer hop frames, burrowed shape); robot-on-robot bumping (+0xE); the Super/Robot
    Tank stun flash; weapon-11 hits spinning obstacles; Bouncer (45) and Tank (6) aren't in any
    bundled enemy set so are untested; model facing vs travel checked only roughly.
+   **Weapons done:** the player now fires through the same tick-based `ShotSystem` as the robots
+   (Projectile is gone); `TankWeapon` runs the cannon's autofire, the eight heavy weapons, their
+   unlocks, costs, keys (Alt / Ctrl / 1-8; gamepad X / shoulders) and sounds; the HUD icon follows
+   `_WEAPON_X` and shows "<name> Online". Measured: cannon 8 rounds in 2 s held (expected ~8.3);
+   Medium levels 1-4 unlock Grenades, Spinners, Missiles, Mines; every heavy weapon fires and
+   charges its wval ammo; Grenades and Bombs splash, Missiles kill, Spinners score and stun.
+   Not done: the player's orbit shields still use our own OrbitShield objects rather than weapon-7
+   shots; mines aren't set off by being shot.
 7. Then the remaining fidelity pass.
 
 **Sound numbers** (`_SOUNDTABLE`, filled from `_SAMPLETABLE` at startup): 0/4 OPPHIT, 1 PLYRSHT,

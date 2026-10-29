@@ -10,7 +10,7 @@ namespace SpectreEX.Matrix
     // (4-char type, id, offset, size) entries. The resource types used here:
     //
     //   wave  level list for one difficulty: per level 8 words
-    //         (grid id, enemy set id, tip number, enemy data id, special weapon, ?, song id, 999)
+    //         (grid id, enemy set id, tip / heavy weapon number, enemy data id, start movie, end movie, song id, 999)
     //   wrld  game grid: count, then (obstacle type, x, y, heading) on a 1024 x 1024 grid; flags first
     //   enem  enemy set: count, then (robot type, max at start, min at start, regeneration multiplier)
     //   bval  enemy data: count, then 14 words per robot type (see EnemyData)
@@ -43,6 +43,8 @@ namespace SpectreEX.Matrix
 
         public bool HasShapeTable => ShapeTable != null;
 
+        // tip: a STR# 1007 index that also unlocks a heavy weapon (_LOAD_WAVE / _ADD_ALT_WEAPON);
+        // special and the word after it are the start / end movies
         public struct Level
         {
             public int grid, enemySet, tip, enemyData, special, song;

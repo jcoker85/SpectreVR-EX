@@ -41,6 +41,9 @@ namespace SpectreEX
         public long ZUnits => z;                     // height in original units, the floor at GroundZ
         public Vector3 SimPosition => curPos;        // this tick's position (the transform is interpolated)
         public Vector3 TickDelta => curPos - prevPos;
+        // The heading in the robots' frame (0 = +X, 0x40 = +Z): this motor's heading points along
+        // (sin, -cos), which is the original's (cos, sin) a quarter turn on
+        public int OriginalHeading => (heading - 0x40) & 0xFF;
 
         // A weapon-16 blob (Smart Wall) takes wings time away
         public void DrainFloating(int amount) => Floating = Mathf.Max(0, Floating - amount);

@@ -1,48 +1,139 @@
 using UnityEngine;
+using SpectreEX.Matrix;
 
 namespace SpectreEX
 {
-    // Cannon: one round = one shield of damage. The player has limited ammo (refilled at ammo dumps);
-    // robots fire without limit.
+    // The player's guns, as SVRWIN.EXE's _DO_PLAYER_MOVE / _KEY_WEAPON run them on the 18.2 Hz tick
+    // (RobotDirector calls Tick): the cannon fires while its button is held, every MAX_FIRE_TIMER + 1
+    // ticks; eight heavy weapons are unlocked level by level, cycled with one key, fired with another,
+    // or picked and fired at once with keys 1-8. Every shot costs its weapon's ammo (wval).
     public class TankWeapon : MonoBehaviour
     {
-        public Transform muzzle;
         public Material projectileMaterial;
-        public Team team = Team.Enemy;
-        public float cooldown = 0.3f;
-        public float projectileSpeed = 80f;
-        public int damage = 1;
-        public bool infiniteAmmo = true;
-        public int maxAmmo = 30;
-        public int lowAmmoWarning = 5;
-        public string fireSound = Snd.EnemyShot;
+        public int maxAmmo = 40;
+        public int lowAmmoWarning = 5;   // the HUD turns red (the original's low-ammo sound starts below 6)
+
+        public const int Weapons = 9;
+        public static readonly string[] Names = { "Cannon", "Grenades", "Scatter Shots", "Seekers", "Missiles", "Spinners", "Mines", "Bombs", "Pulse Bursts" };
+        static readonly int[] ShotType = { 0, 1, 5, 9, 10, 11, 2, 17, 13 };                 // _ALT_WEAPON_TYPE
+        static readonly string[] ShotSound = { Snd.PlayerShot, Snd.RobotShot, Snd.TripleShot, Snd.SeekerShot, Snd.Missile, Snd.SpinnerShot, Snd.MineDrop, Snd.Bomb, Snd.PulseBurst };
+        public static readonly int[] IconCell = { 6, 0, 3, 2, 1, 5, 4, 7, 8 };              // _WEAPON_X / 16 in SPCP36
+        // _ALLOW_ALT_WEAPON_STRS: which weapon(s) a level's unlock number (its tip number) turns on
+        static readonly int[] Unlocks = { 0, 0, 0, 0x10, 0x40, 0, 0, 0, 0, 0, 0x2, 0x8, 0x10, 0x40, 0x20, 0x4, 0xFFFF, 0x80, 0x100, 0 };
+        public const float BannerSeconds = 0x36 / OriginalMath.TickRate;                     // _ALT_WEAPON_TIMER
 
         public int Ammo { get; private set; }
+        public int AltWeapon { get; private set; }
+        public int Allowed { get; private set; } = 1;
+        public float BannerUntil { get; private set; }
+        public bool HasAll => (Allowed & 0x1FF) == 0x1FF;
 
-        float nextFireTime;
+        // Input, set every frame by PlayerTank / DemoPilot; presses are kept until a tick uses them
+        public bool FireHeld { get; set; }
+        bool altPressed, cyclePressed;
+        int keyWeapon;
+        int fireTimer;
 
         void Awake() => Ammo = maxAmmo;
 
         public void Refill() => Ammo = maxAmmo;
         public void AddAmmo(int rounds) => Ammo = Mathf.Clamp(Ammo + rounds, 0, maxAmmo);
-        public bool NeedsAmmo => !infiniteAmmo && Ammo < maxAmmo;
+        public bool NeedsAmmo => Ammo < maxAmmo;
 
-        public bool TryFire()
+        public void PressAlt() => altPressed = true;
+        public void PressCycle() => cyclePressed = true;
+        public void PressWeaponKey(int n) => keyWeapon = n;
+
+        // A new game: the cannon only
+        public void ResetHeavyWeapons()
         {
-            if (Time.time < nextFireTime || muzzle == null) return false;
-            nextFireTime = Time.time + cooldown;
+            Allowed = 1;
+            AltWeapon = 0;
+        }
 
-            if (!infiniteAmmo)
+        // _ADD_ALT_WEAPON, as each level loads
+        public void Unlock(int number)
+        {
+            if (number > 0 && number < Unlocks.Length) Allowed |= Unlocks[number] | 1;
+        }
+
+        // A wings dump hands over Pulse Bursts if nothing heavier is selected and they're unlocked
+        public void OfferPulseBursts()
+        {
+            if (AltWeapon == 0 && (Allowed & 0x100) != 0) Select(8);
+        }
+
+        bool IsAllowed(int w) => (Allowed & (1 << w)) != 0;
+
+        void Select(int w)
+        {
+            AltWeapon = w;
+            BannerUntil = Time.time + BannerSeconds;
+        }
+
+        static int Cost(int shotType)
+        {
+            var m = GameManager.Instance != null ? GameManager.Instance.CurrentMatrix ?? MatrixLibrary.Central() : null;
+            return m != null && m.Weapons.TryGetValue(shotType, out var w) ? w.ammo : 1;
+        }
+
+        public void Tick(ShotSystem shots, int level)
+        {
+            // Cycle to the next unlocked heavy weapon (back to none after the last)
+            if (cyclePressed)
             {
-                if (Ammo <= 0) { Sfx.Play(Snd.OutOfAmmo); return false; }
-                Ammo--;
-                if (Ammo == lowAmmoWarning) Sfx.Play(Snd.LowAmmo);
+                cyclePressed = false;
+                Sfx.Play(Snd.ChangeWeapon);
+                int w = AltWeapon + 1;
+                if (w > 8) w = 1;
+                while (!IsAllowed(w)) { w++; if (w > 8) w = 0; }
+                Select(w);
             }
 
-            Projectile.Spawn(muzzle.position, muzzle.forward, projectileSpeed, damage, team, projectileMaterial, gameObject);
-            if (team == Team.Player) Sfx.Play(fireSound, 0.8f);
-            else Sfx.PlayAt(fireSound, muzzle.position);
-            return true;
+            // Heavy weapon
+            if (altPressed)
+            {
+                altPressed = false;
+                if (AltWeapon != 0) FireHeavy(shots);
+            }
+
+            // Cannon: at once when pressed, then every MAX_FIRE_TIMER + 1 ticks while held
+            if (!FireHeld) fireTimer = 0;
+            else if (fireTimer-- < 1)
+            {
+                fireTimer = 4 - (Mathf.Max(0, level - 1) >> 4);
+                int cost = Cost(0);
+                if (Ammo < cost) Sfx.Play(Snd.OutOfAmmo);
+                else
+                {
+                    Sfx.Play(Ammo < 6 ? Snd.LowAmmo : Snd.PlayerShot);
+                    Ammo -= cost;
+                    shots.PlayerShoot(0);
+                }
+            }
+
+            // Keys 1-8: pick that weapon and fire it (_KEY_WEAPON)
+            if (keyWeapon != 0)
+            {
+                int w = keyWeapon;
+                keyWeapon = 0;
+                if (IsAllowed(w))
+                {
+                    if (w != AltWeapon) Select(w);
+                    if (Ammo < Cost(ShotType[w])) Sfx.Play(Snd.ChangeWeapon);
+                    else FireHeavy(shots);
+                }
+            }
+        }
+
+        void FireHeavy(ShotSystem shots)
+        {
+            int type = ShotType[AltWeapon];
+            int cost = Cost(type);
+            if (Ammo < cost) return;
+            Ammo -= cost;
+            shots.PlayerShoot(type);
+            Sfx.Play(ShotSound[AltWeapon]);
         }
     }
 }

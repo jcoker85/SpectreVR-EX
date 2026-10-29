@@ -220,6 +220,15 @@ namespace SpectreEX
             extraLivesAwarded = 0;
             nextExtraLife = ExtraLifeScore(1);
             Level = startLevel - 1;
+            // Heavy weapons: none to start with, plus whatever the levels skipped would have given
+            // (_CATCHUP_HINT)
+            player.Weapon.ResetHeavyWeapons();
+            var catchUp = MatrixLibrary.Current();
+            if (catchUp != null)
+            {
+                var list = catchUp.Levels[Mathf.Clamp((int)GameSettings.Difficulty, 0, 2)];
+                for (int i = 0; i < startLevel - 1 && list.Count > 0; i++) player.Weapon.Unlock(list[i % list.Count].tip);
+            }
             if (!Demo) Sfx.Play(Snd.Welcome);
             yield return NextLevel();
         }
@@ -313,6 +322,8 @@ namespace SpectreEX
             int lap = (levelNumber - 1) / levels.Count;   // after the last level the matrix repeats, a little harder
             var lv = levels[index];
             levelDifficulty = 1f + lap * 0.25f;
+            // The level's tip number also unlocks a heavy weapon, the first time round (_LOAD_WAVE)
+            if (lap == 0) player.Weapon.Unlock(lv.tip);
 
             ClearLevel();
             SetWallColor(LevelPlan.WallColor(levelNumber));

@@ -89,6 +89,13 @@ namespace SpectreEX
             if (health.Shields > 0) stun = 0x12;
         }
 
+        // A hit from a weapon with no damage (Spinners) counts the same, minus the damage
+        public void HitWithoutDamage()
+        {
+            OnDamaged(0);
+            Sfx.PlayAt(Snd.EnemyHit, transform.position);
+        }
+
         // Destroyed: count ten ticks, then _REPLACE_TANK (RobotDirector / GameManager.ReplaceRobot)
         public void Killed()
         {

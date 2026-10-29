@@ -93,6 +93,7 @@ namespace SpectreEX
                     break;
                 case Kind.Blue:
                     player.Motor.AddFloating();
+                    player.Weapon.OfferPulseBursts();
                     Resupply(player);
                     Sfx.Play(Snd.Repair);
                     break;

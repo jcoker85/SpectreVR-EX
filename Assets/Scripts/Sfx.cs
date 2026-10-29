@@ -19,7 +19,7 @@ namespace SpectreEX
         public const string AmmoPickup = "AMMPCK";
         public const string ShieldPickup = "SHLDPCK";
         public const string OutOfAmmo = "OUTOFAM";
-        public const string LowAmmo = "SHKLOW";
+        public const string LowAmmo = "LOONSHT";       // 0xA: a cannon shot with under 6 rounds left
         public const string Danger = "DANGER";
         public const string Warp = "WARP";
         public const string Land = "PLYRLND";
@@ -46,6 +46,14 @@ namespace SpectreEX
         public const string SlicerNear = "SHKLOW";   // 0x20
         public const string SlicerJump = "SHARK";    // 0x21
         public const string AllRobots = "ALLBOTS";   // 0x2C: the last robot destroyed
+        public const string ChangeWeapon = "CHGWEPN"; // 0x22: heavy weapon changed, or too little ammo
+        public const string TripleShot = "TRPLSHT";  // heavy weapons' own sounds (_SHOT_SOUNDS)
+        public const string SeekerShot = "SEKRSHT";
+        public const string Missile = "MISSL2";
+        public const string SpinnerShot = "SPNSHT";
+        public const string MineDrop = "MINDRP";
+        public const string Bomb = "MINBM";
+        public const string PulseBurst = "DBLSTCY";
     }
 
     public static class Sfx

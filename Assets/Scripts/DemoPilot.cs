@@ -40,17 +40,15 @@ namespace SpectreEX
             tank.Motor.SetInput(throttle, turn);
 
             // Fire at any robot roughly dead ahead
+            bool fire = false;
             foreach (var r in gm.Robots)
             {
                 if (r == null || r.IsDead) continue;
                 Vector3 d = r.transform.position - transform.position;
-                if (d.magnitude < 70f && Vector3.Angle(transform.forward, new Vector3(d.x, 0f, d.z)) < 4f)
-                {
-                    if (tank.Weapon.Ammo <= 3) tank.Weapon.Refill();   // the demo never runs dry
-                    tank.Weapon.TryFire();
-                    break;
-                }
+                if (d.magnitude < 70f && Vector3.Angle(transform.forward, new Vector3(d.x, 0f, d.z)) < 4f) { fire = true; break; }
             }
+            if (fire && tank.Weapon.Ammo <= 3) tank.Weapon.Refill();   // the demo never runs dry
+            tank.Weapon.FireHeld = fire;
         }
 
         Transform Nearest<T>(System.Collections.Generic.List<T> items) where T : Component
