@@ -109,7 +109,8 @@ namespace SpectreEX
             z = dropIn ? DropZ : GroundZ + System.Math.Max(0, ToUnits(position.y));
             vz = 0;
             Floating = 0;
-            bounceI = turningTimer = acidTimer = 0;
+            bounceI = turningTimer = acidTimer = nothingTimer = 0;
+            WingAngle = 0x19;
             onIce = false;
             lastGate = null;
             jumpRequested = hyperRequested = false;
@@ -314,9 +315,25 @@ namespace SpectreEX
                 Floating--;
             }
 
+            // The wings open a step a tick while floating (to -5) and fold back (to 0x19) after
+            if (Floating > 0) { if (WingAngle > -5) WingAngle--; }
+            else if (WingAngle < 0x19) WingAngle++;
+
+            // Two minutes without driving or turning: a reminder tick (_NOTHING_TIMER)
+            if (speed != 0 || turnStep != 0) nothingTimer = 0;
+            else if (++nothingTimer > 0x870)
+            {
+                nothingTimer = 0;
+                Sfx.Play(Snd.TimeTick);
+            }
+
             if (Hyper < HyperMax) Hyper = Mathf.Min(HyperMax, Hyper + HyperRecharge);
             if (contactSoundTimer > 0) contactSoundTimer--;
         }
+
+        // _WING_ANGLE: the wings' turn from the body, in heading steps (0x19 folded, -5 spread)
+        public int WingAngle { get; private set; } = 0x19;
+        int nothingTimer;
 
         void Bounce(string sound)
         {

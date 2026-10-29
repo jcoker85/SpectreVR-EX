@@ -410,8 +410,18 @@ robots within `_QFIND_DIST` 0x0E / 0x40 / 0x80 lose 5 / 2 / 2, the player takes 
    436 bonus paid 1 s after the last flag; level 3 has 4 flags; death returns the craft to the
    start with the bonus reset and one life fewer; the Level 5 pad gives level 5 (5 flags), score
    5000 + bonus, an extra life and the earlier levels' weapons.
-   Still open: wings on the craft model, Slicer hop frames and burrowed shape, robot-on-robot
-   bumping (+0xE), the idle reminder (TMTICK after 0x870 ticks), the start-of-level and game-over
+   Second round:
+   - The craft is drawn from the matrix's own type-6 shape (Central Systems: multi-part 2013) at
+     the original's scale (`PlayerModel`; the hull collider is unchanged). Its parts with shape
+     ids ending 0x5F / 0x60 (10079 / 10080) are the wings: they turn -/+ `_WING_ANGLE` from the body,
+     which moves a step a tick toward 0x19 (tucked) or, while floating, -5 (spread).
+   - Slicers change shape as they hop (`_CHANGE_SHAPE`): 10099 rising fast, 10100 falling fast,
+     10098 otherwise in the air, 10002 on landing, 10023 while burrowed under the floor.
+   - Idle reminder: TMTICK after 0x870 ticks (~2 min) without driving or turning.
+   - Robot bumping: the record's +0xE is only ever cleared in SVRWIN.EXE, never set - nothing to port.
+   Measured: wings tucked at rest and spread on a wings dump (external view); a Slicer next to a
+   floating craft went through 10002 / 10099 / 10098 / 10100.
+   Still open: the start-of-level and game-over
    sounds (`_START_LEVEL` / `_GAME_OVER` pass them in registers Ghidra lost), Bouncer (45) untested,
    pusher direction / model facing / `mshp` sign checked only by reasoning, spinning obstacles'
    unrotated colliders, and the DOSBox-X side-by-side check.

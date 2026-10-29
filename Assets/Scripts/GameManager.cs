@@ -516,6 +516,8 @@ namespace SpectreEX
             if (central == null) Debug.LogWarning("Spectre VR-EX: Central Systems matrix not found - matrices without shapes will have no obstacles");
             shapes = new ShapeSet(m, central);
             shapes.NewLevel();
+            var craft = player.GetComponent<PlayerModel>();
+            if (craft != null) craft.Rebuild(shapes, obstacleLook.edgeThickness);
         }
 
         // Types with no shape (as in the original) aren't placed at all

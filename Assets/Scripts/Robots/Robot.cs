@@ -224,6 +224,7 @@ namespace SpectreEX
             timer = 0;
             mode = matrixType == 7 ? ModePatrol : ModeChase;
             Place(position);
+            if (matrixType == 21) ChangeShape(10002);
             health.Revive(transform.position, transform.rotation);
             if (matrixType == 26)   // Invisible Tank: back on radar only
                 foreach (var r in GetComponentsInChildren<Renderer>()) r.enabled = false;
@@ -426,17 +427,37 @@ namespace SpectreEX
             }
             if (z == 0 && moveTimer == 0)
             {
-                if (director.PlayerUnder) z = -0x1400;   // burrows to follow you under the floor
+                if (director.PlayerUnder) { ChangeShape(10023); z = -0x1400; }   // burrows to follow you under the floor
                 return;
             }
             if (moveTimer > 0) moveTimer--;
             if (z < 0)
             {
-                if (!director.PlayerUnder) { z = 0; vz = 0; moveTimer = 0x24; }
-                else z = -0x1400;
+                if (!director.PlayerUnder) { ChangeShape(10002); z = 0; vz = 0; moveTimer = 0x24; }
+                else { ChangeShape(10023); z = -0x1400; }
             }
+            // The hop's frames: rising, falling, in between
+            else if (vz > 0x300) ChangeShape(10099);
+            else if (vz < -0x300) ChangeShape(10100);
+            else if (z != 0) ChangeShape(10098);
             z += vz;
             if (z > 0) vz -= 0x100;
+        }
+
+        // _CHANGE_SHAPE: swap the model for another shape of the matrix (single-part robots)
+        int shapeId;
+        void ChangeShape(int id)
+        {
+            if (id == shapeId) return;
+            var gm = GameManager.Instance;
+            var geometry = gm != null ? gm.Shapes?.ShapeById(id) : null;
+            if (geometry == null) return;
+            shapeId = id;
+            var part = model != null ? model.Find("Shape") : null;
+            if (part == null) return;
+            foreach (var f in part.GetComponentsInChildren<MeshFilter>(true))
+                f.sharedMesh = f.name == "Panels" ? geometry.Body : geometry.Edges(gm.obstacleLook.edgeThickness);
+            edges = null;   // the stun flash re-reads its renderers
         }
 
         // ---------- _FIND_CLEAR_PATH / _CHECK_TANK_PATH ----------

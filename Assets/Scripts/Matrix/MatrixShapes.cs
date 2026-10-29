@@ -239,6 +239,9 @@ namespace SpectreEX.Matrix
             return parts;
         }
 
+        // One shape by its id, as _CHANGE_SHAPE looks it up
+        public ShapeGeometry ShapeById(int id) => Resolve(id, out _);
+
         ShapeGeometry Resolve(int id, out int resolved)
         {
             for (int guard = 0; guard < 8; guard++)

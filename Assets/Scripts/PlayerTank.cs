@@ -23,6 +23,7 @@ namespace SpectreEX
             Health = GetComponent<Health>();
             Shields = GetComponent<PlayerShields>();
             if (Shields == null) Shields = gameObject.AddComponent<PlayerShields>();
+            if (GetComponent<PlayerModel>() == null) gameObject.AddComponent<PlayerModel>();
         }
 
         public void ResetForLife()
