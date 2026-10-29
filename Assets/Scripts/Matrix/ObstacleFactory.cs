@@ -91,7 +91,9 @@ namespace SpectreEX.Matrix
             {
                 col.isTrigger = beh.IsGate;
                 col.center = bounds.center;
-                col.size = Vector3.Max(bounds.size, Vector3.one * (beh.IsGate ? 1.5f : 0.6f));   // billboards are flat
+                // Billboards are flat; the floor-line walls (type 40) have no height at all, so the craft
+                // (whose box reaches the floor) is stopped but shots fly over, as in the original
+                col.size = beh.IsGate ? Vector3.Max(bounds.size, Vector3.one * 1.5f) : Vector3.Max(bounds.size, new Vector3(0.6f, 0.1f, 0.6f));
                 // The up transport's collision reaches 0x1400 below it, so a craft under the floor can touch it
                 if (kind == ObstacleBehaviour.Kind.UpTransport)
                 {

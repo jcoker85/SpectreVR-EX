@@ -203,8 +203,99 @@ Floating: hovers toward height 0x2D00, `_FLOATING` counts down each tick, wings 
 
 6 Tank, 7 Robot Tank, 8 Super Tank, 20 Turret, 21 Slicer, 22 Flyer, 23 Smart Acid, 24 Smart Wall,
 25 Cyber Mud, 26 Invisible Tank, 27 Cloaked Tank, 35 Orbiter, 45 Bouncer. Cyber Mud and Ice also
-exist as editor obstacles. Robot AI lives in `_MOVE_TANKS`, `_CHASE_*`, `_FLYERDIVE`, `_DO_BOUNCE`
-etc. - not read yet.
+exist as editor obstacles. Type 6 is the player's own tank; matrices use 7, 8, 20-27 and 35
+(Central Systems), and BASIC also 45 in its data.
+
+### Enemy data in memory (`_LOAD_BVAL`, loader 1020:0A02)
+
+File entries are 14 words; memory is 0x20 bytes: +0 type, +2 strength (+ a difficulty add if
+non-zero), +4 collide damage, +6 attack range ×7 (`_CHASE_DIST`), +8 firing range ×7, +0xA long
+(firing range ×7)², +0xE firing arc (unused by the AI), +0x10 firing interval, +0x12 speed,
++0x14 turn speed, +0x16 long score, +0x1A long bonus, +0x1E weapon (-1 = never fires).
+
+### Robot records and the main loop (`_ADD_ENEMY`, `_PLACE_TANKS`, `_MOVE_TANKS` @1068:0277)
+
+Each robot (`_TANKS` + i×0x22; tank 0 is the player) has: +0 object, +8 mode, +0xC fire counter,
++0x10 regenerations left, +0x12 hits left (= strength), +0x14 path heading, +0x18 path timer,
++0x1A path blocker, +0x1E stun timer, +0x20 a per-type timer. Spawned with a random heading.
+- Placement: Turrets (20), Orbiters (35) and Bouncers (45) go next to a flag (round-robin over the
+  flags, 0x3C00 in from it towards the centre on both axes); the rest `_INVISIBLE_PLACE_XY`: random
+  in ±0x3F800, at least 0x26000 from the player on both axes, clear of objects, dumps and flags.
+- Mode: Robot Tanks (7) start in 0 (patrol), the rest in 3 (chase). Each tick, if no robot is in
+  mode 3 the first one processed (not a Flyer) is switched to 3.
+- Stunned (+0x1E > 0): counts down, doesn't move (Super Tanks and Robot Tanks flash).
+- Dispatch: 35/45 `_CIRCLE_SPOT`; a Robot Tank among the first five robots with a live flag of its
+  own index `_PATROL`s that flag; Flyers (22) `_PATROL` the player; everyone else `_CHASE_PLAYER`.
+- After moving: clamp to ±0x40000.
+- Dying (+0x5F counting to 10): then `_REPLACE_TANK` - if regenerations are left, one is used and
+  the robot comes back at once at a new hidden spot (flag spot for 20/35/45) with full strength.
+
+### Steering
+
+- `_ANGLE(dx, dy)`: atan2 as a 0-255 heading (0 = +x, 0x40 = +y). `_FIX_HEADING`: turn toward a
+  heading by at most `limit` steps (the AI passes turn speed ×4).
+- `_FIND_CLEAR_PATH`: every 9 ticks probe the target heading, then the current heading, then
+  target ±4, ±8, ... up to ±0x80 (`_CHECK_TANK_PATH`: a box 0x5000 long / 0x1400 half-wide whose
+  centre is 1.125×0x5000 ahead, against obstacles other than fans, acid, up transports and
+  pushers, then against other robots). No clear heading: the robot is moved to a hidden spot.
+  While turning toward a new path heading the robot doesn't advance.
+- Distances: `_FIND_DIST` is (dx>>8)² + (dy>>8)²; the AI's "d" is that >> 8. `_QFIND_DIST` is
+  max(|dx|, |dy|) >> 8.
+
+### `_CHASE_PLAYER` (@1068:0A76)
+
+- Speed = enemy speed; moves speed × cos/sin table (±256) units a tick, so speed 5 ≈ 0.4 m/tick.
+- Target heading: straight at the player, except Super Tanks lead their aim (`_GUESS_AT`: the
+  player's position minus d/0x2000 × cos/sin of the player's model heading × its speed, i.e. ahead
+  of it given the model's +0x80) and Cyber Mud aims at a point 0x5A00 along the player's model
+  heading (`_BLOCK_AT` adds, so behind the craft), facing the player once within d 0x19.
+- Back off: robots with no collide damage reverse (and steer by heading + 0x80) when d < 0x40;
+  they stop once d < 0x60 and aligned within 8.
+- Smart Acid (23) / Smart Wall (24): never back off; a timer (+0x6F) reloads to 0x36-0x47 with
+  sound 0x13 (Wall) / 0x14 (Acid); while it's below 0x24 they stand still.
+- Flyer (22): timer +0x20 runs from 0xA2 (or 0x5A when d > 0x2F8); on expiry mode 1 (fly away and
+  climb, `_LEAVE_THING`) for another 0xA2, then back to 3 with sound 0x27. Within d 0x1C8 it dives
+  to the player's height + 0x300 (sound 0x27 while above 0xF00), else climbs to 0xF00. Pitch =
+  heading - path heading.
+- Slicer (21): hops. Timer +0x20 = max(d/0x28, 14), on expiry plays 0x20 (d < 0x15E) / 0x1F
+  (d < 800) or waits 12, or 0x21 in the air; jumps vz 0xC00 when d < 0x40 and the player is
+  floating; gravity 0x100; burrows (z -0x1400, shape 10087) while the player is under the floor.
+- Firing: counter +0xC counts up (cap 0x708); fires when counter > max(d/8 - level/2, 16 - level/8)
+  × interval / 120, d² < firing range² (as above), the robot isn't backing off (or level > 14).
+  Weapon 0 becomes 12 when the player is in the air, 12 becomes 0 on the ground.
+- `_CIRCLE_SPOT` (35, 45): heading += turn ×2 a tick, move 4 × speed (a circle). Bouncers bounce:
+  vz 0xC00 on touching z 0, gravity 0x100.
+- `_PATROL` (Robot Tank → its flag, Flyer → the player): mode 0 drives to the flag (switch to 2
+  within `_QFIND_DIST` 0x50), mode 2 points at the player and goes back to 0 when the flag is
+  further than the attack range; either switches to 3 (chase) when the player is on the ground and
+  in firing range.
+
+### Shots (`_DO_SHOOT` @1028:7324, `_TANK_SHOOT`, `_MOVE_SHOTS` @1028:7BBA)
+
+45 shot slots; each has a life in ticks, a speed, the shooter and a weapon. Velocity = cos/sin
+× speed >> 8 per tick; the shot starts half a step out. Robot shots start at robot z + 0x400
+(Turret: its own z). Weapon 5 fires three at heading, ±0x10.
+
+| Weapon | Life | Speed | Other |
+|---|---|---|---|
+| 0 / default | 0x12 | 0x2000 | sound 2 (player) / 0x18 |
+| 2 | 0x10E | 0 | spins 7, no z drift (a mine) |
+| 7 | 30000 | - | orbiting shield |
+| 9 / 10 | 0x19 / 0xB4 | 0x1800 / 0x1000 | homing: turn 2 / 8 a tick toward the closest robot (player's) or the player; climbs over obstacles (shape 10001 for 10) |
+| 11 | 0xB4 | 0x1000 | shape 10087, spins 8; a hit spins the target (+0x6B 0x10 for 0xB4 ticks) |
+| 12 | 0x13 | 0x2000 | rises 0x400 a tick (then acts as 0); sound 0x18 |
+| 13 | 0x13 | 0x2000 | vz 0x600, falls 0x600/tick, becomes a mine (spin 8) on landing |
+| 15 / 16 | 0x36 | 0x200 | lobbed blob: vz 0x900, -0x80 a tick, dies below -0x300; starts 12 steps behind; 16 drains 0x10E of wings on hitting the player |
+| 17 | 0x36 | 0x600 | vz 0x300, -0x80 a tick; splash on landing |
+| 0x7F | 0x36 | 0x700 | explosion debris, vz 0x900, bounces |
+
+Hits (`_CUBE_COLLIDE` against every robot and the player except the shooter - robots can hit each
+other): damage = wval damage of the weapon. Player: `_DAMAGE += damage × 10`, sound 3 (9 when
+low). Robot: hits left -= damage, the player scores the robot's score **on every hit**, sound 4
+and an 18-tick stun; at 0 it dies (sound 5, or 0x2C for the last robot), its bonus is banked and
+paid when the last one dies, `_EXPLODE_TANK` throws 5 debris shots. Weapons 1 and 17 splash:
+robots within `_QFIND_DIST` 0x0E / 0x40 / 0x80 lose 5 / 2 / 2, the player takes 10 per band
+(0x40 / 0x80 / 0xC4). A shot touching an obstacle dies; a weapon-11 shot spins that obstacle.
 
 ## Port plan (single player)
 
@@ -247,7 +338,34 @@ etc. - not read yet.
    (the original is 0.1575) - item 6; the `mshp` part angle sign is unverified (every CENTRAL
    multi-part shape is symmetric); spinning obstacles keep an unrotated collider; the original
    collides obstacles by their z range against the craft's, ours uses the craft hull as before.
-6. Robots (all 13), then weapons (7 alt weapons), then the remaining fidelity pass.
+6. **Robots done:** `Robot` (one robot, ported line by line from `_MOVE_TANKS` / `_CHASE_PLAYER` /
+   `_PATROL` / `_CIRCLE_SPOT` / `_FIND_CLEAR_PATH`), `RobotDirector` (ticks robots in spawn order,
+   then `RobotShots`: weapons 0, 2, 5, 9-13, 15-17 and kill debris, friendly fire, splash) and
+   `RobotFactory` (shape from the matrix's `shps`, exact-bounds collider). Spawning follows
+   `_ADD_ENEMY` / `_PLACE_TANKS` (counts, `regen` extra lives each, flag guards, hidden spots),
+   strength + lap; `_REPLACE_TANK` brings a robot back ten ticks after it dies. Score: the robot's
+   score on every hit, bonuses banked and paid with the last robot (ALLBOTS); flags now +20.
+   The old RoverAI / TurretAI / OrbiterAI / SlicerAI / TankMotor and their prefabs are gone.
+   Measured in Play mode: all 11 Central Systems robot types run (levels 1, 3, 7, 8, 9, 10, 13,
+   22); a Super Tank closes to ~12 m and fires; Robot Tanks guard their flags; Turrets stay put;
+   Flyers climb to 0xF00; Robot Tanks score 25 a hit and regenerate 3 times at hidden spots.
+   Not done: weapons for the player (7 alt weapons, weapon pickups) - next; per-frame shape
+   changes (Slicer hop frames, burrowed shape); robot-on-robot bumping (+0xE); the Super/Robot
+   Tank stun flash; weapon-11 hits spinning obstacles; Bouncer (45) and Tank (6) aren't in any
+   bundled enemy set so are untested; model facing vs travel checked only roughly.
+7. Then the remaining fidelity pass.
+
+**Sound numbers** (`_SOUNDTABLE`, filled from `_SAMPLETABLE` at startup): 0/4 OPPHIT, 1 PLYRSHT,
+2 OPSHOT, 3 PLYRHT, 5 EXPLO, 6 OUTOFAM, 7 COLLSN, 8 GATE, 9 HVDAMG, 0xA LOONSHT, 0xB AMMPCK,
+0xC TNKUP, 0xD CYBOVRL, 0xE TMTICK, 0xF ECYBSHT, 0x10 LTRDUDE, 0x11 FLGPUL, 0x12 HTEDGE,
+0x13/0x14 ACIDMV, 0x15 SPNSHT, 0x16 PLYRLND, 0x17 ONEMFLG, 0x18 GRSHOT, 0x19 SHKDAM, 0x1A SHLDPCK,
+0x1B MISSL2, 0x1C SEKRSHT, 0x1D ACIDD, 0x1E REPPCKP, 0x1F SHKLWR, 0x20 SHKLOW, 0x21 SHARK,
+0x22 CHGWEPN, 0x23 GOOSQ, 0x24 ICESLD, 0x25 MINDRP, 0x26 TRPLSHT, 0x27 FLYRDV, 0x28 MINBM,
+0x29 TNKDWN, 0x2A NEWMAN, 0x2B AWARD, 0x2C ALLBOTS, 0x2D DANGER, 0x2E KICK1, 0x2F APPL2,
+0x30 AWWWW, 0x31/0x32 WHISTLE, 0x33 YOURIT, 0x34/0x35 TMTICK, 0x36-0x38 EXPLO, 0x39 ACCDEN,
+0x3A SPCLOG, 0x3B WELCOME, 0x3C WARP, 0x3D-0x40 ONE..FOUR, 0x41 COVRME, 0x42 DBLSTCY, 0x43 DISCUM,
+0x44 GO4IT, 0x45 HELP, 0x46 RETREAT, 0x47 UCNRUN, 0x48 URDMD. (Our `Snd` names for a few older
+guesses, e.g. LowAmmo = SHKLOW, may not match the original's use - check in the fidelity pass.)
 
 DOSBox-X (`Tools/dosbox-x/bin/x64/Release/dosbox-x.exe`) is unpacked but not yet launched; the
 DOS `SVR.EXE` in `Tools/SpectreVR` is the one to run for side-by-side checks.

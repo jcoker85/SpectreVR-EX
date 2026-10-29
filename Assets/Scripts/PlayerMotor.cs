@@ -26,17 +26,7 @@ namespace SpectreEX
         const int MaxTicksPerFrame = 8;
 
         // The original's tables: 256 * cos / sin of heading * 2pi/256, truncated
-        static readonly int[] Cos = new int[256], Sin = new int[256];
-
-        static PlayerMotor()
-        {
-            for (int i = 0; i < 256; i++)
-            {
-                double a = i * System.Math.PI * 2.0 / 256.0;
-                Cos[i] = (int)(256.0 * System.Math.Cos(a));
-                Sin[i] = (int)(256.0 * System.Math.Sin(a));
-            }
-        }
+        static readonly int[] Cos = OriginalMath.Cos, Sin = OriginalMath.Sin;
 
         [Tooltip("Vehicle speed points (1-9); the craft moves speed * 8 / 5 table units a tick")]
         public int speedPoints = 5;
@@ -46,7 +36,14 @@ namespace SpectreEX
         public int Floating { get; private set; }
         public float Floating01 => Floating / (float)FloatMax;
         public bool OnGround => z <= minZ;
+        public bool Airborne => z > minZ + 0x100;   // robots switch to rising shots (_CHASE_PLAYER)
         public bool Under => under;
+        public long ZUnits => z;                     // height in original units, the floor at GroundZ
+        public Vector3 SimPosition => curPos;        // this tick's position (the transform is interpolated)
+        public Vector3 TickDelta => curPos - prevPos;
+
+        // A weapon-16 blob (Smart Wall) takes wings time away
+        public void DrainFloating(int amount) => Floating = Mathf.Max(0, Floating - amount);
         int ThisSpeed => Mathf.Clamp(speedPoints, 1, 9) * 8 / 5;
 
         // Simulation state, original units. x/y are the floor plane (x = Unity X, y = Unity Z),

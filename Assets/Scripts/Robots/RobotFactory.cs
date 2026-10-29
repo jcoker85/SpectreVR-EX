@@ -1,0 +1,106 @@
+using UnityEngine;
+using UnityEngine.Rendering;
+using SpectreEX.Matrix;
+
+namespace SpectreEX
+{
+    // Materials for robots in the Spectre VR-EX style, set up by the arena builder
+    [System.Serializable]
+    public class RobotLook
+    {
+        public Material panels, tank, superTank, turret, slicer, flyer, acid, wall, mud, orbiter, bolt;
+        public Material tankPanel, turretPanel, slicerPanel, orbiterPanel;   // craft-coloured panels (Options "Filled")
+
+        public Material PanelFor(int type) => type switch
+        {
+            7 or 8 or 26 or 27 => tankPanel,
+            20 => turretPanel,
+            21 => slicerPanel,
+            22 or 35 or 45 => orbiterPanel,
+            _ => panels,
+        } ?? panels;
+
+        public Material GlowFor(int type) => type switch
+        {
+            8 => superTank,
+            20 => turret,
+            21 => slicer,
+            22 => flyer,
+            23 => acid,
+            24 => wall,
+            25 => mud,
+            35 or 45 => orbiter,
+            _ => tank,
+        } ?? tank;
+    }
+
+    // Builds a robot from its original shape(s) - the matrix's shps entry for its type, as _ADD_ENEMY
+    // does with _ADD_SHAPE - with a collider round the exact bounds (_CUBE_COLLIDE).
+    public static class RobotFactory
+    {
+        const int FallbackShape = 10010;
+
+        public static Robot Build(int type, ShapeSet shapes, RobotLook look, float edgeThickness)
+        {
+            var parts = shapes?.ForType(type);
+            if (parts == null || parts.Count == 0)
+            {
+                var central = MatrixLibrary.Central();
+                if (central == null || !central.Shapes.TryGetValue(FallbackShape, out var g)) return null;
+                parts = new System.Collections.Generic.List<ShapeSet.Part> { new ShapeSet.Part { shape = g, id = FallbackShape } };
+            }
+
+            var glow = look.GlowFor(type);
+            var panel = look.PanelFor(type);
+            var root = new GameObject($"Robot_{type}");
+            var model = new GameObject("Model").transform;
+            model.SetParent(root.transform, false);
+            Bounds bounds = default;
+            for (int i = 0; i < parts.Count; i++)
+            {
+                var part = parts[i];
+                var t = new GameObject("Shape").transform;
+                t.SetParent(model, false);
+                t.localPosition = part.offset;
+                Mesh("Panels", t, part.shape.Body, panel, ShadowCastingMode.On);
+                Mesh("Edges", t, part.shape.Edges(edgeThickness), glow, ShadowCastingMode.Off);
+                var b = part.shape.Body.bounds;
+                b.center += part.offset;
+                if (i == 0) bounds = b; else bounds.Encapsulate(b);
+            }
+
+            var col = root.AddComponent<BoxCollider>();
+            col.center = bounds.center;
+            col.size = Vector3.Max(bounds.size, Vector3.one * 0.6f);
+            // Slicers reach 0x1400 below their base, so they still catch a craft under the floor
+            if (type == 21)
+            {
+                float extra = 0x1400 * OriginalMath.UnitsToMetres;
+                col.center -= Vector3.up * extra * 0.5f;
+                col.size += Vector3.up * extra;
+            }
+
+            var health = root.AddComponent<Health>();
+            health.team = Team.Enemy;
+            health.hitSound = Snd.EnemyHit;
+            health.deathSound = Snd.Explosion;
+            health.derezMaterial = glow;
+            health.hiddenFromRadar = type == 27;   // Cloaked Tank: visible, not on radar
+
+            var robot = root.AddComponent<Robot>();
+            if (type == 26)   // Invisible Tank: on radar only
+                foreach (var r in root.GetComponentsInChildren<Renderer>()) r.enabled = false;
+            return robot;
+        }
+
+        static void Mesh(string name, Transform parent, Mesh mesh, Material mat, ShadowCastingMode shadows)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            go.AddComponent<MeshFilter>().sharedMesh = mesh;
+            var r = go.AddComponent<MeshRenderer>();
+            r.sharedMaterial = mat;
+            r.shadowCastingMode = shadows;
+        }
+    }
+}

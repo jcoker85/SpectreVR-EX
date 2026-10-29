@@ -39,8 +39,8 @@ namespace SpectreEX
         [Header("Prefabs")]
         public Flag flagPrefab;
         public AmmoDump ammoDumpPrefab;
-        public GameObject roverPrefab, turretPrefab, orbiterPrefab, slicerPrefab;
         public ObstacleLook obstacleLook = new ObstacleLook();
+        public RobotLook robotLook = new RobotLook();
         public int fallbackObstacleType = 15;   // cube
 
         // Obstacle shapes for the level being built: the matrix's own, else Central Systems'
@@ -49,10 +49,9 @@ namespace SpectreEX
         [Header("Rules")]
         public int startingLives = 3;
         public int extraLifeEvery = 10000;
-        public int flagPoints = 100;
+        public int flagPoints = 20;   // the original's +20 a flag
         public int timeBonusPerSecond = 10;
         public float playerRespawnDelay = 3f;
-        public float robotRespawnDelay = 12f;
 
         public int Score { get; private set; }
         public int Lives { get; private set; }
@@ -81,17 +80,12 @@ namespace SpectreEX
         public System.Action<int, int> ReturnedToMenu;              // final score and level (0 if abandoned)
         public System.Action Suspend;                               // Esc in game: show the menu over the paused game
 
-        // What each robot was spawned as, so it can regenerate the way the matrix says
-        class RobotSpawn
-        {
-            public GameObject prefab;
-            public int type = -1;                      // matrix robot type, -1 for generated levels
-            public MatrixFile.EnemyData data;
-            public bool hasData;
-            public int regenLeft;                      // times it comes back after being destroyed
-        }
-
-        readonly Dictionary<GameObject, RobotSpawn> spawnOf = new Dictionary<GameObject, RobotSpawn>();
+        // The robots run on the original's tick (RobotDirector); _TANKS_LEFT counts every robot still to
+        // be destroyed, regenerations included, and the destroyed robots' bonuses are paid when it hits 0
+        RobotDirector director;
+        int robotsLeft, bankedBonus;
+        readonly int[] flagGuards = new int[64];   // _FLAG_TURRETS: robots placed by each flag
+        public ShapeSet Shapes => shapes;
         int extraLivesAwarded;
         int nextExtraLife;
         float wallNits = -1f;
@@ -103,6 +97,8 @@ namespace SpectreEX
         {
             Instance = this;
             GameSettings.Load();
+            director = GetComponent<RobotDirector>();
+            if (director == null) director = gameObject.AddComponent<RobotDirector>();
             demoPilot = player.GetComponent<DemoPilot>();
             if (demoPilot == null) demoPilot = player.gameObject.AddComponent<DemoPilot>();
             demoPilot.enabled = false;
@@ -298,7 +294,10 @@ namespace SpectreEX
             foreach (var d in Dumps) if (d != null) Destroy(d.gameObject);
             foreach (var r in Robots) if (r != null) Destroy(r.gameObject);
             foreach (var o in Obstacles) if (o != null) Destroy(o);
-            Flags.Clear(); Dumps.Clear(); Robots.Clear(); Obstacles.Clear(); spawnOf.Clear();
+            Flags.Clear(); Dumps.Clear(); Robots.Clear(); Obstacles.Clear();
+            if (director != null) director.Clear();
+            System.Array.Clear(flagGuards, 0, flagGuards.Length);
+            robotsLeft = bankedBonus = 0;
             FlagsTotal = FlagsCollected = 0;
         }
 
@@ -348,18 +347,15 @@ namespace SpectreEX
             TimeRemaining = 60f + FlagsTotal * 12f;
             Plan = new LevelPlan { level = levelNumber, timeAllowed = TimeRemaining, difficulty = levelDifficulty, robotShields = 1, wallColor = LevelPlan.WallColor(levelNumber) };
 
-            // The enemy set: between min and max of each robot type, each regenerating 'regen' times in all
+            // The enemy set (_ADD_ENEMY): a count between its two numbers when the first is the smaller,
+            // else exactly the second; each robot comes back 'regen' more times. Strength rises by one a lap.
             if (m.EnemySets.TryGetValue(lv.enemySet, out var set))
             {
                 foreach (var e in set)
                 {
-                    int count = Random.Range(Mathf.Min(e.min, e.max), Mathf.Max(e.min, e.max) + 1);
-                    for (int i = 0; i < count; i++)
-                    {
-                        var spawn = new RobotSpawn { prefab = PrefabForRobot(e.type), type = e.type, regenLeft = Mathf.Max(0, e.regen - 1) };
-                        spawn.hasData = m.TryGetEnemyData(lv.enemyData, e.type, out spawn.data);
-                        SpawnRobot(spawn, 45f);
-                    }
+                    int count = e.max < e.min ? Random.Range(e.max, e.min + 1) : e.min;
+                    var data = m.TryGetEnemyData(lv.enemyData, e.type, out var d) ? Robot.Data.From(d, lap) : DefaultRobotData(e.type, lap);
+                    for (int i = 0; i < count; i++) SpawnRobot(e.type, data, Mathf.Max(0, e.regen));
                 }
             }
 
@@ -394,11 +390,19 @@ namespace SpectreEX
             FlagsCollected = 0;
             TimeRemaining = plan.timeAllowed;
 
-            void Add(GameObject prefab, int n) { for (int i = 0; i < n; i++) SpawnRobot(new RobotSpawn { prefab = prefab, regenLeft = 99 }, 45f); }
-            Add(roverPrefab, plan.rovers);
-            Add(turretPrefab, plan.turrets);
-            Add(orbiterPrefab, plan.orbiters);
-            Add(slicerPrefab, plan.slicers);
+            // Without a matrix: Robot Tanks, Turrets, Orbiters and Slicers with Central Systems' enemy data
+            void Add(int type, int n) { for (int i = 0; i < n; i++) SpawnRobot(type, DefaultRobotData(type, 0), 99); }
+            Add(7, plan.rovers);
+            Add(20, plan.turrets);
+            Add(35, plan.orbiters);
+            Add(21, plan.slicers);
+        }
+
+        static Robot.Data DefaultRobotData(int type, int lap)
+        {
+            var central = MatrixLibrary.Central();
+            if (central != null && central.TryGetEnemyData(10000, type, out var d)) return Robot.Data.From(d, lap);
+            return new Robot.Data { strength = 1, chaseDist = 1750, firingRange = 560, interval = 120, speed = 5, turn = 1, score = 25, weapon = 0 };
         }
 
         // The original starts every level 15 grid units south of the middle, facing north, dropping in
@@ -484,82 +488,66 @@ namespace SpectreEX
             return c;
         }
 
-        // Matrix robot types (VRchitect's names) to the robots Spectre VR-EX can field
-        GameObject PrefabForRobot(int type) => type switch
+        // _ADD_ENEMY + _PLACE_TANKS: build the robot from its shape, place it, and hand it to the director
+        void SpawnRobot(int type, Robot.Data data, int regen)
         {
-            20 => turretPrefab,                                   // Turret
-            21 or 23 or 24 or 25 or 45 => slicerPrefab,           // Slicer, Smart Acid, Smart Wall, Cyber Mud, Bouncer
-            22 or 35 => orbiterPrefab,                            // Flyer, Orbiter
-            _ => roverPrefab,                                     // Tank, Robot Tank, Super Tank, Invisible / Cloaked Tank
-        };
-
-        void SpawnRobot(RobotSpawn spawn, float minDistance)
-        {
-            if (spawn.prefab == null || !TryFindSpawnPoint(out var p, minDistance)) return;
-            var go = Instantiate(spawn.prefab, p, Quaternion.Euler(0f, Random.Range(0f, 360f), 0f));
-            ApplyFilled(go);
-            spawnOf[go] = spawn;
-            var h = go.GetComponent<Health>();
-            var ai = go.GetComponent<EnemyBase>();
-            if (ai != null) ai.difficulty = levelDifficulty * GameSettings.DifficultyMultiplier;
-
-            if (spawn.hasData) ApplyEnemyData(go, spawn.type, spawn.data);
-            else if (ai != null && spawn.type > 0) { ai.matrixType = spawn.type; ai.hasMatrixData = false; }
-            else if (CurrentMatrix == null) h.SetMaxShields(spawn.prefab.GetComponent<Health>().maxShields + Plan.robotShields - 1);
-
-            if (spawn.type == 26)   // Invisible Tank: shows on radar only
-                foreach (var r in go.GetComponentsInChildren<Renderer>()) r.enabled = false;
-            if (spawn.type == 27) h.hiddenFromRadar = true;   // Cloaked Tank: visible, but not on radar
-            Robots.Add(h);
+            var robot = RobotFactory.Build(type, shapes, robotLook, obstacleLook.edgeThickness);
+            if (robot == null) return;
+            robot.Setup(type, data);
+            robot.index = director.Robots.Count + 1;
+            robot.regenLeft = regen;
+            robot.Place(RobotSpot(robot));
+            ApplyFilled(robot.gameObject);
+            if (type == 26) foreach (var r in robot.GetComponentsInChildren<Renderer>()) r.enabled = false;
+            director.Robots.Add(robot);
+            Robots.Add(robot.Health);
+            robotsLeft += regen + 1;
         }
 
-        // VRchitect "Enemy Data" applied to one robot. Distances are grid units; times are 60ths of a second.
-        void ApplyEnemyData(GameObject go, int type, MatrixFile.EnemyData d)
+        // Turrets, Orbiters and Bouncers start by a flag; everything else somewhere out of sight
+        Vector3 RobotSpot(Robot robot)
         {
-            var h = go.GetComponent<Health>();
-            h.SetMaxShields(Mathf.Max(1, d.strength));
-            h.scoreValue = Mathf.Max(0, d.score) * 10;
+            if (robot.IsFlagGuard) return PlaceNearFlag();
+            TryFindHiddenSpot(out var spot);
+            return spot;
+        }
 
-            var ai = go.GetComponent<EnemyBase>();
-            if (ai != null)
-            {
-                ai.fireInterval = d.firingInterval > 0 ? d.firingInterval / 60f : -1f;
-                ai.collideDamage = Mathf.Max(0, d.collideDamage);
-                ai.matrixType = type;
-                ai.hasMatrixData = true;
-            }
+        // _PLACE_NEAR_FLAG: the flag with the fewest robots so far, 0x3C00 in from it toward the middle
+        Vector3 PlaceNearFlag()
+        {
+            int n = Mathf.Min(Flags.Count, flagGuards.Length);
+            if (n == 0) return Vector3.zero;
+            int best = 0;
+            for (int i = 1; i < n; i++) if (flagGuards[i] < flagGuards[best]) best = i;
+            flagGuards[best]++;
+            Vector3 f = Flags[best] != null ? Flags[best].transform.position : Vector3.zero;
+            float step = 0x3C00 * PlayerMotor.UnitsToMetres;
+            return new Vector3(f.x < 0.0001f ? f.x + step : f.x - step, 0f, f.z < 0.0001f ? f.z + step : f.z - step);
+        }
 
-            var weapon = go.GetComponent<TankWeapon>();
-            if (weapon != null)
+        // _INVISIBLE_PLACE_XY: at least 0x26000 from the player on both axes, clear of other things
+        public bool TryFindHiddenSpot(out Vector3 spot)
+        {
+            const float away = 0x26000 * PlayerMotor.UnitsToMetres;
+            Vector3 me = player.transform.position;
+            spot = Vector3.zero;
+            for (int i = 0; i < 200; i++)
             {
-                weapon.enabled = d.weapon >= 0;
-                if (CurrentMatrix != null && CurrentMatrix.Weapons.TryGetValue(Mathf.Max(0, d.weapon), out var w)) weapon.damage = Mathf.Max(1, w.damage);
+                if (!TryFindSpawnPoint(out spot, 0f)) continue;
+                if (Mathf.Abs(spot.x - me.x) >= away && Mathf.Abs(spot.z - me.z) >= away) { spot.y = 0f; return true; }
             }
+            bool ok = TryFindSpawnPoint(out spot, away);
+            spot.y = 0f;
+            return ok;
+        }
 
-            var motor = go.GetComponent<TankMotor>();
-            if (motor != null && d.speed > 0)
-            {
-                motor.maxSpeed = d.speed * 2.2f;
-                motor.turnSpeed = 60f + 30f * Mathf.Max(1, d.turnSpeed);
-            }
-
-            switch (ai)
-            {
-                case RoverAI rover:
-                    rover.attackRange = d.attackRange > 0 ? Mathf.Max(30f, d.attackRange * GridScale * 1.5f) : 1000f;
-                    rover.fireRange = Mathf.Max(25f, d.firingRange * GridScale * 4f);
-                    rover.aimTolerance = Mathf.Clamp(d.firingArc * 0.5f, 3f, 20f);
-                    break;
-                case TurretAI turret:
-                    turret.range = Mathf.Max(40f, d.firingRange * GridScale * 4f);
-                    break;
-                case SlicerAI slicer:
-                    if (d.speed > 0) slicer.speed = d.speed * 2.2f;
-                    break;
-                case OrbiterAI orbiter:
-                    if (d.speed > 0) orbiter.moveSpeed = d.speed * 2.2f;
-                    break;
-            }
+        // _REPLACE_TANK, ten ticks after a robot is destroyed: back at once, if it has regenerations left
+        public void ReplaceRobot(Robot robot)
+        {
+            if (robot.regenLeft <= 0 || !Playing) return;
+            robot.regenLeft--;
+            robot.Replaced(RobotSpot(robot));
+            ApplyFilled(robot.gameObject);
         }
 
         // Random open spot on the arena floor, clear of obstacles and at least minDistance from the player.
@@ -650,24 +638,19 @@ namespace SpectreEX
                 return;
             }
 
-            AddScore(h.scoreValue);
-            Robots.Remove(h);
-            var go = h.gameObject;
-            spawnOf.TryGetValue(go, out var spawn);
-            spawnOf.Remove(go);
-            Destroy(go, 0.05f);
-            // Each robot regenerates the number of times its enemy set says, then stays dead
-            if (spawn != null && spawn.regenLeft > 0)
+            // A robot (_MOVE_SHOTS): its bonus is banked, all of them paid out with the last robot; it
+            // throws debris, and the director brings it back ten ticks later if it has regenerations left
+            var robot = h.GetComponent<Robot>();
+            if (robot == null) return;
+            robot.Killed();
+            director.Shots.Explode(robot);
+            bankedBonus += Mathf.Max(0, robot.data.bonus);
+            if (--robotsLeft == 0)
             {
-                spawn.regenLeft--;
-                StartCoroutine(RespawnRobot(spawn, Level));
+                Sfx.Play(Snd.AllRobots);
+                AddScore(bankedBonus);
+                bankedBonus = 0;
             }
-        }
-
-        IEnumerator RespawnRobot(RobotSpawn spawn, int level)
-        {
-            yield return new WaitForSeconds(robotRespawnDelay);
-            if (Level == level && Playing) SpawnRobot(spawn, 50f);
         }
 
         IEnumerator PlayerDown()

@@ -50,13 +50,17 @@ namespace SpectreEX
         {
             if (IsDead || points <= 0) return;
             Shields -= points;
+            Damaged?.Invoke(points);
             if (Shields <= 0) { Die(); return; }
             if (!sound) return;
-            if (team == Team.Player) Sfx.Play(Shields <= DangerPoints && hitMultiplier > 1 ? Snd.Danger : hitSound);
+            if (team == Team.Player) Sfx.Play(Shields <= DangerPoints && hitMultiplier > 1 ? Snd.HeavyDamage : hitSound);
             else Sfx.PlayAt(hitSound, transform.position);
         }
 
-        // The original swaps the hit sound for the warning once you're within 20 points of destruction
+        // Every hit, the killing one included (robots score per hit and are stunned by it)
+        public System.Action<int> Damaged;
+
+        // The original swaps the hit sound (3) for the heavy-damage one (9) within 20 points of destruction
         const int DangerPoints = 20;
 
         void Die()

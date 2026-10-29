@@ -41,8 +41,7 @@ namespace SpectreEX.EditorTools
         static readonly Color SlicerOrange = new Color(1f, 0.3f, 0.05f);
 
         // Original Spectre VR shape ids (CENTRAL.MAT) and the scale that maps their units to metres
-        const int PlayerShape = 10011, RoverShape = 10010, TurretShape = 10034, OrbiterShape = 10017, SlicerShape = 10039, FlagShape = 10086;
-        const float ShapeScale = 0.13f;
+        const int PlayerShape = 10011, FlagShape = 10086;
         const float EdgeThickness = 0.07f;
         const float FlagHeightStretch = 3f;
         const float FlagBaseScale = 0.35f;   // keeps the base pyramid's footprint small next to the craft
@@ -81,10 +80,13 @@ namespace SpectreEX.EditorTools
             gm.arenaHalfSize = ArenaHalfSize;
             gm.flagPrefab = prefabs.flag;
             gm.ammoDumpPrefab = prefabs.dump;
-            gm.roverPrefab = prefabs.rover;
-            gm.turretPrefab = prefabs.turret;
-            gm.orbiterPrefab = prefabs.orbiter;
-            gm.slicerPrefab = prefabs.slicer;
+            // Robots too (RobotFactory), each edged in its own colour
+            gm.robotLook = new RobotLook
+            {
+                panels = blockMat, tank = roverMat, superTank = turretMat, turret = turretMat, slicer = slicerMat,
+                flyer = orbiterMat, acid = acidMat, wall = pusherMat, mud = transportMat, orbiter = orbiterMat, bolt = enemyBoltMat,
+                tankPanel = roverPanel, turretPanel = turretPanel, slicerPanel = slicerPanel, orbiterPanel = orbiterPanel,
+            };
             // Obstacles are built at runtime from each matrix's own shapes (Matrix.ObstacleFactory)
             gm.obstacleLook = new Matrix.ObstacleLook
             {
@@ -380,7 +382,6 @@ namespace SpectreEX.EditorTools
         {
             public Flag flag;
             public AmmoDump dump;
-            public GameObject rover, turret, orbiter, slicer;
         }
 
         static Prefabs BuildPrefabs()
@@ -390,10 +391,6 @@ namespace SpectreEX.EditorTools
             var p = new Prefabs();
             p.flag = SavePrefab(BuildFlag(pennant)).GetComponent<Flag>();
             p.dump = SavePrefab(BuildAmmoDump()).GetComponent<AmmoDump>();
-            p.rover = SavePrefab(BuildRover());
-            p.turret = SavePrefab(BuildTurret());
-            p.orbiter = SavePrefab(BuildOrbiter());
-            p.slicer = SavePrefab(BuildSlicer());
             return p;
         }
 
@@ -464,29 +461,6 @@ namespace SpectreEX.EditorTools
             return d;
         }
 
-        static Health AddHealth(GameObject go, int shields, int score, Material derez)
-        {
-            var h = go.AddComponent<Health>();
-            h.team = Team.Enemy;
-            h.maxShields = shields;
-            h.scoreValue = score;
-            h.derezMaterial = derez;
-            return h;
-        }
-
-        static TankWeapon AddEnemyWeapon(GameObject go, Transform muzzle, float cooldown, float speed)
-        {
-            var w = go.AddComponent<TankWeapon>();
-            w.muzzle = muzzle;
-            w.projectileMaterial = enemyBoltMat;
-            w.team = Team.Enemy;
-            w.cooldown = cooldown;
-            w.projectileSpeed = speed;
-            w.infiniteAmmo = true;
-            w.fireSound = Snd.EnemyShot;
-            return w;
-        }
-
         static Transform Muzzle(Transform parent, Vector3 pos)
         {
             var m = new GameObject("Muzzle").transform;
@@ -501,88 +475,6 @@ namespace SpectreEX.EditorTools
             col.center = b.center;
             col.size = Vector3.Max(b.size, new Vector3(0.6f, 0.6f, 0.6f));
             return col;
-        }
-
-        // Rover: the original's finned robot tank
-        static GameObject BuildRover()
-        {
-            var root = new GameObject("Rover");
-            var rb = root.AddComponent<Rigidbody>();
-            rb.mass = 50f;
-            SpectreModel("Model", root.transform, RoverShape, ShapeScale, roverMat, out var b, panel: roverPanel);
-            FitCollider(root, b).sharedMaterial = NoFriction();
-
-            var muzzle = Muzzle(root.transform, new Vector3(0f, b.center.y + 0.2f, b.max.z + 0.4f));
-            root.AddComponent<TankMotor>().maxSpeed = 16f;
-            AddEnemyWeapon(root, muzzle, 1.5f, 55f);
-            AddHealth(root, 1, 250, roverMat);
-            root.AddComponent<RoverAI>();
-            return root;
-        }
-
-        // Gun turret: the original column, widened; the whole column swivels to aim
-        static GameObject BuildTurret()
-        {
-            var root = new GameObject("Turret");
-            var head = SpectreModel("Head", root.transform, TurretShape, ShapeScale, turretMat, out var b, panel: turretPanel);
-            head.localScale = new Vector3(1.8f, 1f, 1.8f);
-            var col = root.AddComponent<CapsuleCollider>();
-            col.center = new Vector3(0f, b.size.y * 0.5f, 0f);
-            col.height = b.size.y;
-            col.radius = Mathf.Max(b.extents.x, b.extents.z) * 1.8f;
-            var muzzle = Muzzle(head, new Vector3(0f, b.max.y * 0.8f, b.max.z + 0.6f));
-
-            AddEnemyWeapon(root, muzzle, 1.8f, 60f);
-            AddHealth(root, 3, 500, turretMat);
-            root.AddComponent<TurretAI>().head = head;
-            return root;
-        }
-
-        // Orbiter: the original spinning-top gem, hovering
-        static GameObject BuildOrbiter()
-        {
-            var root = new GameObject("Orbiter");
-            root.AddComponent<Rigidbody>();
-            var body = SpectreModel("Body", root.transform, OrbiterShape, 0.18f, orbiterMat, out var b, panel: orbiterPanel);
-            body.localPosition = -b.center;   // spin about its own middle
-            var col = root.AddComponent<SphereCollider>();
-            col.radius = Mathf.Max(b.extents.x, b.extents.y, b.extents.z);
-            var muzzle = Muzzle(root.transform, Vector3.zero);
-            AddEnemyWeapon(root, muzzle, 2.6f, 50f);
-            AddHealth(root, 2, 400, orbiterMat);
-            var ai = root.AddComponent<OrbiterAI>();
-            ai.body = body;
-            return root;
-        }
-
-        // Slicer: two of the original's long blades crossed, spinning flat like a rotor
-        static GameObject BuildSlicer()
-        {
-            var root = new GameObject("Slicer");
-            var rb = root.AddComponent<Rigidbody>();
-            rb.mass = 20f;
-
-            var blades = new GameObject("Blades").transform;
-            blades.SetParent(root.transform, false);
-            blades.localPosition = new Vector3(0f, 1.2f, 0f);
-            Bounds b = default;
-            for (int i = 0; i < 2; i++)
-            {
-                var pivot = new GameObject("BladePivot").transform;
-                pivot.SetParent(blades, false);
-                pivot.localRotation = Quaternion.Euler(0f, i * 90f, 0f);
-                var blade = SpectreModel("Blade", pivot, SlicerShape, ShapeScale, slicerMat, out b, panel: slicerPanel);
-                blade.localPosition = -b.center;
-            }
-            var col = root.AddComponent<SphereCollider>();
-            col.center = blades.localPosition;
-            col.radius = b.extents.z;
-            col.sharedMaterial = NoFriction();
-
-            AddHealth(root, 1, 300, slicerMat);
-            var ai = root.AddComponent<SlicerAI>();
-            ai.blades = blades;
-            return root;
         }
 
         static PhysicsMaterial noFriction;

@@ -37,6 +37,15 @@ namespace SpectreEX
         public const string Goo = "GOOSQ";           // slow pads
         public const string Acid = "ACIDD";          // acid burn
         public const string HitEdge = "HTEDGE";      // arena edge
+        // From the EXE's numbered sound table (_SOUNDTABLE, see docs/original-mechanics.md)
+        public const string HeavyDamage = "HVDAMG";  // 9: a hit with 20 points or less left
+        public const string RobotShot = "GRSHOT";    // 0x18: robot fire other than the plain shot
+        public const string SmartMove = "ACIDMV";    // 0x13 / 0x14: Smart Wall / Smart Acid set off
+        public const string FlyerDive = "FLYRDV";    // 0x27
+        public const string SlicerFar = "SHKLWR";    // 0x1F
+        public const string SlicerNear = "SHKLOW";   // 0x20
+        public const string SlicerJump = "SHARK";    // 0x21
+        public const string AllRobots = "ALLBOTS";   // 0x2C: the last robot destroyed
     }
 
     public static class Sfx
