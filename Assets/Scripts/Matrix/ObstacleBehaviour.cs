@@ -12,15 +12,16 @@ namespace SpectreEX.Matrix
         public Kind kind;
         public int type;                   // matrix wrld type
         public int heading;                // the original's 0-255 heading (wrld degrees * 256 / 360)
-        public Transform spinner;          // windmill sails, transport gems
-        public float spinSpeed = 90f;
+        public Transform spinner;          // windmill fans, turning towers and transports
+        public Vector3 spinAxis = Vector3.up;
+        public float spinSpeed = 90f;      // degrees a second
 
         // Gates are driven over or through; the rest block
         public bool IsGate => kind != Kind.Static && kind != Kind.Windmill;
 
         void Update()
         {
-            if (spinner != null) spinner.Rotate(0f, spinSpeed * Time.deltaTime, 0f, Space.Self);
+            if (spinner != null) spinner.Rotate(spinAxis, spinSpeed * Time.deltaTime, Space.Self);
         }
     }
 }

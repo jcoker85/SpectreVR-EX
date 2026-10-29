@@ -63,6 +63,9 @@ namespace SpectreEX.Matrix
             return m;
         }
 
+        // The bundled Central Systems matrix, whose shapes stand in for a matrix that has none
+        public static MatrixFile Central() => Load(Path.Combine(BundledFolder, DefaultMatrix));
+
         // The matrix chosen in the MATRIX dialog, falling back to Central Systems, then anything playable
         public static MatrixFile Current()
         {

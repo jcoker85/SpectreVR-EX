@@ -133,10 +133,30 @@ pusher shoves toward gate deg - 90° (worked through by hand - verify in game).
 **Flags:** the first `_MAX_FLAGS` wrld entries are flags whatever their type (we use type 14).
 Picking one up: +20 score, sound 0x11 (0x17 for one left, 0x3C for the last).
 
-**Shapes are data-driven:** each matrix has a `shps` resource indexed by type, three words each
-(textured shape, plain shape, spare). Ids < 1000 are built into the EXE (procedural table at
-DS:0x9B8 - not decoded yet), 1000-1999 random-pick `rshp` lists, 2000-2999 multi-part `mshp`
-shapes, 10000+ `shap` meshes. CENTRAL.MAT:
+**Shapes are data-driven** (`_ADD_SHAPE` @1020:0127): each matrix has a `shps` resource: a type
+count, then three words per type (textured shape, plain shape, spare). With the default
+`_TEXTURES = 3` the textured column is used. Before lookup 16 → 10030, 17 → 10027, 20 → 10087.
+- 1-999: built into the EXE. `_OT_TO_SHAPE` (DS:0x9B8) has 10-byte entries (id, type, shap id,
+  far pointer to a template object). The templates (`_BIG_BOX`, `_PYRAMID`, `_WINDMILL`,
+  `_WINDMILL_FANS`, `_BASE`, `_FLAG`, `_TURRET`, ...) are filled at startup by `_BUILD_OBJECTS` /
+  `_SET_FACES` from constant stores; `Tools/export_builtin_shapes.py` replays them →
+  `Assets/Resources/Shapes/BuiltinShapes.json`. Points are x forward, y side, z up, world units.
+- 1000-1999: `rshp` random list, **one pick per list per level** (`_LOAD_WRLD` clears the picks),
+  so e.g. every type-3 billboard in a level is the same one.
+- 2000-2999: `mshp` multi-part: count, then (shape, distance ×0xA00, angle in degrees, height
+  ×0x28) per part; part 0 is the root, the rest follow it (`_MOVE_OBJECT`: parent + distance
+  along heading - angle, + height).
+- 10000-10999: `shap` meshes. The loader (jump table at 1020:08ED, handler 1020:106B) stores each
+  16.16 point >> 7, less 1/64, file x/y/z → world y/z/x: 1.0 = 504 units = 0.1575 m.
+- A matrix without `shps` gets no world objects at all (`_SHPSP == 0`); the EXE loads `Basic.mat`
+  first, then the chosen matrix. BASIC.MAT has no shapes. We fall back to CENTRAL's.
+- `_LOAD_WRLD` spin per tick (+0x3A): type 2 -2, type 36 +3, type 37 -3. Windmill fans: a child
+  object 0x800 forward, 0x1D00 up, roll +2/tick from a random start, never collides (type 0xF8).
+- Collision is `_CUBE_COLLIDE`: the exact point bounds (`_SIZE_OBJECT`, +0x24..+0x2E), in 3D,
+  for gates too. The up transport's zmin is lowered by 0x1400 so a craft under the floor meets it.
+  Type 40 (VRchitect walls, a flat 10026 strip) isn't a gate, so it's solid.
+
+CENTRAL.MAT:
 
 | Type | Textured | Plain |
 |---|---|---|
@@ -164,8 +184,9 @@ shapes, 10000+ `shap` meshes. CENTRAL.MAT:
 | 36 / 37 | 10017 / 10016 | same |
 | 39 / 40 | 10025 / 10026 | same |
 
-Our `ArenaBuilder` obstacle prefabs use guessed shapes and a guessed type list (it treats 17 as
-teleport, 19 as windmill, 4 as rock, 39 as a wall) - to be rebuilt from this table.
+Built-ins in that column: type 0 → 1 `_BIG_BOX`, 1 → 2 `_PYRAMID` (a 3-sided tetrahedron),
+4 → 5 `_WINDMILL`, 5 → 6 `_FUEL`, 9 → `_SHOT`, 11 → `_BASE`, 12 → `_FLAG`, 32 → 19 `_TURRET`;
+10, 14 and 42 have no shape.
 
 ## Ammo dumps ("fuel", `_CHECK_FUEL_COLLIDE`)
 
@@ -215,7 +236,17 @@ etc. - not read yet.
    Not done: wings visuals on the model, alt weapon 8 from blue dumps, level-0 "jump" pads
    (`_CHECK_JUMP_COLLIDE`: skip to level 3 or 8), the original's bonus counter on the HUD
    (ours shows TIME; `_BONUS` falls by 4 a second).
-5. Shapes from `shps` (decode the built-in shapes at DS:0x9B8).
+5. **Done:** obstacles are built at runtime from the playing matrix's own `shps`/`shap`/`rshp`/
+   `mshp` (`MatrixFile`, `Matrix.ShapeSet`, `Matrix.ObstacleFactory`), with CENTRAL's as the
+   fallback, the 16 EXE built-ins from `BuiltinShapes.json`, one random pick per list per level,
+   the spins and windmill fans above, exact-bounds colliders (min 0.6 m, as before), and the up
+   transport's extended reach. The builder's guessed obstacle prefabs are gone (`ObstacleLook`
+   holds the materials). Checked: all 47 CENTRAL types resolve; level 1 (towers, billboards),
+   level 3 (windmills with rolling fans) and level 5 (pyramids block the craft) in Play mode.
+   Not done: robots and the player still use the builder's guessed shapes at 0.13 m per unit
+   (the original is 0.1575) - item 6; the `mshp` part angle sign is unverified (every CENTRAL
+   multi-part shape is symmetric); spinning obstacles keep an unrotated collider; the original
+   collides obstacles by their z range against the craft's, ours uses the craft hull as before.
 6. Robots (all 13), then weapons (7 alt weapons), then the remaining fidelity pass.
 
 DOSBox-X (`Tools/dosbox-x/bin/x64/Release/dosbox-x.exe`) is unpacked but not yet launched; the

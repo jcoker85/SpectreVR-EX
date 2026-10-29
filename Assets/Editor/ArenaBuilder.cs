@@ -85,7 +85,12 @@ namespace SpectreEX.EditorTools
             gm.turretPrefab = prefabs.turret;
             gm.orbiterPrefab = prefabs.orbiter;
             gm.slicerPrefab = prefabs.slicer;
-            gm.obstacleKinds = BuildObstaclePrefabs();
+            // Obstacles are built at runtime from each matrix's own shapes (Matrix.ObstacleFactory)
+            gm.obstacleLook = new Matrix.ObstacleLook
+            {
+                panels = blockMat, edges = cyanMat, acid = acidMat, ice = teleportMat, teleport = teleportMat,
+                pusher = pusherMat, transport = transportMat, edgeThickness = EdgeThickness,
+            };
             gmGo.AddComponent<MusicPlayer>();
             var hudFont = AssetDatabase.LoadAssetAtPath<Font>(HudFontPath);
             gmGo.AddComponent<SpectreHud>().segmentFont = hudFont;
@@ -354,22 +359,6 @@ namespace SpectreEX.EditorTools
             go.transform.localScale = scale;
             go.GetComponent<MeshRenderer>().sharedMaterial = mat;
             return go;
-        }
-
-        // Thin glowing strips along all 12 edges of a box: the core of the vector look.
-        static void AddEdges(Transform parent, Vector3 center, Vector3 size, float thickness, Material mat)
-        {
-            var edges = new GameObject("Edges").transform;
-            edges.SetParent(parent, false);
-            Vector3 h = size * 0.5f;
-            float t = thickness;
-            for (int a = -1; a <= 1; a += 2)
-            for (int b = -1; b <= 1; b += 2)
-            {
-                Box("EdgeX", edges, center + new Vector3(0f, a * h.y, b * h.z), new Vector3(size.x + t, t, t), mat, false);
-                Box("EdgeY", edges, center + new Vector3(a * h.x, 0f, b * h.z), new Vector3(t, size.y + t, t), mat, false);
-                Box("EdgeZ", edges, center + new Vector3(a * h.x, b * h.y, 0f), new Vector3(t, t, size.z + t), mat, false);
-            }
         }
 
         static void NoShadows(GameObject root)
@@ -661,155 +650,6 @@ namespace SpectreEX.EditorTools
                 renderers.Add(r);
             }
             return renderers.ToArray();
-        }
-
-        // ---------- matrix obstacles ----------
-
-        // One prefab per original obstacle shape, grouped by matrix obstacle type (VRchitect's palette).
-        // Where the original picked a random shape (its "rshp" lists), every candidate becomes a variant.
-        static GameManager.ObstacleKind[] BuildObstaclePrefabs()
-        {
-            const float s = GameManager.GridScale;
-            var kinds = new List<GameManager.ObstacleKind>();
-
-            void Kind(int type, params GameObject[] variants) => kinds.Add(new GameManager.ObstacleKind { type = type, variants = variants });
-            GameObject Shape(int type, int shape, Material glow = null) => SavePrefab(SolidObstacle($"Obstacle_{type}_{shape}", shape, s, glow ?? cyanMat));
-            GameObject[] Shapes(int type, params int[] shapes) => System.Array.ConvertAll(shapes, id => Shape(type, id));
-
-            // Types and shapes from the matrix "shps" table and the game's _HIT_A_GATE / _LOAD_WRLD (see
-            // docs/original-mechanics.md). Shapes under id 1000 are built into SVRWIN.EXE and not decoded
-            // yet, so those types (0, 1, 2's plain form, 4, 19) use the nearest matrix shape.
-            Kind(0, Shape(0, 10032));                                      // pyramid (built-in 1)
-            Kind(1, Shape(1, 10034));                                      // column (built-in 2)
-            Kind(2, Shapes(2, 10034, 10004, 10086));                       // random tower: rshp 1000
-            Kind(3, Shapes(3, 10097, 10005, 10006, 10007, 10014, 10018, 10019, 10063, 10084, 10085, 10105, 10106, 10107, 10108));   // billboards: rshp 1001
-            Kind(4, SavePrefab(Windmill("Obstacle_4_Windmill", s)));      // windmill (built-in 5 + fans)
-            Kind(13, Shape(13, 10088));
-            Kind(15, Shapes(15, 10008, 10013, 10009, 10000, 10020));       // cube: rshp 1002
-            Kind(16, SavePrefab(FloorPad("Obstacle_16_Acid", 10024, s, acidMat, Matrix.ObstacleBehaviour.Kind.Acid)));
-            Kind(17, SavePrefab(FloorPad("Obstacle_17_Ice", 10094, s, teleportMat, Matrix.ObstacleBehaviour.Kind.Ice)));
-            Kind(18, SavePrefab(FloorPad("Obstacle_18_Slow", 10095, s, pusherMat, Matrix.ObstacleBehaviour.Kind.Slow)));
-            Kind(19, SavePrefab(Gate("Obstacle_19_Teleport", 10030, s, teleportMat, Matrix.ObstacleBehaviour.Kind.Teleport)));
-            Kind(36, SavePrefab(Transport("Obstacle_36_UpTransport", 10017, s, Matrix.ObstacleBehaviour.Kind.UpTransport)));
-            Kind(37, SavePrefab(Transport("Obstacle_37_DownTransport", 10016, s, Matrix.ObstacleBehaviour.Kind.DownTransport)));
-            Kind(38, Shape(38, 10098));
-            Kind(39, SavePrefab(FloorPad("Obstacle_39_Pusher", 10025, s, pusherMat, Matrix.ObstacleBehaviour.Kind.Pusher)));
-            Kind(40, Shape(40, 10026));
-            return kinds.ToArray();
-        }
-
-        static GameObject SolidObstacle(string name, int shape, float scale, Material glow)
-        {
-            var root = new GameObject(name);
-            var model = SpectreModel("Model", root.transform, shape, scale, glow, out var b, panel: blockMat);
-            NoShadows(model.Find("Edges").gameObject);
-            var col = root.AddComponent<BoxCollider>();
-            col.center = b.center;
-            col.size = Vector3.Max(b.size, new Vector3(0.6f, 0.6f, 0.6f));   // billboards are flat
-            return root;
-        }
-
-        // Flat floor features (acid, teleport and pusher pads): drawn just above the floor, a trigger to drive over
-        static GameObject FloorPad(string name, int shape, float scale, Material glow, Matrix.ObstacleBehaviour.Kind kind)
-        {
-            var root = new GameObject(name);
-            var model = SpectreModel("Model", root.transform, shape, scale, glow, out var b, panel: glow);
-            model.localPosition = Vector3.up * 0.04f;
-            NoShadows(model.gameObject);
-            var col = root.AddComponent<BoxCollider>();
-            col.isTrigger = true;
-            col.center = new Vector3(b.center.x, 1.5f, b.center.z);
-            col.size = new Vector3(Mathf.Max(1.5f, b.size.x), 3f, Mathf.Max(1.5f, b.size.z));
-            root.AddComponent<Matrix.ObstacleBehaviour>().kind = kind;
-            return root;
-        }
-
-        // Standing gates you drive into (teleport): the shape at full height, a trigger round it
-        static GameObject Gate(string name, int shape, float scale, Material glow, Matrix.ObstacleBehaviour.Kind kind)
-        {
-            var root = new GameObject(name);
-            var model = SpectreModel("Model", root.transform, shape, scale, glow, out var b, panel: blockMat);
-            NoShadows(model.Find("Edges").gameObject);
-            var col = root.AddComponent<BoxCollider>();
-            col.isTrigger = true;
-            col.center = b.center;
-            col.size = Vector3.Max(b.size, new Vector3(1.5f, 1.5f, 1.5f));
-            root.AddComponent<Matrix.ObstacleBehaviour>().kind = kind;
-            return root;
-        }
-
-        // The windmill's tower and fans are built-in shapes of SVRWIN.EXE (5 and _WINDMILL_FANS, not
-        // decoded yet): a stand-in tower with four sails turning on top. 0x1D00 units up, 8 table-steps out.
-        static GameObject Windmill(string name, float scale)
-        {
-            var root = new GameObject(name);
-            float height = 0x1D00 * scale / 0x200;
-            var towerSize = new Vector3(1.2f, height, 1.2f);
-            var tower = Box("Panels", root.transform, Vector3.up * height * 0.5f, towerSize, blockMat);
-            Object.DestroyImmediate(tower.GetComponent<Collider>());
-            AddEdges(root.transform, Vector3.up * height * 0.5f, towerSize, EdgeThickness, cyanMat);
-            NoShadows(root.transform.Find("Edges").gameObject);
-
-            var pivot = new GameObject("Sails").transform;
-            pivot.SetParent(root.transform, false);
-            pivot.localPosition = new Vector3(0f, height, 0.8f);
-            pivot.localRotation = Quaternion.Euler(90f, 0f, 0f);   // spin axis (local Y) along the windmill's facing
-            var sailCentre = new Vector3(1.6f, 0f, 0f);
-            var sailSize = new Vector3(3f, 0.08f, 0.5f);
-            for (int i = 0; i < 4; i++)
-            {
-                var arm = new GameObject("Sail").transform;
-                arm.SetParent(pivot, false);
-                arm.localRotation = Quaternion.Euler(0f, i * 90f, 0f);
-                var sail = Box("Panels", arm, sailCentre, sailSize, blockMat);
-                Object.DestroyImmediate(sail.GetComponent<Collider>());
-                AddEdges(arm, sailCentre, sailSize, EdgeThickness, cyanMat);
-            }
-
-            var col = root.AddComponent<BoxCollider>();
-            col.center = Vector3.up * height * 0.5f;
-            col.size = towerSize;
-            var beh = root.AddComponent<Matrix.ObstacleBehaviour>();
-            beh.kind = Matrix.ObstacleBehaviour.Kind.Windmill;
-            beh.spinner = pivot;
-            beh.spinSpeed = 60f;
-            return root;
-        }
-
-        // Up / down transports: a hovering, spinning gem you drive under
-        static GameObject Transport(string name, int shape, float scale, Matrix.ObstacleBehaviour.Kind kind)
-        {
-            var root = new GameObject(name);
-            var pivot = new GameObject("Gem").transform;
-            pivot.SetParent(root.transform, false);
-            pivot.localPosition = Vector3.up * 1.2f;
-            var model = SpectreModel("Model", pivot, shape, scale * 1.6f, transportMat, out var b, panel: blockMat);
-            model.localPosition = -b.center;
-            NoShadows(model.gameObject);
-            var col = root.AddComponent<BoxCollider>();
-            col.isTrigger = true;
-            col.center = new Vector3(0f, 1.5f, 0f);
-            col.size = new Vector3(3f, 3f, 3f);
-            var beh = root.AddComponent<Matrix.ObstacleBehaviour>();
-            beh.kind = kind;
-            beh.spinner = pivot;
-            beh.spinSpeed = 120f;
-            return root;
-        }
-
-        // Walls are drawn as lines in VRchitect: each entry is one 32-unit segment along its heading
-        static GameObject WallSegment(string name, Vector3 size)
-        {
-            var root = new GameObject(name);
-            var center = Vector3.up * size.y * 0.5f;
-            var box = Box("Panels", root.transform, center, size, blockMat);   // "Panels" = hidden when Filled is off
-            Object.DestroyImmediate(box.GetComponent<Collider>());
-            AddEdges(root.transform, center, size, EdgeThickness, cyanMat);
-            NoShadows(root.transform.Find("Edges").gameObject);
-            var col = root.AddComponent<BoxCollider>();
-            col.center = center;
-            col.size = Vector3.Max(size, new Vector3(0.6f, 0.6f, 0.6f));
-            return root;
         }
 
         // ---------- player ----------

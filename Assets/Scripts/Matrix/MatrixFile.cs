@@ -17,6 +17,10 @@ namespace SpectreEX.Matrix
     //   wval  weapons: count, then (weapon id, damage, ammo used)
     //   sstf  extra lives: 7 header words, 10 score thresholds (32-bit), then the increment after those
     //   STR#  string lists: 1007 = level tips, 5000 = matrix name / author / description
+    //   shps  shape per world object type: count, then (textured shape, plain shape, spare) per type
+    //   shap  a 3D shape: points (16.16 fixed, x / y up / z forward) and faces (1-based point lists)
+    //   rshp  random shape list: count, then shape ids (one is picked per level)
+    //   mshp  multi-part shape: count, then (shape id, distance, angle, height) per part
     public class MatrixFile
     {
         public string Path { get; private set; }
@@ -32,6 +36,12 @@ namespace SpectreEX.Matrix
         public readonly Dictionary<int, Weapon> Weapons = new Dictionary<int, Weapon>();
         public readonly List<string> Tips = new List<string>();
         public readonly ExtraLives[] Lives = new ExtraLives[3];
+        public readonly Dictionary<int, ShapeGeometry> Shapes = new Dictionary<int, ShapeGeometry>();
+        public readonly Dictionary<int, int[]> RandomShapes = new Dictionary<int, int[]>();
+        public readonly Dictionary<int, ShapePart[]> MultiShapes = new Dictionary<int, ShapePart[]>();
+        public int[] ShapeTable { get; private set; }   // 3 words per world object type, or null
+
+        public bool HasShapeTable => ShapeTable != null;
 
         public struct Level
         {
@@ -72,6 +82,11 @@ namespace SpectreEX.Matrix
             public int increment;      // then one more every this many points
         }
 
+        public struct ShapePart
+        {
+            public int shape, distance, angle, height;   // distance x 0xA00 units, angle in degrees, height x 0x28 units
+        }
+
         // ---------- loading ----------
 
         public static MatrixFile Load(string path)
@@ -108,6 +123,13 @@ namespace SpectreEX.Matrix
                     case "bval": EnemyDataSets[id] = ParseEnemyData(res); break;
                     case "wval": ParseWeapons(res); break;
                     case "sstf": if (id - 10000 >= 0 && id - 10000 < 3) Lives[id - 10000] = ParseLives(res); break;
+                    case "shps": ShapeTable = ParseList(res, 3); break;
+                    case "rshp": RandomShapes[id] = ParseList(res); break;
+                    case "mshp": MultiShapes[id] = ParseParts(res); break;
+                    case "shap":
+                        var shape = ParseShape(res);
+                        if (shape != null) Shapes[id] = shape;
+                        break;
                     case "STR#":
                         var strings = ParseStrings(res);
                         if (id == 1007) { Tips.Clear(); Tips.AddRange(strings); }
@@ -196,6 +218,64 @@ namespace SpectreEX.Matrix
             for (int i = 0; i < 10 && 8 + i * 2 < w.Length; i++) lives.thresholds[i] = Long(w[7 + i * 2], w[8 + i * 2]);
             lives.increment = w.Length > 27 ? (ushort)w[27] : 30000;
             return lives;
+        }
+
+        // count, then that many entries of 'width' words
+        static int[] ParseList(byte[] b, int width = 1)
+        {
+            var w = Words(b);
+            if (w.Length == 0) return new int[0];
+            var list = new int[Mathf.Clamp(w[0] * width, 0, w.Length - 1)];
+            for (int i = 0; i < list.Length; i++) list[i] = w[i + 1];
+            return list;
+        }
+
+        static ShapePart[] ParseParts(byte[] b)
+        {
+            var w = Words(b);
+            var parts = new List<ShapePart>();
+            for (int i = 1; i + 3 < w.Length && parts.Count < w[0]; i += 4)
+                parts.Add(new ShapePart { shape = w[i], distance = w[i + 1], angle = w[i + 2], height = w[i + 3] });
+            return parts.ToArray();
+        }
+
+        // Points come out in the game's world units, as SVRWIN.EXE loads them: each 16.16 value >> 7,
+        // less 1/64, with the file's x / y / z becoming world side / up / forward.
+        static ShapeGeometry ParseShape(byte[] b)
+        {
+            int o = 0;
+            bool Has(int bytes) => o + bytes <= b.Length;
+            int Word() { int v = (short)((b[o] << 8) | b[o + 1]); o += 2; return v; }
+            int Fixed()
+            {
+                int v = (int)U32(b, o) >> 7;
+                o += 4;
+                return v - v / 64;
+            }
+
+            if (!Has(2)) return null;
+            int points = Word() + 1;
+            if (points < 0 || !Has(points * 12 + 2)) return null;
+            var verts = new int[points * 3];
+            for (int i = 0; i < points; i++)
+            {
+                int x = Fixed(), y = Fixed(), z = Fixed();
+                verts[i * 3] = z;
+                verts[i * 3 + 1] = x;
+                verts[i * 3 + 2] = y;
+            }
+            int faceCount = Word() + 1;
+            var faces = new List<int[]>();
+            for (int f = 0; f < faceCount && Has(2); f++)
+            {
+                int n = Word() + 1;
+                if (n < 0 || !Has(n * 2 + 2)) break;
+                var idx = new int[n];
+                for (int k = 0; k < n; k++) idx[k] = Word() - 1;
+                Word();   // colour
+                faces.Add(idx);
+            }
+            return new ShapeGeometry(verts, faces.ToArray());
         }
 
         static List<string> ParseStrings(byte[] b)

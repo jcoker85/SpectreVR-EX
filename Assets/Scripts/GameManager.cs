@@ -30,13 +30,6 @@ namespace SpectreEX
         // Original grids are 1024 units square; this many metres per unit (the scale the shapes use)
         public const float GridScale = 0.16f;
 
-        [System.Serializable]
-        public class ObstacleKind
-        {
-            public int type;                 // matrix obstacle type
-            public GameObject[] variants;    // picked at random, like the original's random shapes
-        }
-
         [Header("Scene")]
         public PlayerTank player;
         public Renderer[] wallRenderers;
@@ -47,8 +40,11 @@ namespace SpectreEX
         public Flag flagPrefab;
         public AmmoDump ammoDumpPrefab;
         public GameObject roverPrefab, turretPrefab, orbiterPrefab, slicerPrefab;
-        public ObstacleKind[] obstacleKinds;
+        public ObstacleLook obstacleLook = new ObstacleLook();
         public int fallbackObstacleType = 15;   // cube
+
+        // Obstacle shapes for the level being built: the matrix's own, else Central Systems'
+        ShapeSet shapes;
 
         [Header("Rules")]
         public int startingLives = 3;
@@ -322,6 +318,7 @@ namespace SpectreEX
             ClearLevel();
             SetWallColor(LevelPlan.WallColor(levelNumber));
             PlacePlayerAtStart();
+            UseShapes(m);
 
             // The grid: flags first (as VRchitect stores them), then every other obstacle where the designer put it
             var flagSpots = new List<Vector3>();
@@ -378,6 +375,7 @@ namespace SpectreEX
             ClearLevel();
             SetWallColor(plan.wallColor);
             PlacePlayerAtStart();
+            UseShapes(null);
 
             var rng = new System.Random(1991);
             for (int i = 0; i < 14; i++)
@@ -458,30 +456,25 @@ namespace SpectreEX
             player.ResetForLife();
         }
 
-        void SpawnObstacle(int type, Vector3 pos, int heading)
+        void UseShapes(MatrixFile m)
         {
-            var prefab = PickObstaclePrefab(type) ?? PickObstaclePrefab(fallbackObstacleType);
-            if (prefab == null) return;
-            // The original's heading byte; its shapes face the opposite way to how its tanks travel,
-            // which puts the model at yaw -degrees here
-            var go = Instantiate(prefab, pos, Quaternion.Euler(0f, -heading, 0f));
-            var beh = go.GetComponent<ObstacleBehaviour>();
-            if (beh != null)
-            {
-                beh.type = type;
-                beh.heading = Mathf.RoundToInt(heading * 256f / 360f) & 0xFF;
-            }
-            ApplyFilled(go);
-            Obstacles.Add(go);
+            var central = MatrixLibrary.Central();
+            if (central == null) Debug.LogWarning("Spectre VR-EX: Central Systems matrix not found - matrices without shapes will have no obstacles");
+            shapes = new ShapeSet(m, central);
+            shapes.NewLevel();
         }
 
-        GameObject PickObstaclePrefab(int type)
+        // Types with no shape (as in the original) aren't placed at all
+        void SpawnObstacle(int type, Vector3 pos, int heading)
         {
-            if (obstacleKinds == null) return null;
-            foreach (var k in obstacleKinds)
-                if (k.type == type && k.variants != null && k.variants.Length > 0)
-                    return k.variants[Random.Range(0, k.variants.Length)];
-            return null;
+            var go = ObstacleFactory.Build(type, shapes?.ForType(type), obstacleLook);
+            if (go == null) return;
+            // The original's heading byte; its shapes face the opposite way to how its tanks travel,
+            // which puts the model at yaw -degrees here
+            go.transform.SetPositionAndRotation(pos, Quaternion.Euler(0f, -heading, 0f));
+            go.GetComponent<ObstacleBehaviour>().heading = Mathf.RoundToInt(heading * 256f / 360f) & 0xFF;
+            ApplyFilled(go);
+            Obstacles.Add(go);
         }
 
         T Spawn<T>(T prefab, Vector3 pos, Quaternion rot) where T : Component
