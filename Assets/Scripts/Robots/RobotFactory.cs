@@ -10,6 +10,7 @@ namespace SpectreEX
     {
         public Material panels, tank, superTank, turret, slicer, flyer, acid, wall, mud, orbiter, bolt;
         public Material tankPanel, turretPanel, slicerPanel, orbiterPanel;   // craft-coloured panels (Options "Filled")
+        public Material flash;   // Robot / Super Tank edges flash between their own colour and this while stunned
 
         public Material PanelFor(int type) => type switch
         {

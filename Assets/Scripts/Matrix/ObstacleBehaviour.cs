@@ -19,9 +19,22 @@ namespace SpectreEX.Matrix
         // Gates are driven over or through; the rest block
         public bool IsGate => kind != Kind.Static && kind != Kind.Windmill;
 
+        float hitSpinUntil;
+
+        // A Spinner shot (weapon 11) sets an obstacle turning 16 steps a tick for 0xB4 ticks
+        public void SpinFromHit()
+        {
+            hitSpinUntil = Time.time + 0xB4 / PlayerMotor.TickRate;
+        }
+
         void Update()
         {
             if (spinner != null) spinner.Rotate(spinAxis, spinSpeed * Time.deltaTime, Space.Self);
+            if (Time.time < hitSpinUntil)
+            {
+                var model = transform.Find("Model");
+                if (model != null) model.Rotate(0f, -16f * 360f / 256f * PlayerMotor.TickRate * Time.deltaTime, 0f, Space.Self);
+            }
         }
     }
 }

@@ -5,7 +5,7 @@ using UnityEngine.UI;
 namespace SpectreEX.Hud
 {
     // The Spectre VR instrument panel, rebuilt for widescreen: green DSEG14 segment-display text,
-    // LIVES / DAMAGE / AMMO and SCORE / LEVEL / TIME hugging the top-left, the H (hyperspace) and
+    // LIVES / DAMAGE / AMMO and SCORE / LEVEL / BONUS hugging the top-left, the H (hyperspace) and
     // F (flags) gauges and WEAPON box in the top-right corner, the tick-mark radar in the bottom-right
     // corner, the cockpit crosshair, and the big "LEVEL n" banner with its red tip line.
     //
@@ -86,11 +86,11 @@ namespace SpectreEX.Hud
             ammoFill = Fill(left, 66, r3 - 5, 22, 10, DigitGreen, out ammoFillImg, horizontal: true);
             ammoValue = Value(left, 93, r3);
 
-            // Beside it: SCORE / LEVEL / TIME
+            // Beside it: SCORE / LEVEL / BONUS
             var mid = Group("Score", new Vector2(0f, 1f), new Vector2(Margin + 178f, -Margin));
             Label(mid, "SCORE", 0, r1);
             Label(mid, "LEVEL", 0, r2);
-            Label(mid, "TIME", 0, r3);
+            Label(mid, "BONUS", 0, r3);
             scoreValue = Value(mid, 56, r1);
             levelValue = Value(mid, 56, r2);
             timeValue = Value(mid, 56, r3);
@@ -325,7 +325,7 @@ namespace SpectreEX.Hud
             livesValue.text = Mathf.Max(0, gm.Lives).ToString();
             scoreValue.text = gm.Score.ToString();
             levelValue.text = gm.Level.ToString("00");
-            timeValue.text = Mathf.CeilToInt(gm.TimeRemaining).ToString("000");
+            timeValue.text = gm.Bonus.ToString("0000");   // the original shows the bonus counting down
 
             SetFill(damageFill, p.Health.Damage01, true);
             int ammo = p.Weapon.Ammo;

@@ -383,9 +383,38 @@ robots within `_QFIND_DIST` 0x0E / 0x40 / 0x80 lose 5 / 2 / 2, the player takes 
    `_WEAPON_X` and shows "<name> Online". Measured: cannon 8 rounds in 2 s held (expected ~8.3);
    Medium levels 1-4 unlock Grenades, Spinners, Missiles, Mines; every heavy weapon fires and
    charges its wval ammo; Grenades and Bombs splash, Missiles kill, Spinners score and stun.
-   Not done: the player's orbit shields still use our own OrbitShield objects rather than weapon-7
-   shots; mines aren't set off by being shot.
-7. Then the remaining fidelity pass.
+   Not done: the player's orbit shields are still our own OrbitShield objects rather than weapon-7
+   shots (they now behave like them - see 7). "Mines blow up when hit" means robots driving into
+   them, which works; nothing shoots mines in the original.
+7. **Fidelity pass, first round:**
+   - Level flow (`_SETUP_LEVEL`, `_PLAY_LEVEL`, `_END_LEVEL`): flags are the grid's first
+     `min(6, level/2 + 3)` entries (level 0-based), whatever their type - not every type-14 entry.
+     No time limit: `_TIME_ALLOWED` = flags × 10 + tanks (robots + the player) × 10 + 30, `_BONUS` =
+     that × 4, falling by 4 every 18 ticks; 18 ticks after the last flag the level ends and the
+     bonus is added (stats: time allowed, time taken, bonus, score). The HUD shows BONUS, as the
+     original does. Flag sounds: FLGPUL, ONEMFLG with one left, WARP for the last.
+   - Extra lives: SVRWIN.EXE never reads `sstf`; it gives one every 5000 points below 10000, every
+     10000 below 60000, then every 20000, nine at most, sound NEWMAN.
+   - Every 0x21C ticks (~30 s) 10 points of damage are mended (TMTICK).
+   - Death: CYBOVRL, a life goes 50 ticks later, and the level carries on from the start position
+     (drop-in) with flags and robots as they were, shots cleared, ammo full, the bonus restarted.
+   - First level only: two spinning pads labelled Level 5 / Level 10 (`_JUMP_OBJ`, the fuel shape,
+     random spots); driving onto one sets the score to 5000 / 10000, unlocks the heavy weapons of
+     levels before (pad level - 2), mends damage and ends the level.
+   - Orbit shields kill enemy shots and stay, and are lost on touching an obstacle (not floor
+     pads); Robot / Super Tanks flash while stunned; a Spinner shot hitting an obstacle spins it
+     16 steps a tick for 0xB4 ticks.
+   - Sounds: acid and hits at low strength play HVDAMG (9), not DANGER; TNKUP / TNKDWN are the
+     transport sounds (renamed), not respawn / death.
+   Measured: level 1 has 3 flags, time allowed 100, bonus 400 → 388 in 3 s; level 2 ended with
+   436 bonus paid 1 s after the last flag; level 3 has 4 flags; death returns the craft to the
+   start with the bonus reset and one life fewer; the Level 5 pad gives level 5 (5 flags), score
+   5000 + bonus, an extra life and the earlier levels' weapons.
+   Still open: wings on the craft model, Slicer hop frames and burrowed shape, robot-on-robot
+   bumping (+0xE), the idle reminder (TMTICK after 0x870 ticks), the start-of-level and game-over
+   sounds (`_START_LEVEL` / `_GAME_OVER` pass them in registers Ghidra lost), Bouncer (45) untested,
+   pusher direction / model facing / `mshp` sign checked only by reasoning, spinning obstacles'
+   unrotated colliders, and the DOSBox-X side-by-side check.
 
 **Sound numbers** (`_SOUNDTABLE`, filled from `_SAMPLETABLE` at startup): 0/4 OPPHIT, 1 PLYRSHT,
 2 OPSHOT, 3 PLYRHT, 5 EXPLO, 6 OUTOFAM, 7 COLLSN, 8 GATE, 9 HVDAMG, 0xA LOONSHT, 0xB AMMPCK,

@@ -132,9 +132,29 @@ namespace SpectreEX
 
         public void EndTick()
         {
+            Flash(stun > 0 && (stun & 1) == 1 && (matrixType == 7 || matrixType == 8));
             curPos = Position;
             curYaw = OriginalMath.Yaw(heading);
             curRoll = RollDegrees();
+        }
+
+        // _MOVE_TANKS: a stunned Robot / Super Tank swaps colour every tick
+        MeshRenderer[] edges;
+        Material[] edgeMats;
+        bool flashing;
+
+        void Flash(bool on)
+        {
+            if (on == flashing) return;
+            var look = GameManager.Instance != null ? GameManager.Instance.robotLook : null;
+            if (look == null || look.flash == null) return;
+            if (edges == null)
+            {
+                edges = System.Array.FindAll(GetComponentsInChildren<MeshRenderer>(true), r => r.name == "Edges");
+                edgeMats = System.Array.ConvertAll(edges, r => r.sharedMaterial);
+            }
+            flashing = on;
+            for (int i = 0; i < edges.Length; i++) edges[i].sharedMaterial = on ? look.flash : edgeMats[i];
         }
 
         public void Interpolate(float t)

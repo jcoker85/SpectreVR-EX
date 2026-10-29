@@ -12,8 +12,8 @@ namespace SpectreEX
         public const string PlayerHit = "PLYRHT";
         public const string EnemyHit = "OPPHIT";
         public const string Explosion = "EXPLO";
-        public const string PlayerDown = "TNKDWN";
-        public const string PlayerUp = "TNKUP";
+        public const string TransportDown = "TNKDWN"; // 0x29: going down a transport
+        public const string TransportUp = "TNKUP";     // 0xC: coming back up
         public const string FlagPickup = "FLGPUL";
         public const string OneMoreFlag = "ONEMFLG";
         public const string AmmoPickup = "AMMPCK";
@@ -26,7 +26,7 @@ namespace SpectreEX
         public const string Collision = "COLLSN";
         public const string Welcome = "WELCOME";
         public const string Award = "AWARD";
-        public const string ExtraLife = "LIFESPT";
+        public const string NewLife = "NEWMAN";         // 0x2A: an extra tank
         public const string TimeTick = "TMTICK";
         public const string SlicerSpin = "SPINNER";
         public const string GameOver = "URDMD";
@@ -45,6 +45,7 @@ namespace SpectreEX
         public const string SlicerFar = "SHKLWR";    // 0x1F
         public const string SlicerNear = "SHKLOW";   // 0x20
         public const string SlicerJump = "SHARK";    // 0x21
+        public const string PlayerDestroyed = "CYBOVRL"; // 0xD: the craft destroyed
         public const string AllRobots = "ALLBOTS";   // 0x2C: the last robot destroyed
         public const string ChangeWeapon = "CHGWEPN"; // 0x22: heavy weapon changed, or too little ammo
         public const string TripleShot = "TRPLSHT";  // heavy weapons' own sounds (_SHOT_SOUNDS)

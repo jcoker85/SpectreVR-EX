@@ -5,8 +5,8 @@ namespace SpectreEX
     // Orange ammo dumps: up to four shields circle the craft (SVRWIN.EXE weapon 7 shots, kept in
     // place by _MOVE_SHOTS). Each sits 0x3C table steps out - about 4.8 m - in front, left, behind
     // and right; with all four up, a fifth pickup sets them spinning (8 heading steps a tick) until
-    // one is lost. A shield hits the first robot it touches for weapon 7's damage and soaks up the
-    // first enemy shot that reaches it, and is gone either way.
+    // one is lost. A shield destroys any enemy shot that reaches it and stays; it hits the first
+    // robot it touches for weapon 7's damage, and is gone after that or after touching an obstacle.
     public class PlayerShields : MonoBehaviour
     {
         public const float Radius = 0x3C * 256 * PlayerMotor.UnitsToMetres;
@@ -102,8 +102,19 @@ namespace SpectreEX
         void Update()
         {
             if (owner == null) { Destroy(gameObject); return; }
-            foreach (var c in Physics.OverlapSphere(transform.position, 0.6f, ~0, QueryTriggerInteraction.Ignore))
+            foreach (var c in Physics.OverlapSphere(transform.position, 0.6f, ~0, QueryTriggerInteraction.Collide))
             {
+                // Obstacles end a shield (_MOVE_SHOTS), except the floor pads it passes over
+                var obstacle = c.GetComponentInParent<Matrix.ObstacleBehaviour>();
+                if (obstacle != null)
+                {
+                    var k = obstacle.kind;
+                    if (k == Matrix.ObstacleBehaviour.Kind.Acid || k == Matrix.ObstacleBehaviour.Kind.Ice ||
+                        k == Matrix.ObstacleBehaviour.Kind.Slow || k == Matrix.ObstacleBehaviour.Kind.Pusher) continue;
+                    Absorb();
+                    return;
+                }
+                if (c.isTrigger) continue;
                 var robot = c.GetComponentInParent<EnemyBase>();
                 if (robot == null || robot.Health == null || robot.Health.IsDead) continue;
                 robot.Health.TakeDamage(PlayerShields.Damage);

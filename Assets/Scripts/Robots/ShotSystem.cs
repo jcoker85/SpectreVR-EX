@@ -281,7 +281,7 @@ namespace SpectreEX
         {
             var target = Overlap(s.curPos, s) ?? Overlap(s.curPos - new Vector3(s.vx, s.vz, s.vy) * (0.5f * OriginalMath.UnitsToMetres), s);
             if (target == null) return false;
-            if (target.GetComponent<OrbitShield>() is OrbitShield shield) { shield.Absorb(); return true; }
+            if (target.GetComponent<OrbitShield>() != null) return true;   // a shield kills the shot and stays (weapon 7)
 
             var health = target.GetComponentInParent<Health>();
             var robot = health.GetComponent<Robot>();
@@ -323,6 +323,7 @@ namespace SpectreEX
                 if (o == null) continue;
                 if (o.kind == ObstacleBehaviour.Kind.Acid || o.kind == ObstacleBehaviour.Kind.Ice ||
                     o.kind == ObstacleBehaviour.Kind.Slow || o.kind == ObstacleBehaviour.Kind.Pusher) continue;
+                if (s.weapon == 11) o.SpinFromHit();
                 return true;
             }
             return false;

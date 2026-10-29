@@ -240,16 +240,16 @@ namespace SpectreEX
                             if (health != null)
                             {
                                 health.TakeRawDamage(gm != null ? gm.AcidDamage : 10, false);
-                                if (!health.IsDead) Sfx.Play(health.Shields <= 20 ? Snd.Danger : Snd.Acid);
+                                if (!health.IsDead) Sfx.Play(health.Shields <= 20 ? Snd.HeavyDamage : Snd.Acid);
                             }
                         }
                         break;
                     case ObstacleBehaviour.Kind.DownTransport:
-                        if (!under) Sfx.Play(Snd.PlayerDown);
+                        if (!under) Sfx.Play(Snd.TransportDown);
                         under = true;
                         break;
                     case ObstacleBehaviour.Kind.UpTransport:
-                        if (under) Sfx.Play(Snd.PlayerUp);
+                        if (under) Sfx.Play(Snd.TransportUp);
                         under = false;
                         break;
                 }

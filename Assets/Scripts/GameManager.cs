@@ -48,15 +48,19 @@ namespace SpectreEX
 
         [Header("Rules")]
         public int startingLives = 3;
-        public int extraLifeEvery = 10000;
         public int flagPoints = 20;   // the original's +20 a flag
-        public int timeBonusPerSecond = 10;
-        public float playerRespawnDelay = 3f;
+
+        const int MaxLives = 9;
+        const int DeadTicks = 50;          // _DEAD_TIMER: 0x9C3 at 0x32 a tick
+        const int RepairTicks = 0x21C;     // _DAMAGE_TIMER: 10 points of damage mended every ~30 s
 
         public int Score { get; private set; }
         public int Lives { get; private set; }
         public int Level { get; private set; }
-        public float TimeRemaining { get; private set; }
+        // _BONUS: (flags + tanks) x 10 + 30 "seconds" x 4 at the start of each life, falling by 4 every
+        // 18 ticks; what's left is added to the score when the level is won. There's no time limit.
+        public int Bonus { get; private set; }
+        public int TimeAllowed { get; private set; }
         public int FlagsTotal { get; private set; }
         public int FlagsCollected { get; private set; }
         public bool Playing { get; private set; }
@@ -86,8 +90,6 @@ namespace SpectreEX
         int robotsLeft, bankedBonus;
         readonly int[] flagGuards = new int[64];   // _FLAG_TURRETS: robots placed by each flag
         public ShapeSet Shapes => shapes;
-        int extraLivesAwarded;
-        int nextExtraLife;
         float wallNits = -1f;
         float levelDifficulty = 1f;
         Coroutine session;
@@ -217,8 +219,6 @@ namespace SpectreEX
         {
             Score = 0;
             Lives = startingLives;
-            extraLivesAwarded = 0;
-            nextExtraLife = ExtraLifeScore(1);
             Level = startLevel - 1;
             // Heavy weapons: none to start with, plus whatever the levels skipped would have given
             // (_CATCHUP_HINT)
@@ -270,9 +270,37 @@ namespace SpectreEX
             }
 
             if (!Playing || Paused) return;
-            float before = TimeRemaining;
-            TimeRemaining = Mathf.Max(0f, TimeRemaining - Time.deltaTime);
-            if (before > 10f && TimeRemaining <= 10f) Sfx.Play(Snd.TimeTick);
+            levelTickClock += Time.deltaTime * PlayerMotor.TickRate;
+            while (levelTickClock >= 1f)
+            {
+                levelTickClock -= 1f;
+                LevelTick();
+            }
+        }
+
+        // The per-tick level clock (_PLAY_LEVEL): the bonus count-down and the slow self-repair
+        void LevelTick()
+        {
+            if (player.Health.IsDead) return;
+            if (++LevelTicks % 18 == 0) Bonus = Mathf.Max(0, Bonus - 4);
+            if (++repairTimer > RepairTicks)
+            {
+                repairTimer = 0;
+                if (player.Health.Restore(10)) Sfx.Play(Snd.TimeTick);
+            }
+        }
+
+        public int LevelTicks { get; private set; }
+        float levelTickClock;
+        int repairTimer;
+
+        // _TIME_ALLOWED and the bonus, at the start of a level and of every life
+        void StartBonus()
+        {
+            TimeAllowed = FlagsTotal * 10 + (director.Robots.Count + 1) * 10 + 30;
+            Bonus = TimeAllowed * 4;
+            LevelTicks = 0;
+            repairTimer = 0;
         }
 
         // Esc: freeze the game and bring up the main menu over it; Esc again resumes
@@ -303,6 +331,8 @@ namespace SpectreEX
             foreach (var d in Dumps) if (d != null) Destroy(d.gameObject);
             foreach (var r in Robots) if (r != null) Destroy(r.gameObject);
             foreach (var o in Obstacles) if (o != null) Destroy(o);
+            foreach (var j in jumpPads) if (j != null) Destroy(j.gameObject);
+            jumpPads.Clear();
             Flags.Clear(); Dumps.Clear(); Robots.Clear(); Obstacles.Clear();
             if (director != null) director.Clear();
             System.Array.Clear(flagGuards, 0, flagGuards.Length);
@@ -330,14 +360,17 @@ namespace SpectreEX
             PlacePlayerAtStart();
             UseShapes(m);
 
-            // The grid: flags first (as VRchitect stores them), then every other obstacle where the designer put it
+            // The grid: its first entries are the flags (_LOAD_WRLD), as many as _SETUP_LEVEL allows -
+            // 3 on the first two levels, one more every two levels, 6 at most - whatever their type;
+            // the rest are obstacles where the designer put them (spare flag entries have no shape)
             var flagSpots = new List<Vector3>();
+            int maxFlags = Mathf.Min(6, ((levelNumber - 1) >> 1) + 3);
             if (m.Grids.TryGetValue(lv.grid, out var grid))
             {
                 foreach (var o in grid.obstacles)
                 {
                     var pos = GridToWorld(o.x, o.y);
-                    if (o.type == 14) { flagSpots.Add(pos); continue; }
+                    if (flagSpots.Count < maxFlags) { flagSpots.Add(pos); continue; }
                     SpawnObstacle(o.type, pos, o.heading);
                 }
             }
@@ -352,11 +385,16 @@ namespace SpectreEX
                 ? new[] { fuel.strength, fuel.collideDamage, fuel.attackRange / 7, fuel.firingRange / 7 }
                 : DefaultDumpOdds;
             for (int i = 0; i < DumpsPerLevel; i++) SpawnDump();
+            // The first level's shortcuts to levels 5 and 10 (_BUILD_WORLD)
+            if (levelNumber == 1 && !Demo)
+            {
+                if (TryFindSpawnPoint(out var j5, 25f)) jumpPads.Add(JumpPad.Create(5, 5000, j5 - Vector3.up * j5.y, obstacleLook.transport, obstacleLook.edgeThickness));
+                if (TryFindSpawnPoint(out var j10, 25f)) jumpPads.Add(JumpPad.Create(10, 10000, j10 - Vector3.up * j10.y, obstacleLook.transport, obstacleLook.edgeThickness));
+            }
 
             FlagsTotal = Flags.Count;
             FlagsCollected = 0;
-            TimeRemaining = 60f + FlagsTotal * 12f;
-            Plan = new LevelPlan { level = levelNumber, timeAllowed = TimeRemaining, difficulty = levelDifficulty, robotShields = 1, wallColor = LevelPlan.WallColor(levelNumber) };
+            Plan = new LevelPlan { level = levelNumber, difficulty = levelDifficulty, robotShields = 1, wallColor = LevelPlan.WallColor(levelNumber) };
 
             // The enemy set (_ADD_ENEMY): a count between its two numbers when the first is the smaller,
             // else exactly the second; each robot comes back 'regen' more times. Strength rises by one a lap.
@@ -372,6 +410,7 @@ namespace SpectreEX
 
             // Acid burns for the level's Smart Acid collision damage, or 10 (_LOAD_BVAL)
             AcidDamage = m.TryGetEnemyData(lv.enemyData, 23, out var acid) ? acid.collideDamage : 10;
+            StartBonus();
 
             if (MusicPlayer.Instance != null) MusicPlayer.Instance.PlayTrackOrStop(MatrixMusic.TrackFor(lv.song));
             return m.Tip(lv.tip);
@@ -399,7 +438,6 @@ namespace SpectreEX
 
             FlagsTotal = Flags.Count;
             FlagsCollected = 0;
-            TimeRemaining = plan.timeAllowed;
 
             // Without a matrix: Robot Tanks, Turrets, Orbiters and Slicers with Central Systems' enemy data
             void Add(int type, int n) { for (int i = 0; i < n; i++) SpawnRobot(type, DefaultRobotData(type, 0), 99); }
@@ -407,6 +445,7 @@ namespace SpectreEX
             Add(20, plan.turrets);
             Add(35, plan.orbiters);
             Add(21, plan.slicers);
+            StartBonus();
         }
 
         static Robot.Data DefaultRobotData(int type, int lap)
@@ -594,20 +633,17 @@ namespace SpectreEX
 
         // ---------- events ----------
 
-        // Extra tanks at the matrix's score thresholds (VRchitect "New Lives"), or every extraLifeEvery points
-        int ExtraLifeScore(int n) => CurrentMatrix != null
-            ? CurrentMatrix.ExtraLifeScore((int)GameSettings.Difficulty, n)
-            : n * extraLifeEvery;
-
+        // Extra tanks the way SVRWIN.EXE gives them: one every 5000 points below 10000, every 10000
+        // below 60000, then every 20000, nine at most (sound NEWMAN). It never reads the matrix's sstf.
         public void AddScore(int points)
         {
+            int before = Score;
             Score += points;
-            while (Score >= nextExtraLife)
+            int step = before < 10000 ? 5000 : before < 60000 ? 10000 : 20000;
+            if (before / step != Score / step && Lives < MaxLives)
             {
                 Lives++;
-                extraLivesAwarded++;
-                nextExtraLife = ExtraLifeScore(extraLivesAwarded + 1);
-                Sfx.Play(Snd.ExtraLife);
+                Sfx.Play(Snd.NewLife);
             }
         }
 
@@ -616,25 +652,49 @@ namespace SpectreEX
             Flags.Remove(flag);
             FlagsCollected++;
             AddScore(flagPoints);
-            Sfx.Play(Snd.FlagPickup);
             int left = FlagsTotal - FlagsCollected;
-            if (left == 1) Sfx.Play(Snd.OneMoreFlag);
+            Sfx.Play(left == 0 ? Snd.Warp : left == 1 ? Snd.OneMoreFlag : Snd.FlagPickup);
             if (left == 0 && Playing) session = StartCoroutine(LevelComplete());
         }
 
+        // A first-level jump pad (_PLAY_LEVEL): the score becomes 5000 / 10000, the skipped levels'
+        // heavy weapons are unlocked (_CATCHUP_HINT, up to the pad's level - 2), damage is mended and
+        // the level ends at once
+        public void TakeJumpPad(JumpPad pad)
+        {
+            if (!Playing || FlagsCollected >= FlagsTotal) return;   // the level is already ending
+            AddScore(pad.score - Score);
+            var m = CurrentMatrix;
+            if (m != null)
+            {
+                var list = m.Levels[Mathf.Clamp((int)GameSettings.Difficulty, 0, 2)];
+                for (int i = 0; i < pad.toLevel - 2 && list.Count > 0; i++) player.Weapon.Unlock(list[i % list.Count].tip);
+            }
+            Level = pad.toLevel - 1;
+            Sfx.Play(Snd.Warp);
+            player.Health.Restore(player.Health.maxShields);
+            foreach (var j in jumpPads) if (j != null) Destroy(j.gameObject);
+            jumpPads.Clear();
+            FlagsCollected = FlagsTotal;
+            session = StartCoroutine(LevelComplete());
+        }
+
+        readonly List<JumpPad> jumpPads = new List<JumpPad>();
+
+        // _END_LEVEL, 18 ticks after the last flag: the bonus left goes on the score
         IEnumerator LevelComplete()
         {
+            yield return new WaitForSeconds(18f / PlayerMotor.TickRate);
             Playing = false;
             if (MusicPlayer.Instance != null) MusicPlayer.Instance.PlayTrack("AWARD", loop: false);
             Sfx.Play(Snd.Award);
 
-            int allowed = Mathf.RoundToInt(Plan.timeAllowed);
-            int taken = Mathf.RoundToInt(Plan.timeAllowed - TimeRemaining);
-            int bonus = Mathf.RoundToInt(TimeRemaining) * timeBonusPerSecond;
+            int taken = LevelTicks / 18;
+            int bonus = Bonus;
             AddScore(bonus);
             ShowStats?.Invoke(
-                new[] { "TIME ALLOWED", "TIME TAKEN", "TIME BONUS", "SCORE" },
-                new[] { allowed.ToString(), taken.ToString(), bonus.ToString(), Score.ToString() });
+                new[] { "TIME ALLOWED", "TIME TAKEN", "BONUS", "SCORE" },
+                new[] { TimeAllowed.ToString(), taken.ToString(), bonus.ToString(), Score.ToString() });
             yield return new WaitForSeconds(4.5f);
             HideOverlays?.Invoke();
             yield return NextLevel();
@@ -664,11 +724,13 @@ namespace SpectreEX
             }
         }
 
+        // Destroyed (_PLAY_LEVEL): 50 ticks later a life goes; the level carries on from the start
+        // position with the flags and robots as they were, shots cleared and the bonus restarted
         IEnumerator PlayerDown()
         {
+            Sfx.Play(Snd.PlayerDestroyed);
+            yield return new WaitForSeconds(DeadTicks / PlayerMotor.TickRate);
             Lives--;
-            Sfx.Play(Snd.PlayerDown);
-            yield return new WaitForSeconds(playerRespawnDelay);
 
             if (Lives <= 0)
             {
@@ -681,10 +743,9 @@ namespace SpectreEX
                 yield break;
             }
 
-            TryFindSpawnPoint(out var p, 40f);
-            player.Health.Revive(p, Quaternion.Euler(0f, Random.Range(0f, 360f), 0f));
-            player.ResetForLife();
-            Sfx.Play(Snd.PlayerUp);
+            director.Shots.Clear();
+            PlacePlayerAtStart();
+            StartBonus();
         }
     }
 }
