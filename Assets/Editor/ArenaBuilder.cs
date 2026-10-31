@@ -224,6 +224,9 @@ namespace SpectreEX.EditorTools
             return mat;
         }
 
+        const float ShapeGlowEv100 = 11.5f;
+        const float ShapeLightLux = 1500f;
+
         // Every original shape's solid faces. GameManager puts the level's palette in both maps at runtime;
         // the texture here only makes HDRP compile the emissive map in. The faces glow a little so they
         // keep their colour in the dark arena, and the lights and reflections do the rest.
@@ -235,7 +238,7 @@ namespace SpectreEX.EditorTools
             mat.SetTexture("_EmissiveColorMap", placeholder);
             HDMaterial.SetUseEmissiveIntensity(mat, true);
             HDMaterial.SetEmissiveColor(mat, Color.white);
-            HDMaterial.SetEmissiveIntensity(mat, 12f, EmissiveIntensityUnit.EV100);
+            HDMaterial.SetEmissiveIntensity(mat, ShapeGlowEv100, EmissiveIntensityUnit.EV100);
             HDMaterial.ValidateMaterial(mat);
             EditorUtility.SetDirty(mat);
             return mat;
@@ -622,6 +625,17 @@ namespace SpectreEX.EditorTools
             light.shadows = LightShadows.Soft;
             var hdLight = lightGo.AddComponent<HDAdditionalLightData>();
             hdLight.useRayTracedShadows = true;
+
+            // The light _SHADE shades faces by (x forward, y side, z up in the game's axes). The faces' glow
+            // is the middle of the original's shade range; this light moves them up and down from there.
+            var shadeGo = new GameObject("ShadeLight");
+            shadeGo.transform.rotation = Quaternion.LookRotation(-new Vector3(0x99, 0xC0, 0x47).normalized);
+            var shade = shadeGo.AddComponent<Light>();
+            shade.type = LightType.Directional;
+            shade.color = Color.white;
+            shade.intensity = ShapeLightLux;
+            shade.shadows = LightShadows.Soft;
+            shadeGo.AddComponent<HDAdditionalLightData>().useRayTracedShadows = true;
 
             // The arena profile is hand-tuned in the editor (ray tracing quality, samples, DLSS-friendly
             // settings), so only create it when it's missing - never overwrite an existing one.
