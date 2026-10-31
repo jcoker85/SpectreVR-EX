@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -93,6 +94,14 @@ namespace SpectreEX.Menu
             Sfx.Play(Snd.Logo);
             matrixChoices = Matrix.MatrixLibrary.ChooseAtStartup();
             main.refresh();
+            StartCoroutine(FirstOpen());
+        }
+
+        // The startup movie, then the menu with its theme, so neither talks over the other
+        IEnumerator FirstOpen()
+        {
+            canvas.enabled = false;
+            yield return Matrix.StartupMovie.Play(this);
             Open();
             if (matrixChoices != null) Push(matrix);
         }

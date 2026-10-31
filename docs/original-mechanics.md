@@ -577,3 +577,14 @@ Robots don't bump each other: the path check keeps them apart, and nothing sets 
 | Longest firing range | 140900 | 141800 |
 
 That measured a real difference: homing shots aim at the middle of the craft's first shape, 1764 for the player on the ground, not its whole collision box. Fixed. The demo freezes under emulation after anything from a few ticks to a level, so Flyers, Cyber Mud, Smart Acid, Smart Walls, Orbiters and moving Invisible or Cloaked Tanks have no measurements yet. `memlevels.py` sets level and difficulty in the emulator's RAM, but the demo loads its own wave list, so robot sets differ from the Hard list.
+
+## Movies
+
+The game ships five QuickTime movies in MOVIES. `Tools/qtmovie.py` decodes them at import, with no outside tools, into `StreamingAssets/Movies`: STARTUP (Apple Video, 320x240, with sound), WALL1 (Animation), WALL2 (Cinepak), WALL3 and WALL4 (Apple Video).
+
+- `_SHOW_MOVIE`: STARTUP plays once before the menu, after the logo sound. Any input ends it.
+- Face colours 1028-1031 show WALL1-WALL4 (`_BUILD_MOVIE_TEXTURE`). A level loads one movie, the first it meets, and that shows on every movie face, looping in real time (`_SHOW_A_MOVIE_FRAME`). Their sound isn't played. `_TEXTURES` bit 8 turns them on; off, those faces take the object colour. The original has them off by default; the remake has them on, like Textures.
+- `level1.mov`, `death.mov` and the rest named in the EXE aren't on the disks, and nothing reads `_START_MOVIE` or `_END_MOVIE`.
+- Each billboard is one face a side, so the movie sits a centimetre in front of its plain face.
+
+`_POLY_2D` (read from its floating-point code, which the decompile drops) gives a texture point's x from the axis across the face's first edge and its y from the edge itself, y negated. The remake had these swapped, so every textured face was turned 90 degrees. The movies' pictures fixed the horizontal sign, since the code's coordinates can't.

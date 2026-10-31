@@ -199,6 +199,7 @@ namespace SpectreEX
             else if (r.name == "Edges") r.enabled = !GameSettings.DisplayFilled;
             else if (r.name == "Textured") r.enabled = GameSettings.DisplayFilled && GameSettings.DisplayTextures;
             else if (r.name == "Flat") r.enabled = GameSettings.DisplayFilled && !GameSettings.DisplayTextures;
+            else if (r.name == "Movie") r.enabled = GameSettings.DisplayFilled && GameSettings.DisplayMovies;
         }
 
         static void ApplyFilled(GameObject go)
@@ -322,6 +323,7 @@ namespace SpectreEX
             if (!InGame || Suspended) return;
             var k = Keyboard.current;
             if (k != null) DisplayKeys(k);
+            MovieTextures.Advance(Time.unscaledDeltaTime);
 
             if (Demo)
             {
@@ -582,6 +584,7 @@ namespace SpectreEX
             if (central == null) Debug.LogWarning("Spectre VR-EX: Central Systems matrix not found - matrices without shapes will have no obstacles");
             shapes = new ShapeSet(m, central);
             shapes.NewLevel();
+            MovieTextures.NewLevel();
             var craft = player.GetComponent<PlayerModel>();
             if (craft != null) craft.Rebuild(shapes, obstacleLook.shapes, obstacleLook.edgeThickness);
         }

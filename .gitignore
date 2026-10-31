@@ -134,6 +134,8 @@ InitTestScene*.unity*
 /Assets/StreamingAssets/Matrices.meta
 /Assets/StreamingAssets/Textures/
 /Assets/StreamingAssets/Textures.meta
+/Assets/StreamingAssets/Movies/
+/Assets/StreamingAssets/Movies.meta
 /Assets/Editor/Data/
 /Assets/Editor/Data.meta
 /Assets/Meshes/Spectre_*

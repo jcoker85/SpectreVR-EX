@@ -72,6 +72,20 @@ namespace SpectreEX.Matrix
             }
         }
 
+        readonly Dictionary<int, Mesh> movieFaces = new Dictionary<int, Mesh>();
+
+        // The faces showing a movie, a hair in front of their plain colour, which is what shows with movies off
+        public Dictionary<int, Mesh> MovieFaces
+        {
+            get
+            {
+                if (movieFaces.Count == 0 && colours != null)
+                    foreach (int id in new HashSet<int>(colours))
+                        if (MovieTextures.Has(id)) movieFaces[id] = ShapeMeshes.Textured(UnityPoints(), faces, colours, id, 0.01f);
+                return movieFaces;
+            }
+        }
+
         public Mesh Edges(float thickness)
         {
             if (edges == null || !Mathf.Approximately(edgeThickness, thickness))
@@ -144,8 +158,9 @@ namespace SpectreEX.Matrix
         }
 
         // The faces showing one texture: as _SIZE_TEXTURE_POINTS does it, the image is stretched over
-        // each face's own extent in the face's plane.
-        public static Mesh Textured(Vector3[] v, int[][] faces, int[] colours, int texture)
+        // each face's own extent in the face's plane. _POLY_2D runs the image's height up the face's first
+        // edge and its width across that.
+        public static Mesh Textured(Vector3[] v, int[][] faces, int[] colours, int texture, float lift = 0f)
         {
             var verts = new List<Vector3>();
             var uvs = new List<Vector2>();
@@ -156,6 +171,7 @@ namespace SpectreEX.Matrix
                 var f = faces[i];
                 if (f.Length < 3 || colours[i] != texture) continue;
                 var u = (v[f[1]] - v[f[0]]).normalized;
+                var outward = Vector3.Cross(v[f[1]] - v[f[0]], v[f[2]] - v[f[0]]).normalized * lift;
                 var w = Vector3.Cross(Vector3.Cross(u, v[f[2]] - v[f[0]]), u).normalized;
                 var min = new Vector2(float.MaxValue, float.MaxValue);
                 var max = new Vector2(float.MinValue, float.MinValue);
@@ -165,14 +181,14 @@ namespace SpectreEX.Matrix
                     min = Vector2.Min(min, q);
                     max = Vector2.Max(max, q);
                 }
-                Vector2 Uv(int p) => new Vector2(Mathf.InverseLerp(min.x, max.x, Vector3.Dot(v[p], u)), Mathf.InverseLerp(min.y, max.y, Vector3.Dot(v[p], w)));
+                Vector2 Uv(int p) => new Vector2(Mathf.InverseLerp(min.y, max.y, Vector3.Dot(v[p], w)), Mathf.InverseLerp(min.x, max.x, Vector3.Dot(v[p], u)));
                 for (int k = 1; k + 1 < f.Length; k++)
                 {
                     int n = verts.Count;
                     var corners = backed.Contains(i) ? new[] { f[0], f[k], f[k + 1] } : new[] { f[0], f[k], f[k + 1], f[0], f[k + 1], f[k] };
                     foreach (int p in corners)
                     {
-                        verts.Add(v[p]);
+                        verts.Add(v[p] + outward);
                         uvs.Add(Uv(p));
                     }
                     for (int c = 0; c < corners.Length; c++) tris.Add(n + c);

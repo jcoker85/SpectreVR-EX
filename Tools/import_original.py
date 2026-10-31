@@ -24,6 +24,7 @@ TOOLS = os.path.join(ROOT, "Tools")
 RESOURCES = os.path.join(ROOT, "Assets", "Imported", "Resources")
 MATRICES = os.path.join(ROOT, "Assets", "StreamingAssets", "Matrices")
 TEXTURES = os.path.join(ROOT, "Assets", "StreamingAssets", "Textures")
+MOVIES = os.path.join(ROOT, "Assets", "StreamingAssets", "Movies")
 SHAPES_JSON = os.path.join(ROOT, "Assets", "Editor", "Data", "SpectreShapes.json")
 
 # The game's pictures are PCX files named .DAT
@@ -80,6 +81,12 @@ def import_textures(game):
     print(len(pcx), "textures")
 
 
+def import_movies(game):
+    os.makedirs(MOVIES, exist_ok=True)
+    for path in glob.glob(os.path.join(game, "MOVIES", "*.MOV")):
+        subprocess.run([sys.executable, os.path.join(TOOLS, "qtmovie.py"), path, MOVIES], check=True)
+
+
 def import_shapes(game):
     run = lambda script, *args: subprocess.run([sys.executable, os.path.join(TOOLS, script), *args], check=True)
     os.makedirs(os.path.dirname(SHAPES_JSON), exist_ok=True)
@@ -109,6 +116,7 @@ def main():
     import_sounds(a.game)
     import_matrices(a.game)
     import_textures(a.game)
+    import_movies(a.game)
     import_shapes(a.game)
     if not a.skip_music:
         import_music(a.game, a.fluidsynth, a.soundfont)
