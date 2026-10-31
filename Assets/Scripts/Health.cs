@@ -10,7 +10,6 @@ namespace SpectreEX
         public Team team = Team.Enemy;
         public int maxShields = 1;
         public int scoreValue = 250;
-        public Material derezMaterial;
         public string hitSound = Snd.EnemyHit;
         public string deathSound = Snd.Explosion;
         public bool hiddenFromRadar;   // Cloaked Tanks

@@ -34,9 +34,31 @@ namespace SpectreEX
             playerMask = layer >= 0 ? 1 << layer : 0;
         }
 
+        float demoClock;
+
+        // In demo mode the view moves on every 126 ticks (_PLAY_LEVEL), and a real game starts inside
+        void CycleInDemo()
+        {
+            var gm = GameManager.Instance;
+            if (gm != null && gm.Demo)
+            {
+                demoClock += Time.deltaTime;
+                if (demoClock < 126f / PlayerMotor.TickRate) return;
+                demoClock = 0f;
+                mode = (ViewMode)(((int)mode + 1) % 3);
+            }
+            else if (demoClock > 0f)
+            {
+                demoClock = 0f;
+                mode = ViewMode.Internal;
+            }
+        }
+
         void LateUpdate()
         {
             if (target == null) return;
+
+            CycleInDemo();
 
             var k = Keyboard.current;
             if (k != null)

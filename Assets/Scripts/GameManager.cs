@@ -252,7 +252,7 @@ namespace SpectreEX
                 if (MusicPlayer.Instance != null) MusicPlayer.Instance.PlayForLevel(Level);
             }
 
-            ShowBanner?.Invoke(Demo ? "DEMO" : $"LEVEL {Level}", tip);
+            ShowBanner?.Invoke($"LEVEL {Level}", tip);
             yield return new WaitForSeconds(3f);
             HideOverlays?.Invoke();
             Playing = true;
@@ -726,6 +726,7 @@ namespace SpectreEX
             if (h.team == Team.Player)
             {
                 director.Shots.ExplodePlayer();
+                DeRes.Play(player.gameObject, 0x5A, DeadTicks / PlayerMotor.TickRate, false);
                 StartCoroutine(PlayerDown());
                 return;
             }
@@ -736,6 +737,7 @@ namespace SpectreEX
             if (robot == null) return;
             robot.Killed();
             director.Shots.Explode(robot);
+            DeRes.Play(robot.gameObject, 10, 10f / PlayerMotor.TickRate, false);
             bankedBonus += Mathf.Max(0, robot.data.bonus);
             if (--robotsLeft == 0)
             {

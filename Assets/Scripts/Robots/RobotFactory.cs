@@ -77,7 +77,6 @@ namespace SpectreEX
             health.team = Team.Enemy;
             health.hitSound = Snd.EnemyHit;
             health.deathSound = Snd.Explosion;
-            health.derezMaterial = glow;
             health.hiddenFromRadar = type == 27;   // Cloaked Tank: visible, not on radar
 
             var robot = root.AddComponent<Robot>();

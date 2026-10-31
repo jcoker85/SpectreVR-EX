@@ -372,7 +372,9 @@ namespace SpectreEX
         // (never the one who fired it)
         void Splash(Shot s)
         {
-            Derez.Burst(s.curPos, GameManager.Instance.robotLook.bolt, 20, 8f);
+            debrisColour = ShotColour(s.weapon);
+            for (int i = 0; i < 0x500; i += 0x100)
+                Fire(null, false, s.x, s.y, s.z, s.heading + i / 5 + (10 - Random.Range(0, 20)), Debris);
             foreach (var r in director.Robots)
             {
                 if (r == null || !r.visible || r.dying != 0 || r == s.owner) continue;

@@ -40,7 +40,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 7821828416140940076}
-  - component: {fileID: 7643737915677363753}
+  - component: {fileID: 7366348194735065616}
   - component: {fileID: 6745217529248420214}
   m_Layer: 0
   m_Name: Flag
@@ -65,8 +65,8 @@ Transform:
   - {fileID: 7224155681653189134}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!135 &7643737915677363753
-SphereCollider:
+--- !u!65 &7366348194735065616
+BoxCollider:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
@@ -84,8 +84,8 @@ SphereCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Radius: 3
-  m_Center: {x: 0, y: 1.5, z: 0}
+  m_Size: {x: 1.28, y: 1.4399999, z: 1.28}
+  m_Center: {x: 0, y: 0.71999997, z: 0}
 --- !u!114 &6745217529248420214
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -16,6 +16,7 @@ namespace SpectreEX.Hud
         public static readonly Color DigitGreen = new Color(0.25f, 0.78f, 0.27f);
         public static readonly Color FrameWhite = new Color(0.9f, 0.9f, 0.9f);
         public static readonly Color AlertRed = new Color(0.95f, 0.16f, 0.12f);
+        public static readonly Color DemoBlue = new Color(0.2f, 0.25f, 0.95f);
         public static readonly Color FlagBlue = new Color(0.45f, 0.45f, 1f);
 
         public Font segmentFont;   // DSEG14 Classic Light, assigned by the scene builder
@@ -34,7 +35,7 @@ namespace SpectreEX.Hud
         Image ammoFillImg;
         RectTransform radarRoot;
         readonly List<Image> radarDots = new List<Image>();
-        GameObject crosshair, bannerRoot, statsRoot;
+        GameObject crosshair, bannerRoot, statsRoot, demoRoot;
         Text bannerTitle, bannerTip, message, hint;
         readonly List<Text> recapWords = new List<Text>();
         readonly List<RecapWedge> recapWedges = new List<RecapWedge>();
@@ -136,6 +137,12 @@ namespace SpectreEX.Hud
             CrossLine(ch, new Vector2(0, 38), new Vector2(0, 52));
             CrossLine(ch, new Vector2(-58, 0), new Vector2(-42, 0));
             CrossLine(ch, new Vector2(42, 0), new Vector2(58, 0));
+
+            var demo = NewRect("Demo", centre);
+            demoRoot = demo.gameObject;
+            MakeText(demo, "DEMO MODE", 0, -16, 16, DigitGreen, TextAnchor.MiddleCenter);
+            MakeText(demo, "PRESS A KEY", 0, 8, 12, DemoBlue, TextAnchor.MiddleCenter);
+            demoRoot.SetActive(false);
 
             var banner = NewRect("Banner", centre);
             bannerRoot = banner.gameObject;
@@ -397,6 +404,7 @@ namespace SpectreEX.Hud
             if (banner > 0f && gm.Playing)
                 Flash(p.Weapon.AltWeapon == 0 ? "HEAVY WEAPONS OFFLINE" : TankWeapon.Names[p.Weapon.AltWeapon].ToUpperInvariant() + " ONLINE", banner);
 
+            demoRoot.SetActive(gm.Demo && gm.Playing);
             message.enabled = Time.time < messageUntil;
             hint.enabled = Time.time < hintUntil;
             if (crosshair != null) crosshair.SetActive(view == null || view.mode == ViewMode.Internal);

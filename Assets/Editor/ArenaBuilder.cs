@@ -430,10 +430,11 @@ namespace SpectreEX.EditorTools
         static GameObject BuildFlag(Mesh pennant)
         {
             var f = new GameObject("Flag");
-            var trigger = f.AddComponent<SphereCollider>();
+            // The flag's own extent, 0x800 units out and 0x1200 high (_CUBE_COLLIDE)
+            var trigger = f.AddComponent<BoxCollider>();
             trigger.isTrigger = true;
-            trigger.radius = 3f;
-            trigger.center = new Vector3(0f, 1.5f, 0f);
+            trigger.size = new Vector3(0x1000, 0x1200, 0x1000) * PlayerMotor.UnitsToMetres;
+            trigger.center = new Vector3(0f, 0x900 * PlayerMotor.UnitsToMetres, 0f);
 
             var visual = new GameObject("Visual").transform;
             visual.SetParent(f.transform, false);
@@ -448,11 +449,12 @@ namespace SpectreEX.EditorTools
             var d = new GameObject("AmmoDump");
             var trigger = d.AddComponent<BoxCollider>();
             trigger.isTrigger = true;
-            trigger.size = new Vector3(5.5f, 3f, 5.5f);
-            trigger.center = new Vector3(0f, 1.5f, 0f);
+            // _FLAT_CUBE_COLLIDE: the square's own extent, at any height
+            float side = 0xC00 * PlayerMotor.UnitsToMetres;
+            trigger.size = new Vector3(side, 100f, side);
+            trigger.center = new Vector3(0f, 50f, 0f);
 
             // The built-in fuel shape: one flat square, 0xC00 units across
-            float side = 0xC00 * PlayerMotor.UnitsToMetres;
             var tiles = new List<Transform> { Box("Tile", d.transform, new Vector3(0f, 0.05f, 0f), new Vector3(side, 0.02f, side), dumpMat, false).transform };
             NoShadows(d);
             d.AddComponent<AmmoDump>().tiles = tiles.ToArray();
@@ -563,7 +565,6 @@ namespace SpectreEX.EditorTools
             health.team = Team.Player;
             health.maxShields = 60;
             health.hitMultiplier = 10;
-            health.derezMaterial = cyanMat;
             health.hitSound = Snd.PlayerHit;
             return root.AddComponent<PlayerTank>();
         }

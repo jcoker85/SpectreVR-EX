@@ -437,7 +437,7 @@ namespace SpectreEX
                 var target = o.GetComponent<ObstacleBehaviour>();
                 if (target == null || target.kind != ObstacleBehaviour.Kind.Teleport) continue;
 
-                Derez.Burst(transform.position + Vector3.up, health != null ? health.derezMaterial : null, 20, 5f);
+                DeRes.Play(gameObject, 5, 0.5f, true);
                 x = ToUnits(o.transform.position.x);
                 y = ToUnits(o.transform.position.z);
                 heading = target.heading + 0x40;
@@ -453,9 +453,6 @@ namespace SpectreEX
         {
             var gm = GameManager.Instance;
             if (gm == null || !gm.TryFindSpawnPoint(out var p, 0f)) return;
-            var mat = health != null ? health.derezMaterial : null;
-            Derez.Burst(transform.position + Vector3.up, mat, 30, 6f);
-
             x = ToUnits(p.x);
             y = ToUnits(p.z);
             heading = Random.Range(0, 0xFF);
@@ -471,7 +468,7 @@ namespace SpectreEX
             lastGate = null;
             Sfx.Play(Snd.Warp);
             Snap();
-            Derez.Burst(Position() + Vector3.up, mat, 30, 6f);
+            DeRes.Play(gameObject, 5, 0.5f, true);
         }
 
         void HyperspaceFailed()

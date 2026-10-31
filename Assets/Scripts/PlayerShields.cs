@@ -125,7 +125,6 @@ namespace SpectreEX
 
         public void Absorb()
         {
-            Derez.Burst(transform.position, GetComponent<MeshRenderer>().sharedMaterial, 8, 4f);
             Destroy(gameObject);
         }
     }

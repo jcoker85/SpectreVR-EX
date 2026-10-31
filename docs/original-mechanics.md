@@ -483,5 +483,7 @@ Measured with collisions off, Balance craft, at 10 / 30 / 59 / 117 / 128 fps: sp
 
 - Matches: yellow boxes and pyramids, red robots with white wings, five red debris pieces, green craft with white wings, cyan wings dump filling the F gauge.
 - Flags are the built-in FLAG template in the object colour, about the craft's height. Dumps are one still flat square 0xC00 units across; the manual's "undulating" isn't in the code or on screen.
-- Not yet in the remake: a dying robot dissolves into horizontal lines of its colour (object +0xD21 goes to the polygon drawers as a de-res amount; `_PLAYER_DE_RES` does the same for the player).
+- De-res: object +0xD21 (+0x5F, the dying count) or `_PLAYER_DE_RES` is `_DRAW_POLY`'s second argument. Each scanline slides by a sine of the row times (amount + width / 8), with jitter. DeRes.cs does this with lines across the view. The player reaches 0x5A on death; `_D_P_DE_RES` -1 takes it to -5 and back after a teleport or hyperspace.
+- Pickups are box overlaps: `_CUBE_COLLIDE` for flags, `_FLAT_CUBE_COLLIDE` (no height) for dumps and jump pads, at their true sizes.
+- Demo: "Demo Mode / Press A Key" stays on screen and the view moves on every 126 ticks.
 - With bit 4 of `_TEXTURES` on, the demo stayed on a black screen for 40+ seconds under DOSBox-X. Not investigated; the harness needs textures off.

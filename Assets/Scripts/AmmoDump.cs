@@ -31,5 +31,44 @@ namespace SpectreEX
                 if (r != null) SpectrePalette.Paint(r, SpectrePalette.Entry(KindRamps[(int)k]), GameManager.Instance.obstacleLook.shapes);
             }
         }
+
+        void OnTriggerEnter(Collider other)
+        {
+            var player = other.GetComponentInParent<PlayerTank>();
+            if (player == null || player.Health.IsDead) return;
+
+            switch (kind)
+            {
+                case Kind.Green:
+                    Resupply(player);
+                    Sfx.Play(Snd.AmmoPickup);
+                    break;
+                case Kind.White:
+                    player.Health.Restore(player.Health.maxShields);
+                    player.Weapon.Refill();
+                    Sfx.Play(Snd.Repair);
+                    break;
+                case Kind.Orange:
+                    player.Shields.Add();
+                    Sfx.Play(Snd.ShieldPickup);
+                    break;
+                case Kind.Blue:
+                    player.Motor.AddFloating();
+                    player.Weapon.OfferPulseBursts();
+                    Resupply(player);
+                    Sfx.Play(Snd.Repair);
+                    break;
+            }
+
+            // Used up: a new kind, somewhere well away from you
+            var gm = GameManager.Instance;
+            if (gm != null) gm.RelocateDump(this);
+        }
+
+        static void Resupply(PlayerTank player)
+        {
+            player.Health.Restore(10);
+            player.Weapon.AddAmmo(10);
+        }
     }
 }
