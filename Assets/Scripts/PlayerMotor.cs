@@ -455,10 +455,7 @@ namespace SpectreEX
             if (gm == null || !gm.TryFindSpawnPoint(out var p, 0f)) return;
             x = ToUnits(p.x);
             y = ToUnits(p.z);
-            heading = Random.Range(0, 0xFF);
-            // Out near a corner you come in facing the middle
-            if (System.Math.Abs(x) > FaceCentreBeyond && System.Math.Abs(y) > FaceCentreBeyond)
-                heading = HeadingToward(-x, -y);
+            FaceRandomly();
             under = false;
             minZ = GroundZ;
             z = DropZ;
@@ -469,6 +466,15 @@ namespace SpectreEX
             Sfx.Play(Snd.Warp);
             Snap();
             DeRes.Play(gameObject, 5, 0.5f, true);
+        }
+
+        // Any way round, but out near a corner you come in facing the middle
+        public void FaceRandomly()
+        {
+            heading = Random.Range(0, 0xFF);
+            if (System.Math.Abs(x) > FaceCentreBeyond && System.Math.Abs(y) > FaceCentreBeyond)
+                heading = HeadingToward(-x, -y);
+            Snap();
         }
 
         void HyperspaceFailed()

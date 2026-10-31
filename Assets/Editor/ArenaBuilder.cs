@@ -614,7 +614,9 @@ namespace SpectreEX.EditorTools
             shade.color = Color.white;
             shade.intensity = ShapeLightLux;
             shade.shadows = LightShadows.Soft;
-            shadeGo.AddComponent<HDAdditionalLightData>().useRayTracedShadows = true;
+            var shadeData = shadeGo.AddComponent<HDAdditionalLightData>();
+            shadeData.useRayTracedShadows = true;
+            shadeData.affectSpecular = false;   // it shades faces; on the glossy floor it's only a glare
 
             // The arena profile is hand-tuned in the editor (ray tracing quality, samples, DLSS-friendly
             // settings), so only create it when it's missing - never overwrite an existing one.

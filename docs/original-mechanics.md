@@ -487,3 +487,7 @@ Measured with collisions off, Balance craft, at 10 / 30 / 59 / 117 / 128 fps: sp
 - Pickups are box overlaps: `_CUBE_COLLIDE` for flags, `_FLAT_CUBE_COLLIDE` (no height) for dumps and jump pads, at their true sizes.
 - Demo: "Demo Mode / Press A Key" stays on screen and the view moves on every 126 ticks.
 - With bit 4 of `_TEXTURES` on, the demo stayed on a black screen for 40+ seconds under DOSBox-X. Not investigated; the harness needs textures off.
+
+- Every life starts at a random clear spot (`_PLACE_XY`) at a random heading, facing the middle near a corner, as hyperspace does.
+- `_LOAD_WRLD`: object X = (512 - file y) * 0x200, Y = (512 - file x) * 0x200, and wrld headings are in degrees. The remake's world is that frame turned a quarter (Unity x = -Y, z = X); a frame of the running original matched its layout, and its pusher arrow matches at heading 32. Unity's robot code uses its own frame, consistent within the remake.
+- A pusher moves the craft along (-sin h, cos h) in object coordinates. With that layout, this is directly against the way the arrow points. The code is ported as written; it hasn't been seen on the running original, because the random start makes the pad hard to reach in a scripted run.

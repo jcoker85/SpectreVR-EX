@@ -503,9 +503,12 @@ namespace SpectreEX
 
         void PlacePlayerAtStart()
         {
-            var start = new Vector3(0f, 0f, -15f * GridScale);
+            // _PLAY_LEVEL: every life starts at a random clear spot (_PLACE_XY), dropping in
+            if (!TryFindSpawnPoint(out var start, 0f)) start = new Vector3(0f, 0f, -15f * GridScale);
+            start.y = 0f;
             if (player.Health.IsDead) player.Health.Revive(start, Quaternion.identity);
             player.Motor.Place(start, 0f, dropIn: true);
+            player.Motor.FaceRandomly();
             player.Health.Restore(player.Health.maxShields);
             player.ResetForLife();
         }
