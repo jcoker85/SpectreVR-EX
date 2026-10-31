@@ -488,12 +488,14 @@ namespace SpectreEX.Menu
             controls.onAnyClick = controls.onEscape = controls.onEnter = Pop;
         }
 
-        // _SHOW_HIGHSCORES: all ten rows on the SPCP15 panel, blank ones as score 0, level 1
+        // _SHOW_HIGHSCORES: all ten rows, blank ones as score 0, level 1, laid out as on the original's
+        // panel but in the HUD's green on black
         void BuildScores()
         {
-            scores = ImageScreen("Scores", "Scores");
-            AddRect(scores, new Rect(-2000, -2000, 4284, 4220), Color.black).transform.SetAsFirstSibling();   // on black, not over the menu
-            var ink = Color.black;
+            scores = NewScreen("Scores", new Vector2(284, 220));
+            AddRect(scores, new Rect(-2000, -2000, 4284, 4220), Color.black);   // on black, not over the menu
+            var ink = new Color(0.25f, 0.78f, 0.27f);
+            Frame(scores, new Rect(0, 0, 284, 220), ink, 4f);
             var title = AddText(scores, new Rect(8, 8, 268, 14), 9, ink, TextAnchor.MiddleCenter);
             AddText(scores, new Rect(46, 28, 100, 12), 8, ink, TextAnchor.MiddleLeft).Text = Seg("Name");
             AddText(scores, new Rect(140, 28, 74, 12), 8, ink, TextAnchor.MiddleRight).Text = Seg("Score");
