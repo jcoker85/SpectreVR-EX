@@ -43,9 +43,6 @@ namespace SpectreEX.EditorTools
         // Original Spectre VR shape ids (CENTRAL.MAT) and the scale that maps their units to metres
         const int PlayerShape = 10011, FlagShape = 10086;
         const float EdgeThickness = 0.07f;
-        const float FlagHeightStretch = 3f;
-        const float FlagBaseScale = 0.35f;   // keeps the base pyramid's footprint small next to the craft
-        const float FlagBaseHeight = 0.4f;   // and its height low
 
         static Material shapeMat, floorMat, bodyMat, wallMat, blockMat, dotMat, cyanMat, flagMat, poleMat, dumpMat;
         static Material roverMat, turretMat, orbiterMat, slicerMat, enemyBoltMat;
@@ -438,28 +435,11 @@ namespace SpectreEX.EditorTools
             trigger.radius = 3f;
             trigger.center = new Vector3(0f, 1.5f, 0f);
 
-            // Original flag stand (pole on a base plate), stretched tall so flags stand well above
-            // the craft as in the original, with a red pennant at the top of the pole
             var visual = new GameObject("Visual").transform;
             visual.SetParent(f.transform, false);
-            visual.localPosition = Vector3.zero;
-            // Shape 10086: base plate y 0-1, pyramid up to y 5, pole to y 16, tip at 17 (shape units).
-            // Squash the plate and pyramid, stretch the pole so its top stays FlagHeightStretch x the
-            // original, and narrow the footprint - all baked into the mesh so edge lines stay even.
-            const float pyramidTop = 5f, shapeTop = 17f;
-            float poleStretch = (shapeTop * FlagHeightStretch - pyramidTop * FlagBaseHeight) / (shapeTop - pyramidTop);
-            System.Func<Vector3, Vector3> warp = p => new Vector3(
-                p.x * FlagBaseScale,
-                p.y <= pyramidTop ? p.y * FlagBaseHeight : pyramidTop * FlagBaseHeight + (p.y - pyramidTop) * poleStretch,
-                p.z * FlagBaseScale);
-            SpectreModel("Stand", visual, FlagShape, 0.15f, poleMat, out var b, warp, "_flag");
-            float poleTop = b.max.y;
-            MeshObj("Pennant", visual, pennant, flagMat, new Vector3(0.05f, poleTop - 1.7f, 0f), new Vector3(1.5f, 1.5f, 1f), Quaternion.identity);
-            NoShadows(f);
 
             var flag = f.AddComponent<Flag>();
             flag.visual = visual;
-            flag.bobHeight = 0f;
             return f;
         }
 
@@ -471,10 +451,9 @@ namespace SpectreEX.EditorTools
             trigger.size = new Vector3(5.5f, 3f, 5.5f);
             trigger.center = new Vector3(0f, 1.5f, 0f);
 
-            var tiles = new List<Transform>();
-            for (int i = -1; i <= 1; i++)
-            for (int j = -1; j <= 1; j++)
-                tiles.Add(Box("Tile", d.transform, new Vector3(i * 1.7f, 0.05f, j * 1.7f), new Vector3(1.45f, 0.08f, 1.45f), dumpMat, false).transform);
+            // The built-in fuel shape: one flat square, 0xC00 units across
+            float side = 0xC00 * PlayerMotor.UnitsToMetres;
+            var tiles = new List<Transform> { Box("Tile", d.transform, new Vector3(0f, 0.05f, 0f), new Vector3(side, 0.02f, side), dumpMat, false).transform };
             NoShadows(d);
             d.AddComponent<AmmoDump>().tiles = tiles.ToArray();
             return d;

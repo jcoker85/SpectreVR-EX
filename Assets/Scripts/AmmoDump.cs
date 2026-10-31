@@ -16,25 +16,10 @@ namespace SpectreEX
         public enum Kind { Green, White, Orange, Blue }
 
         public Transform[] tiles;
-        public float rippleHeight = 0.35f;
-        public float rippleSpeed = 3f;
         public Kind kind;
 
         // _PICK_FUEL_TYPE's colours: green, white, orange and, for wings, cyan
         static readonly int[] KindRamps = { 0x20, 0xB0, 0x40, 0x60 };
-
-        void Update()
-        {
-            if (tiles == null) return;
-            for (int i = 0; i < tiles.Length; i++)
-            {
-                var t = tiles[i];
-                Vector3 p = t.localPosition;
-                float phase = (p.x + p.z) * 0.9f;
-                p.y = 0.05f + (Mathf.Sin(Time.time * rippleSpeed + phase) * 0.5f + 0.5f) * rippleHeight;
-                t.localPosition = p;
-            }
-        }
 
         public void SetKind(Kind k)
         {

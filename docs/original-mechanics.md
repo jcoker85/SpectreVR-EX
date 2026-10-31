@@ -478,3 +478,10 @@ Measured with collisions off, Balance craft, at 10 / 30 / 59 / 117 / 128 fps: sp
 - Face colours 6000-6015 name a PCX in TEXTURES (`_TEXTURE_FILE_NAMES`; 1000-1999 are movie faces). `_SIZE_TEXTURE_POINTS` stretches the whole image over the face's extent in its plane. The original's textured-object option is off by default; the remake's Textures option defaults on.
 - `_SHADE`: dot of the face normal with the light (0x47, 0x99, 0xC0; x forward, y side, z up), minus distance >> 10, plus 0x100, clamped to 0-0x1E0, over 0x20: a shade of 0-15, 8 for a side-on face. The remake has a real directional light from that direction (ShadeLight, 1500 lux) over a glow at about the middle of the range (EV 11.5). Distance darkening isn't reproduced.
 - The remake reads these from SVRWIN.EXE at import and uses a fixed point on each ramp. Movie faces stay flat. The wireframe option draws the old edge strips.
+
+## Compared with the running original (Easy, textures off)
+
+- Matches: yellow boxes and pyramids, red robots with white wings, five red debris pieces, green craft with white wings, cyan wings dump filling the F gauge.
+- Flags are the built-in FLAG template in the object colour, about the craft's height. Dumps are one still flat square 0xC00 units across; the manual's "undulating" isn't in the code or on screen.
+- Not yet in the remake: a dying robot dissolves into horizontal lines of its colour (object +0xD21 goes to the polygon drawers as a de-res amount; `_PLAYER_DE_RES` does the same for the player).
+- With bit 4 of `_TEXTURES` on, the demo stayed on a black screen for 40+ seconds under DOSBox-X. Not investigated; the harness needs textures off.
