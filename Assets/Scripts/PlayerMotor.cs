@@ -4,15 +4,18 @@ using SpectreEX.Matrix;
 namespace SpectreEX
 {
     // The player's craft, moved the way Spectre VR moves it (SVRWIN.EXE _DO_PLAYER_MOVE and the
-    // _PLAY_LEVEL tick loop; see docs/original-mechanics.md). The simulation runs on the original's
-    // fixed 18.2 Hz tick in its own units - instant speed, a two-step turn ramp, gravity, jump,
-    // hyperspace, collisions that undo the move, and the obstacle "gates" - and the transform is
-    // interpolated between ticks for display. The Rigidbody is kinematic: bolts and triggers still
-    // find the craft, but nothing pushes it.
+    // _PLAY_LEVEL tick loop; see docs/original-mechanics.md), in its units - instant speed, a two-step
+    // turn ramp, gravity, jump, hyperspace, collisions that undo the move, and the obstacle "gates" -
+    // but sampled SubSteps times per 18.2 Hz tick, on SimClock's fixed steps. Movement per tick is
+    // shared out exactly, so the craft is where the original's would be at the end of every tick;
+    // timers, damage and sounds still go by whole ticks. The Rigidbody is kinematic: bolts and
+    // triggers still find the craft, but nothing pushes it.
     [RequireComponent(typeof(Rigidbody))]
     public class PlayerMotor : MonoBehaviour
     {
         public const float TickRate = 1193182f / 65536f;                   // PC timer, ~18.2065 Hz
+        public const int SubSteps = 8;                                     // ~146 Hz; heading has this many parts to a step
+        const int FineHeadings = 256 * SubSteps;
         public const float UnitsToMetres = GameManager.GridScale / 0x200;   // a matrix grid unit is 0x200
 
         public const int HyperMax = 0x1900;
@@ -23,7 +26,6 @@ namespace SpectreEX
         const int PushSpeed = 0x12;
         public const int FloatMax = 0x546;
         const int FloatGain = 0x10E, FloatHeight = 0x2D00;   // a wings dump: 270 ticks (~15 s) of hover, up to 1350
-        const int MaxTicksPerFrame = 8;
 
         // The original's tables: 256 * cos / sin of heading * 2pi/256, truncated
         static readonly int[] Cos = OriginalMath.Cos, Sin = OriginalMath.Sin;
@@ -39,8 +41,8 @@ namespace SpectreEX
         public bool Airborne => z > minZ + 0x100;   // robots switch to rising shots (_CHASE_PLAYER)
         public bool Under => under;
         public long ZUnits => z;                     // height in original units, the floor at GroundZ
-        public Vector3 SimPosition => curPos;        // this tick's position (the transform is interpolated)
-        public Vector3 TickDelta => curPos - prevPos;
+        public Vector3 SimPosition => curPos;        // the latest step's position (the transform is interpolated)
+        public Vector3 TickDelta => tickEndPos - lastTickEndPos;
         // The heading in the robots' frame (0 = +X, 0x40 = +Z): this motor's heading points along
         // (sin, -cos), which is the original's (cos, sin) a quarter turn on
         public int OriginalHeading => (heading - 0x40) & 0xFF;
@@ -52,12 +54,18 @@ namespace SpectreEX
         // Simulation state, original units. x/y are the floor plane (x = Unity X, y = Unity Z),
         // z is height with the floor at GroundZ, heading is 0-255 with Unity yaw = 180 - heading * 360/256.
         long x, y, z = GroundZ, vz;
-        int heading = 0x80;
+        int fineHeading = 0x80 * SubSteps;
+        int heading
+        {
+            get => fineHeading / SubSteps;
+            set => fineHeading = (value & 0xFF) * SubSteps;
+        }
         int minZ = GroundZ;
-        int turningTimer, bounceI, acidTimer, contactSoundTimer;
+        int turningSteps, heightStep, bounceI, acidTimer, contactSoundTimer;
+        long moveLeftX, moveLeftY;
         bool under, onIce;
         long iceDx, iceDy;
-        int iceHeading;
+        int iceFineHeading;
         ObstacleBehaviour lastGate;
 
         float throttle, turn;
@@ -67,8 +75,7 @@ namespace SpectreEX
         Health health;
         BoxCollider hull;
         readonly Collider[] overlaps = new Collider[32];
-        float tickAccumulator;
-        Vector3 prevPos, curPos, lastWritten;
+        Vector3 prevPos, curPos, lastWritten, tickEndPos, lastTickEndPos;
         float prevYaw, curYaw;
         bool snapped;
 
@@ -109,7 +116,8 @@ namespace SpectreEX
             z = dropIn ? DropZ : GroundZ + System.Math.Max(0, ToUnits(position.y));
             vz = 0;
             Floating = 0;
-            bounceI = turningTimer = acidTimer = nothingTimer = 0;
+            bounceI = turningSteps = heightStep = acidTimer = nothingTimer = 0;
+            moveLeftX = moveLeftY = 0;
             WingAngle = 0x19;
             onIce = false;
             lastGate = null;
@@ -119,57 +127,49 @@ namespace SpectreEX
 
         void Resync() => Place(transform.position, transform.eulerAngles.y, false);
 
-        void Update()
+        // Something else moved us (respawn, editor): take that as the new position
+        public void BeforeSim()
         {
-            // Something else moved us (respawn, editor): take that as the new position
             if ((transform.position - lastWritten).sqrMagnitude > 0.0001f) Resync();
-
-            if (health != null && health.IsDead) return;
-
-            tickAccumulator += Time.deltaTime * TickRate;
-            int ticks = 0;
-            while (tickAccumulator >= 1f && ticks < MaxTicksPerFrame)
-            {
-                tickAccumulator -= 1f;
-                ticks++;
-                prevPos = curPos;
-                prevYaw = curYaw;
-                Tick();
-                curPos = Position();
-                curYaw = Yaw();
-                if (snapped) { prevPos = curPos; prevYaw = curYaw; snapped = false; }   // teleports cut, not sweep
-            }
-            if (ticks == MaxTicksPerFrame) tickAccumulator = 0f;   // hitch: don't try to catch up
-
-            float t = Mathf.Clamp01(tickAccumulator);
-            Write(Vector3.Lerp(prevPos, curPos, t), Mathf.LerpAngle(prevYaw, curYaw, t));
         }
 
-        // ---------- one original tick ----------
-
-        void Tick()
+        // One fixed step of SimClock; tickEnds marks the last of an original tick's sub-steps
+        public void SubStep(bool tickEnds)
         {
-            // The ground sinks while under the floor (down transport) and rises back afterwards
-            if (!under) { if (minZ < GroundZ) minZ += 0x100; }
-            else
-            {
-                if (minZ > UnderZ) minZ -= 0x100;
-                Floating = 0;
-            }
+            if (health != null && health.IsDead) return;
+            prevPos = curPos;
+            prevYaw = curYaw;
+            Step(tickEnds);
+            curPos = Position();
+            curYaw = Yaw();
+            if (snapped) { prevPos = curPos; prevYaw = curYaw; snapped = false; }   // teleports cut, not sweep
+            if (tickEnds) { lastTickEndPos = tickEndPos; tickEndPos = curPos; }
+        }
 
+        // The moment between the last two steps, for this frame
+        public void Present(float alpha)
+        {
+            if (health != null && health.IsDead) return;
+            Write(Vector3.Lerp(prevPos, curPos, alpha), Mathf.LerpAngle(prevYaw, curYaw, alpha));
+        }
+
+        // ---------- one step ----------
+
+        void Step(bool tickEnds)
+        {
             int speed = throttle > 0.3f ? ThisSpeed : throttle < -0.3f ? -ThisSpeed : 0;
             if (Floating > 0) speed += speed >> 2;
             int turnStep = 0;
             if (Mathf.Abs(turn) > 0.3f)
             {
-                turningTimer++;
-                int step = turningTimer < 3 ? 1 : 2;
+                int ticksTurning = turningSteps++ / SubSteps + 1;
+                int step = ticksTurning < 3 ? 1 : 2;
                 turnStep = turn < 0f ? step : -step;    // left raises the heading
             }
-            else turningTimer = 0;
+            else turningSteps = 0;
 
-            int startHeading = heading;
-            heading = (heading + turnStep) & 0xFF;
+            int startHeading = fineHeading;
+            fineHeading = (fineHeading + turnStep + FineHeadings) % FineHeadings;
 
             if (jumpRequested)
             {
@@ -186,9 +186,11 @@ namespace SpectreEX
                 else HyperspaceFailed();
             }
 
-            long dx = (long)Sin[heading] * speed;
-            long dy = -(long)Cos[heading] * speed;
-            long nx = x + dx, ny = y + dy;
+            // A whole tick's move at this heading; a step takes its share below
+            long dx = TableAt(Sin) * speed;
+            long dy = -TableAt(Cos) * speed;
+            long moveX = dx, moveY = dy;
+            long nx = x + dx / SubSteps, ny = y + dy / SubSteps;
 
             Classify(nx, ny, heading, out var robot, out var gate, out var solid);
 
@@ -196,7 +198,7 @@ namespace SpectreEX
             Vector3 blockerAt = default;
             if (robot != null)
             {
-                blocked = !RobotContact(robot);
+                blocked = !RobotContact(robot, tickEnds);
                 blockerAt = robot.transform.position;
             }
             else if (gate != null)
@@ -204,13 +206,13 @@ namespace SpectreEX
                 switch (gate.kind)
                 {
                     case ObstacleBehaviour.Kind.Teleport:
-                        if (gate != lastGate && TeleportFrom(gate)) { nx = x; ny = y; }
+                        if (gate != lastGate && TeleportFrom(gate)) { moveX = moveY = 0; moveLeftX = moveLeftY = 0; }
                         break;
                     case ObstacleBehaviour.Kind.Pusher:
                     {
                         int h = (gate.heading - 0x40) & 0xFF;
-                        nx = x + (long)Sin[h] * PushSpeed;
-                        ny = y - (long)Cos[h] * PushSpeed;
+                        moveX = (long)Sin[h] * PushSpeed;
+                        moveY = -(long)Cos[h] * PushSpeed;
                         onIce = false;
                         break;
                     }
@@ -218,23 +220,23 @@ namespace SpectreEX
                         if (!onIce)
                         {
                             onIce = true;
-                            iceDx = dx; iceDy = dy; iceHeading = heading;
+                            iceDx = dx; iceDy = dy; iceFineHeading = fineHeading;
                             Sfx.Play(Snd.IceSlide);
                         }
                         else
                         {
-                            heading = iceHeading;
-                            nx = x + iceDx; ny = y + iceDy;
+                            fineHeading = iceFineHeading;
+                            moveX = iceDx; moveY = iceDy;
                         }
                         break;
                     case ObstacleBehaviour.Kind.Slow:
-                        nx = x + dx / 4; ny = y + dy / 4;
+                        moveX = dx / 4; moveY = dy / 4;
                         onIce = false;
-                        if (acidTimer-- < 1) { acidTimer = 8; Sfx.Play(Snd.Goo); }
+                        if (tickEnds && acidTimer-- < 1) { acidTimer = 8; Sfx.Play(Snd.Goo); }
                         break;
                     case ObstacleBehaviour.Kind.Acid:
                         onIce = false;
-                        if (acidTimer-- < 1)
+                        if (tickEnds && acidTimer-- < 1)
                         {
                             acidTimer = 2;
                             var gm = GameManager.Instance;
@@ -263,26 +265,90 @@ namespace SpectreEX
             if (gate == null) { lastGate = null; onIce = false; acidTimer = 0; }
             if (Floating > 0) blocked = false;   // wings carry you over anything
 
-            // Blocked: the whole tick's move is undone, turn included, and on the ground you're
-            // nudged 1/32 of the way out from the thing you hit with a little hop
+            // Blocked: the move is undone, turn included, and on the ground you're nudged 1/32 of the
+            // way out from the thing you hit, a tick's worth, with a little hop
             if (blocked)
             {
-                nx = x; ny = y;
-                heading = startHeading;
+                fineHeading = startHeading;
+                moveLeftX = moveLeftY = 0;
                 if (z <= minZ)
                 {
                     Bounce(Snd.Collision);
-                    nx += (x - ToUnits(blockerAt.x)) >> 5;
-                    ny += (y - ToUnits(blockerAt.z)) >> 5;
+                    x += ((x - ToUnits(blockerAt.x)) >> 5) / SubSteps;
+                    y += ((y - ToUnits(blockerAt.z)) >> 5) / SubSteps;
                 }
             }
-            x = nx; y = ny;
+            else
+            {
+                x += Share(moveX, ref moveLeftX);
+                y += Share(moveY, ref moveLeftY);
+            }
 
             // The arena edge is a clamp, not a collider
             if (x > Arena) { x = Arena; Bounce(Snd.HitEdge); }
             if (x < -Arena) { x = -Arena; Bounce(Snd.HitEdge); }
             if (y > Arena) { y = Arena; Bounce(Snd.HitEdge); }
             if (y < -Arena) { y = -Arena; Bounce(Snd.HitEdge); }
+
+            MoveHeight();
+            if (tickEnds) EndTick(speed != 0 || turnStep != 0, speed != 0);
+        }
+
+        // The tick's share of a move; what's left over rounds into the next step, so nothing is lost
+        static long Share(long perTick, ref long left)
+        {
+            left += perTick;
+            long step = left / SubSteps;
+            left -= step * SubSteps;
+            return step;
+        }
+
+        // The original's sine or cosine table, read between its 256 headings
+        long TableAt(int[] table)
+        {
+            int h = fineHeading / SubSteps, part = fineHeading % SubSteps;
+            return (table[h] * (SubSteps - part) + table[(h + 1) & 0xFF] * part) / SubSteps;
+        }
+
+        // Height through a tick: speed eases by the tick's gravity as it goes rather than all at once at
+        // the end, so a jump is a smooth arc that still passes through the original's height every tick
+        void MoveHeight()
+        {
+            if (z <= minZ && vz <= 0)
+            {
+                z = minZ;
+                vz = 0;
+                heightStep = 0;
+                return;
+            }
+            z += HeightAfter(heightStep + 1) - HeightAfter(heightStep);
+            if (z < minZ)
+            {
+                z = minZ;
+                if (vz < HardLanding) Bounce(Snd.Land);
+                vz = 0;
+                heightStep = 0;
+                return;
+            }
+            if (++heightStep == SubSteps)
+            {
+                heightStep = 0;
+                vz -= Gravity;
+            }
+        }
+
+        long HeightAfter(int steps) => vz * steps / SubSteps + Gravity * steps * (SubSteps - steps) / (2 * SubSteps * SubSteps);
+
+        // What the original does once a tick whatever the sampling rate
+        void EndTick(bool active, bool moving)
+        {
+            // The ground sinks while under the floor (down transport) and rises back afterwards
+            if (!under) { if (minZ < GroundZ) minZ += 0x100; }
+            else
+            {
+                if (minZ > UnderZ) minZ -= 0x100;
+                Floating = 0;
+            }
 
             // Bounce hop: a run of upward kicks shaped by the cosine table
             if (bounceI != 0)
@@ -296,19 +362,10 @@ namespace SpectreEX
                 }
             }
 
-            z += vz;
-            if (z < minZ)
-            {
-                z = minZ;
-                if (vz < HardLanding) Bounce(Snd.Land);
-                vz = 0;
-            }
-            else vz -= Gravity;
-
             // Wings: lift toward hover height (a little lower while moving), with a wobble and drag
             if (Floating > 0)
             {
-                long lift = ((FloatHeight - z) >> 4) - (speed != 0 ? 0x100 : 0);
+                long lift = ((FloatHeight - z) >> 4) - (moving ? 0x100 : 0);
                 if (lift < 0) lift = 0;
                 vz += lift + Random.Range(0, 0x60);
                 vz -= vz >> 4;
@@ -320,7 +377,7 @@ namespace SpectreEX
             else if (WingAngle < 0x19) WingAngle++;
 
             // Two minutes without driving or turning: a reminder tick (_NOTHING_TIMER)
-            if (speed != 0 || turnStep != 0) nothingTimer = 0;
+            if (active) nothingTimer = 0;
             else if (++nothingTimer > 0x870)
             {
                 nothingTimer = 0;
@@ -343,14 +400,14 @@ namespace SpectreEX
         }
 
         // _DO_COLLIDE_DAMAGE for robots: true = drive through, false = blocked
-        bool RobotContact(EnemyBase e)
+        bool RobotContact(EnemyBase e, bool tickEnds)
         {
             if (!e.hasMatrixData) return false;
             int type = e.matrixType, damage = e.collideDamage;
             bool blocks = type == 7 || type == 8 || type == 25 || type == 27;   // robot / super tanks, cyber mud, cloaked tank
             if (type == 24 && damage == 0) return true;                        // harmless smart wall
             if (blocks && damage == 0) return false;
-            if (damage > 0) DamageSelf(damage, true);
+            if (damage > 0 && tickEnds) DamageSelf(damage, true);
             return !blocks;
         }
 
@@ -383,7 +440,7 @@ namespace SpectreEX
                 Derez.Burst(transform.position + Vector3.up, health != null ? health.derezMaterial : null, 20, 5f);
                 x = ToUnits(o.transform.position.x);
                 y = ToUnits(o.transform.position.z);
-                heading = (target.heading + 0x40) & 0xFF;
+                heading = target.heading + 0x40;
                 lastGate = target;
                 Sfx.Play(Snd.Gate);
                 Snap();
@@ -476,12 +533,12 @@ namespace SpectreEX
             Mathf.RoundToInt(Mathf.Atan2(dx, -dy) * (128f / Mathf.PI)) & 0xFF;
 
         Vector3 Position() => new Vector3(x, z - GroundZ, y) * UnitsToMetres;
-        float Yaw() => YawFromHeading(heading);
+        float Yaw() => 180f - fineHeading * (360f / FineHeadings);
 
         void Snap()
         {
             snapped = true;
-            curPos = prevPos = Position();
+            curPos = prevPos = tickEndPos = lastTickEndPos = Position();
             curYaw = prevYaw = Yaw();
             Write(curPos, curYaw);
         }

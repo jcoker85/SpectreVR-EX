@@ -8,13 +8,10 @@ namespace SpectreEX
     // robot in spawn order (_MOVE_TANKS), then every shot (_MOVE_SHOTS). Lives on the GameManager.
     public class RobotDirector : MonoBehaviour
     {
-        const int MaxTicksPerFrame = 8;
-
         public readonly List<Robot> Robots = new List<Robot>();
         public ShotSystem Shots { get; private set; }
 
         GameManager gm;
-        float accumulator;
 
         void Awake()
         {
@@ -28,24 +25,18 @@ namespace SpectreEX
             Shots.Clear();
         }
 
-        void Update()
+        // How far through the tick this frame is drawn
+        public void Present(float t)
         {
             if (gm == null || !gm.Playing) return;
-            accumulator += Time.deltaTime * OriginalMath.TickRate;
-            int ticks = 0;
-            while (accumulator >= 1f && ticks < MaxTicksPerFrame)
-            {
-                accumulator -= 1f;
-                ticks++;
-                Tick();
-            }
-            if (ticks == MaxTicksPerFrame) accumulator = 0f;
-            foreach (var r in Robots) if (r != null) r.Interpolate(accumulator);
-            Shots.Interpolate(accumulator);
+            foreach (var r in Robots) if (r != null) r.Interpolate(t);
+            Shots.Interpolate(t);
         }
 
-        void Tick()
+        // One original tick, from SimClock
+        public void SimTick()
         {
+            if (gm == null || !gm.Playing) return;
             if (PlayerAlive && !gm.Paused) gm.player.Weapon.Tick(Shots, gm.Level);
             bool needChaser = true;
             foreach (var r in Robots) if (r != null && r.mode == 3) needChaser = false;

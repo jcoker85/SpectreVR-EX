@@ -455,3 +455,16 @@ DOS `SVR.EXE` in `Tools/SpectreVR` is the one to run for side-by-side checks.
 - Words: 128 Perfect, 101-127 Radical, 65-100 Not Bad, 33-64 Marginal, 0-32 Get Help (colours 0x2F, 0x2F, 0xF, 0x1F, 0x1F; wedge 0xC).
 - Layout measured on the original (532-wide game window): labels at the left edge in white, wedge from about 0.31 to 0.69 of the width in light grey, words at about 0.77, lines 30 pixels apart from the middle of the screen, wedge 20 high. PERFECT and RADICAL green, MARGINAL and GET HELP red.
 - In the demo the recap stayed up for over 3 minutes although `_END_LEVEL` reads as 18 ticks or a key. Not explained: a hold in demo mode or a hang under emulation. A normal level finish hasn't been timed; the remake keeps 18 ticks.
+
+## Remake timing (a deliberate difference from the original)
+
+`SimClock` is the only clock: fixed steps of 1/(18.2065 x 8) s, about 146 Hz, whatever the frame rate. Every 8th step is an original tick, when robots, shots and the level timers advance; the player moves on every step and each frame draws between the last two steps.
+
+- Movement per tick is shared out with the remainder carried, so a straight run ends each tick where the original's would.
+- Height eases gravity across the tick (speed vz + g(1/2 - t) over 0..1), so the arc is smooth and matches the original's height at every tick. On the ground gravity doesn't run.
+- Heading has 8 parts to a step, with the sine and cosine tables read between entries.
+- Damage, sounds and timers still go by whole ticks. A blocked step undoes only that step.
+- Robots and shots stay at 18.2 Hz with display interpolation.
+- Catch-up is limited by Unity's maximumDeltaTime, so a stall longer than that loses time rather than speeding up afterwards.
+
+Measured with collisions off, Balance craft, at 10 / 30 / 59 / 117 / 128 fps: speed 11.64-11.67 m/s (calculated 11.65), jump 6.25 m in about 1.38 s (calculated 6.24), about 36 heading steps a second.

@@ -101,6 +101,7 @@ namespace SpectreEX
             GameSettings.Load();
             director = GetComponent<RobotDirector>();
             if (director == null) director = gameObject.AddComponent<RobotDirector>();
+            if (GetComponent<SimClock>() == null) gameObject.AddComponent<SimClock>();
             demoPilot = player.GetComponent<DemoPilot>();
             if (demoPilot == null) demoPilot = player.gameObject.AddComponent<DemoPilot>();
             demoPilot.enabled = false;
@@ -269,19 +270,12 @@ namespace SpectreEX
                 if (k.pKey.wasPressedThisFrame) TogglePause();
             }
 
-            if (!Playing || Paused) return;
-            levelTickClock += Time.deltaTime * PlayerMotor.TickRate;
-            while (levelTickClock >= 1f)
-            {
-                levelTickClock -= 1f;
-                LevelTick();
-            }
         }
 
-        // The per-tick level clock (_PLAY_LEVEL): the bonus count-down and the slow self-repair
-        void LevelTick()
+        // One original tick, from SimClock (_PLAY_LEVEL): the bonus count-down and the slow self-repair
+        public void SimTick()
         {
-            if (player.Health.IsDead) return;
+            if (!Playing || Paused || player.Health.IsDead) return;
             if (++LevelTicks % 18 == 0) Bonus = Mathf.Max(0, Bonus - 4);
             if (++repairTimer > RepairTicks)
             {
@@ -291,7 +285,6 @@ namespace SpectreEX
         }
 
         public int LevelTicks { get; private set; }
-        float levelTickClock;
         int repairTimer;
 
         // _TIME_ALLOWED and the bonus, at the start of a level and of every life
