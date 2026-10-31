@@ -6,16 +6,22 @@ and pointer (+0x40/+0x42) and face count and pointer (+0x52/+0x54), then each 0x
 vertex count and index-list pointer (+0/+2). The points themselves are initialised data in the
 EXE's data segments (three 32-bit ints each: x forward, y side, z up, in world units).
 
-This replays those stores, taken from the Ghidra decompile, over the EXE's segments and reads the
-templates back. The id -> template table is _OT_TO_SHAPE (DS:0x9B8): 10-byte entries of shape
+This replays those stores over the EXE's segments and reads the templates back. The stores are only
+pointers and counts: they were taken once from the Ghidra decompile into builtin_shapes_layout.json,
+so the import needs nothing but the player's own SVRWIN.EXE, where all the geometry is read from. The id -> template table is _OT_TO_SHAPE (DS:0x9B8): 10-byte entries of shape
 id, object type, shap resource id, far pointer to the template (pointer filled by relocations).
 
-    python export_builtin_shapes.py <SVRWIN.EXE> <SVRWIN.EXE.c> <symbols.tsv> <out.json>
+    python export_builtin_shapes.py <SVRWIN.EXE> <out.json>       (the import, using the layout)
+    python export_builtin_shapes.py --make-layout <SVRWIN.EXE> <SVRWIN.EXE.c> <symbols.tsv>
 """
+import hashlib
 import json
+import os
 import re
 import struct
 import sys
+
+LAYOUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "builtin_shapes_layout.json")
 
 TEMPLATES = ["BIG_BOX", "PYRAMID", "WALL", "WINDMILL", "WINDMILL_FANS", "COLUMN", "FUEL", "PLAYER_TANK",
              "TANK", "SUPERTANK", "SHOT", "BASE", "FLAG", "ICE", "GOO", "TURRET"]
@@ -98,13 +104,36 @@ def replay(exe, sym, lines, name):
         (exe.w32 if v > 0xFFFF or v < -0x8000 else exe.w16)(*a, v)
 
 
-def main():
-    exe_path, c_path, sym_path, out_path = sys.argv[1:5]
+def make_layout(exe_path, c_path, sym_path):
+    """Record the stores and the addresses the export needs; the geometry stays in the EXE."""
     exe = Exe(exe_path)
     sym = load_symbols(sym_path)
     lines = open(c_path, encoding="utf-8").read().split("\n")
+    writes = []
+    w16, w32 = exe.w16, exe.w32
+    exe.w16 = lambda sel, o, v: (writes.append([sel, o, 2, v]), w16(sel, o, v))
+    exe.w32 = lambda sel, o, v: (writes.append([sel, o, 4, v]), w32(sel, o, v))
     replay(exe, sym, lines, "_BUILD_OBJECTS")
     replay(exe, sym, lines, "_SET_FACES")
+    names = ["_" + n for n in TEMPLATES] + ["_OT_TO_SHAPE"]
+    with open(LAYOUT, "w") as f:
+        json.dump({"sha256": hashlib.sha256(open(exe_path, "rb").read()).hexdigest(),
+                   "symbols": {n: sym[n] for n in names}, "writes": writes}, f, separators=(",", ":"))
+    print(len(writes), "stores ->", LAYOUT)
+
+
+def main():
+    if sys.argv[1] == "--make-layout":
+        make_layout(*sys.argv[2:5])
+        return
+    exe_path, out_path = sys.argv[1:3]
+    layout = json.load(open(LAYOUT))
+    if hashlib.sha256(open(exe_path, "rb").read()).hexdigest() != layout["sha256"]:
+        sys.exit("This SVRWIN.EXE isn't the release the built-in shape layout was made from.")
+    exe = Exe(exe_path)
+    sym = {n: tuple(v) for n, v in layout["symbols"].items()}
+    for sel, o, size, v in layout["writes"]:
+        (exe.w32 if size == 4 else exe.w16)(sel, o, v)
 
     shapes, at = [], {}
     for name in TEMPLATES:

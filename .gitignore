@@ -125,3 +125,13 @@ InitTestScene*.unity*
 /Tools/ghidra_out/
 /Tools/ghidra_home/
 /Tools/dosbox_run/
+/Tools/win31/
+
+# Generated from the player's own copy of Spectre VR by Tools/import_original.py - never commit
+/Assets/Imported/
+/Assets/Imported.meta
+/Assets/StreamingAssets/Matrices/
+/Assets/StreamingAssets/Matrices.meta
+/Assets/Editor/Data/
+/Assets/Editor/Data.meta
+/Assets/Meshes/Spectre_*

@@ -6,7 +6,7 @@ using UnityEngine.UI;
 namespace SpectreEX.Menu
 {
     // The original Spectre VR main menu and its dialogs, rebuilt from the game's own artwork
-    // (Assets/Resources/Menu, copied from the DATA folder) at the largest whole-number scale that
+    // (imported from the DATA folder by Tools/import_original.py) at the largest whole-number scale that
     // fits the screen, with point filtering so the 1993 pixels stay crisp.
     //
     //   PLAY      -> Choose a vehicle (Balance / Speedy / Strong / Custom, Edit Custom..., Cancel, Play)
@@ -72,6 +72,12 @@ namespace SpectreEX.Menu
 
         void Start()
         {
+            if (LoadTex("MainMenu") == null)
+            {
+                Debug.LogError("Spectre VR-EX: no imported game data. Run Tools/import_original.py on your copy of Spectre VR.");
+                enabled = false;
+                return;
+            }
             gm = GameManager.Instance;
             GameSettings.Load();
             buttonsTex = LoadTex("Buttons");

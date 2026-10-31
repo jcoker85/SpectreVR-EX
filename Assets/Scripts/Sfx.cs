@@ -4,7 +4,7 @@ using UnityEngine;
 namespace SpectreEX
 {
     // Original Spectre VR sound names, in one place so a mis-guessed mapping is a one-line fix.
-    // Clips live in Assets/Resources/Sounds (WAV, copied from the original SOUNDS folder).
+    // Clips are the original SOUNDS folder's WAVs, copied in by Tools/import_original.py.
     public static class Snd
     {
         public const string PlayerShot = "PLYRSHT";

@@ -131,7 +131,7 @@ namespace SpectreEX.Matrix
     }
 
     // The shapes built into SVRWIN.EXE (ids under 1000) and its _OT_TO_SHAPE table, exported by
-    // Tools/export_builtin_shapes.py into Resources/Shapes/BuiltinShapes.json.
+    // Tools/import_original.py into Resources/Shapes/BuiltinShapes.json.
     public static class BuiltinShapes
     {
         [Serializable] class Face { public int[] idx; }

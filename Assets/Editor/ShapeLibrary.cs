@@ -21,6 +21,8 @@ namespace SpectreEX.EditorTools
         {
             if (shapes == null)
             {
+                if (!System.IO.File.Exists(JsonPath))
+                    throw new System.IO.FileNotFoundException("No imported game data: run Tools/import_original.py on your copy of Spectre VR first");
                 var file = JsonUtility.FromJson<ShapeFile>(System.IO.File.ReadAllText(JsonPath));
                 shapes = new Dictionary<int, ShapeDef>();
                 foreach (var s in file.shapes) shapes[s.id] = s;
