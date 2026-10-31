@@ -502,3 +502,17 @@ Measured with collisions off, Balance craft, at 10 / 30 / 59 / 117 / 128 fps: sp
 ## Robot audit against the decompile
 
 Checked line by line: `_MOVE_TANKS`, `_CHASE_PLAYER`, `_FIND_CLEAR_PATH`, `_PATROL`, `_CIRCLE_SPOT`, `_LEAVE_THING`, `_FIX_HEADING` and `_MOVE_SHOTS`'s direct hits. Differences fixed: firing used the 1-based level (`_LEVEL` counts from 0); `_PLACE_TANKS` and `_RESET_TANKS_CHASE` run at every life, the reset also after hyperspace; lives drop from 0xC800 and hyperspace from 0x5000, after the banner; a stunned robot's object colour swaps (orange and red) rather than flashing, visible only on faces in the object colour; Slicers burrow only in cockpit view; hits on the player set `_D_P_DE_RES`. `_DZ` at a hit is a camera value overwritten each frame, so it isn't ported.
+
+## Weapon audit against the decompile
+
+Checked line by line: `_DO_SHOOT`, `_MY_SHOOT`, `_MOVE_SHOTS`, `_KEY_WEAPON`, the firing part of `_DO_PLAYER_MOVE`, `_CHECK_MISSILE_PATH`, `_FIND_CLOSEST_TANK`. Differences fixed:
+
+- `_CHECK_MISSILE_PATH` is a flat rectangle against obstacles taller than a floor pad, at any height. The remake's box also caught the floor, so homing shots near it kept climbing.
+- Homing shots ignore robots at `_QFIND_DIST` 2000 or more, and aim at the middle of the player's box too.
+- A splash's robot loop only uses the range for the loss. Every other visible robot still takes the 18-tick stun, sound 4 and a score, however far off, even from a robot's shot. A splash throws no debris of its own.
+- Shots end in a de-res: +0x5F rises 3 a tick and the shot goes above 0x1E. One that runs out starts at 4 and keeps moving (9 ticks); one that strikes a robot, an obstacle, a shield or the arena edge starts at 10 and stops there (7 ticks). A hit on the player, a Spinner hit and a splash remove the shot at once.
+- Shots draw flat at their heading, never pitched. +0x3A turns the heading (grenade-type lobs and bombs 4), +0x3E rolls them (0x10 by default).
+- Debris cycles shapes 10102-10104 by life; a landed Pulse Burst becomes shape 10096.
+- A Spinner hit spins the player as well as robots: 0x10 a tick for 0xB4 ticks, with no steering or thrust.
+
+Left alone: one non-splash shot can hit two overlapping tanks in the same tick in the original (the remake stops at the first); a splash's sound uses a fixed `_DAMAGE < 0x1E` test.

@@ -49,11 +49,19 @@ namespace SpectreEX
 
         // A weapon-16 blob (Smart Wall) takes wings time away
         public void DrainFloating(int amount) => Floating = Mathf.Max(0, Floating - amount);
+
+        // A Spinner hit: no steering or thrust while it lasts (+0x6B / +0x6D)
+        public void SpinFromHit()
+        {
+            spinRate = 0x10;
+            spinTimer = 0xB4;
+        }
         int ThisSpeed => Mathf.Clamp(speedPoints, 1, 9) * 8 / 5;
 
         // Simulation state, original units. x/y are the floor plane (x = Unity X, y = Unity Z),
         // z is height with the floor at GroundZ, heading is 0-255 with Unity yaw = 180 - heading * 360/256.
         long x, y, z = GroundZ, vz;
+        int spinRate, spinTimer;
         int fineHeading = 0x80 * SubSteps;
         int heading
         {
@@ -116,7 +124,7 @@ namespace SpectreEX
             z = dropIn ? LifeDropZ : GroundZ + System.Math.Max(0, ToUnits(position.y));
             vz = 0;
             Floating = 0;
-            bounceI = turningSteps = heightStep = acidTimer = nothingTimer = 0;
+            bounceI = turningSteps = heightStep = acidTimer = nothingTimer = spinRate = spinTimer = 0;
             moveLeftX = moveLeftY = 0;
             WingAngle = 0x19;
             onIce = false;
@@ -167,6 +175,13 @@ namespace SpectreEX
                 turnStep = turn < 0f ? step : -step;    // left raises the heading
             }
             else turningSteps = 0;
+
+            if (spinRate != 0)
+            {
+                turnStep = spinRate;
+                speed = 0;
+                if (tickEnds && --spinTimer < 0) spinRate = spinTimer = 0;
+            }
 
             int startHeading = fineHeading;
             fineHeading = (fineHeading + turnStep + FineHeadings) % FineHeadings;
