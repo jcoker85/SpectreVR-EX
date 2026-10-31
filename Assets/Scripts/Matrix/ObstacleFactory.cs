@@ -112,6 +112,7 @@ namespace SpectreEX.Matrix
             t.SetParent(parent, false);
             t.localPosition = offset;
             MeshObject("Panels", t, shape.Coloured(colour), panel, ShadowCastingMode.On);
+            foreach (var face in shape.TexturedFaces) MeshObject("Panels", t, face.Value, ShapeTextures.Material(face.Key, panel), ShadowCastingMode.On);
             MeshObject("Edges", t, shape.Edges(thickness), glow, ShadowCastingMode.Off);
             return t;
         }

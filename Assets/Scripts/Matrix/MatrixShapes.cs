@@ -34,13 +34,33 @@ namespace SpectreEX.Matrix
 
         public Mesh Body => Coloured(0);
 
-        // The faces, coloured for an object of this colour (UVs into SpectrePalette)
+        // The faces, coloured for an object of this colour (UVs into SpectrePalette). With Options
+        // "Textures" on, textured faces are left to TexturedFaces.
         public Mesh Coloured(int objectColour)
         {
-            if (!bodies.TryGetValue(objectColour, out var mesh))
-                bodies[objectColour] = mesh = ShapeMeshes.Body(UnityPoints(), faces, colours, objectColour, "Shape_Body");
+            bool skip = GameSettings.DisplayTextures;
+            int key = objectColour * 2 + (skip ? 1 : 0);
+            if (!bodies.TryGetValue(key, out var mesh))
+                bodies[key] = mesh = ShapeMeshes.Body(UnityPoints(), faces, colours, objectColour, skip, "Shape_Body");
             return mesh;
         }
+
+        readonly Dictionary<int, Mesh> textured = new Dictionary<int, Mesh>();
+
+        // One mesh per texture this shape uses; empty with Options "Textures" off
+        public Dictionary<int, Mesh> TexturedFaces
+        {
+            get
+            {
+                if (!GameSettings.DisplayTextures) return Empty;
+                if (textured.Count == 0 && colours != null)
+                    foreach (int id in new HashSet<int>(colours))
+                        if (ShapeTextures.Has(id)) textured[id] = ShapeMeshes.Textured(UnityPoints(), faces, colours, id);
+                return textured;
+            }
+        }
+
+        static readonly Dictionary<int, Mesh> Empty = new Dictionary<int, Mesh>();
 
         public Mesh Edges(float thickness)
         {
@@ -59,7 +79,7 @@ namespace SpectreEX.Matrix
     {
         // Panels: every face fan-triangulated, emitted with both windings and flat normals,
         // so the original's mixed face orientation never leaves holes.
-        public static Mesh Body(Vector3[] v, int[][] faces, int[] colours, int objectColour, string name)
+        public static Mesh Body(Vector3[] v, int[][] faces, int[] colours, int objectColour, bool skipTextured, string name)
         {
             var verts = new List<Vector3>();
             var uvs = new List<Vector2>();
@@ -68,7 +88,9 @@ namespace SpectreEX.Matrix
             {
                 var f = faces[i];
                 if (f.Length < 3) continue;
-                var uv = SpectrePalette.Uv(SpectrePalette.Entry(colours != null && i < colours.Length ? colours[i] : 0, objectColour));
+                int colour = colours != null && i < colours.Length ? colours[i] : 0;
+                if (skipTextured && ShapeTextures.Has(colour)) continue;
+                var uv = SpectrePalette.Uv(SpectrePalette.Entry(colour, objectColour));
                 for (int k = 1; k + 1 < f.Length; k++)
                 {
                     int a = f[0], b = f[k], c = f[k + 1];
@@ -85,8 +107,49 @@ namespace SpectreEX.Matrix
             mesh.SetUVs(0, uvs);
             mesh.SetTriangles(tris, 0);
             mesh.RecalculateNormals();
-            mesh.RecalculateBounds();
-            if (verts.Count == 0) mesh.bounds = Bounds(v);   // line-only shapes
+            mesh.bounds = Bounds(v);   // the whole shape, whatever faces this mesh leaves out
+            return mesh;
+        }
+
+        // The faces showing one texture: as _SIZE_TEXTURE_POINTS does it, the image is stretched over
+        // each face's own extent in the face's plane.
+        public static Mesh Textured(Vector3[] v, int[][] faces, int[] colours, int texture)
+        {
+            var verts = new List<Vector3>();
+            var uvs = new List<Vector2>();
+            var tris = new List<int>();
+            for (int i = 0; i < faces.Length; i++)
+            {
+                var f = faces[i];
+                if (f.Length < 3 || colours[i] != texture) continue;
+                var u = (v[f[1]] - v[f[0]]).normalized;
+                var w = Vector3.Cross(Vector3.Cross(u, v[f[2]] - v[f[0]]), u).normalized;
+                var min = new Vector2(float.MaxValue, float.MaxValue);
+                var max = new Vector2(float.MinValue, float.MinValue);
+                foreach (int p in f)
+                {
+                    var q = new Vector2(Vector3.Dot(v[p], u), Vector3.Dot(v[p], w));
+                    min = Vector2.Min(min, q);
+                    max = Vector2.Max(max, q);
+                }
+                Vector2 Uv(int p) => new Vector2(Mathf.InverseLerp(min.x, max.x, Vector3.Dot(v[p], u)), Mathf.InverseLerp(min.y, max.y, Vector3.Dot(v[p], w)));
+                for (int k = 1; k + 1 < f.Length; k++)
+                {
+                    int n = verts.Count;
+                    foreach (int p in new[] { f[0], f[k], f[k + 1], f[0], f[k + 1], f[k] })
+                    {
+                        verts.Add(v[p]);
+                        uvs.Add(Uv(p));
+                    }
+                    tris.AddRange(new[] { n, n + 1, n + 2, n + 3, n + 4, n + 5 });
+                }
+            }
+            var mesh = new Mesh { name = "Shape_Textured" };
+            mesh.SetVertices(verts);
+            mesh.SetUVs(0, uvs);
+            mesh.SetTriangles(tris, 0);
+            mesh.RecalculateNormals();
+            mesh.bounds = Bounds(v);
             return mesh;
         }
 
@@ -154,7 +217,7 @@ namespace SpectreEX.Matrix
         [Serializable] class Face { public int[] idx; public int col; }
         [Serializable] class Shape { public string name; public int[] verts; public Face[] faces; }
         [Serializable] class Entry { public int id, type, shap; public string shape; }
-        [Serializable] class File { public Entry[] table; public Shape[] shapes; public int[] typeColors, objColors, skyColors; }
+        [Serializable] class File { public Entry[] table; public Shape[] shapes; public int[] typeColors, objColors, skyColors; public string[] textures; }
 
         static Dictionary<string, ShapeGeometry> byName;
         static Dictionary<int, Entry> byId;
@@ -174,6 +237,14 @@ namespace SpectreEX.Matrix
             if (value > 0xFF) return value;
             int v = value == 0xFE ? 0xFE : value == 0xFF ? 0xFF : TypeColour(value);
             return v == 0xFF ? 0 : v == 0xFE ? 1 : v;
+        }
+
+        // The file behind a texture face colour (6000-6015), or "" if there is none
+        public static string TextureFile(int colour)
+        {
+            Load();
+            int i = colour - 6000;
+            return data != null && i >= 0 && i < data.textures.Length ? data.textures[i] : "";
         }
 
         public static Color32 ObjectColour(int level) => LevelColour(data => data.objColors, level);

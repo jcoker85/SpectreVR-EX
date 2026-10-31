@@ -40,6 +40,7 @@ namespace SpectreEX
                 t.SetParent(root, false);
                 t.localPosition = p.offset;
                 AddMesh("Panels", t, p.shape.Coloured(colour), faces, layer);
+                foreach (var face in p.shape.TexturedFaces) AddMesh("Panels", t, face.Value, ShapeTextures.Material(face.Key, faces), layer);
                 AddMesh("Edges", t, p.shape.Edges(edgeThickness), glow, layer);
                 int tag = p.id & 0xFF;
                 if (tag == 0x5F) wings.Add((t, -1));

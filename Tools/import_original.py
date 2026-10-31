@@ -4,7 +4,7 @@ this repository: everything here is generated into git-ignored folders.
     python Tools/import_original.py <your Spectre VR folder> [--fluidsynth EXE] [--soundfont SF2] [--skip-music]
 
 Writes Assets/Imported/Resources (menus, HUD, sounds, music, built-in shapes),
-Assets/StreamingAssets/Matrices (the .MAT files and their pictures) and
+Assets/StreamingAssets/Matrices (the .MAT files and their pictures), Assets/StreamingAssets/Textures and
 Assets/Editor/Data/SpectreShapes.json. Afterwards open the project in Unity and run
 Spectre VR-EX > Build Arena Scene. Needs Python with Pillow, numpy and soundfile; music also needs
 FluidSynth and a General MIDI SoundFont.
@@ -23,6 +23,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TOOLS = os.path.join(ROOT, "Tools")
 RESOURCES = os.path.join(ROOT, "Assets", "Imported", "Resources")
 MATRICES = os.path.join(ROOT, "Assets", "StreamingAssets", "Matrices")
+TEXTURES = os.path.join(ROOT, "Assets", "StreamingAssets", "Textures")
 SHAPES_JSON = os.path.join(ROOT, "Assets", "Editor", "Data", "SpectreShapes.json")
 
 # The game's pictures are PCX files named .DAT
@@ -71,6 +72,14 @@ def import_matrices(game):
     print(len(MATRIX_FILES), "matrix files")
 
 
+def import_textures(game):
+    os.makedirs(TEXTURES, exist_ok=True)
+    pcx = glob.glob(os.path.join(require(os.path.join(game, "TEXTURES"), "texture folder"), "*.PCX"))
+    for path in pcx:
+        shutil.copyfile(path, os.path.join(TEXTURES, os.path.basename(path).upper()))
+    print(len(pcx), "textures")
+
+
 def import_shapes(game):
     run = lambda script, *args: subprocess.run([sys.executable, os.path.join(TOOLS, script), *args], check=True)
     os.makedirs(os.path.dirname(SHAPES_JSON), exist_ok=True)
@@ -99,6 +108,7 @@ def main():
     import_pictures(a.game)
     import_sounds(a.game)
     import_matrices(a.game)
+    import_textures(a.game)
     import_shapes(a.game)
     if not a.skip_music:
         import_music(a.game, a.fluidsynth, a.soundfont)

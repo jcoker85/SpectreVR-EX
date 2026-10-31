@@ -44,7 +44,7 @@ namespace SpectreEX
         public static Difficulty Difficulty = Difficulty.Easy;
         public static bool DisplayComplex = true;    // ray-traced lighting and reflections
         public static bool DisplayFilled = true;     // solid faces; off is the wireframe view
-        public static bool DisplayTextures = true;   // floor dots and wall glow
+        public static bool DisplayTextures = true;   // floor dots, wall glow and textured faces
         public static VehicleSpec Custom = new VehicleSpec("CUSTOM", 5, 5, 5);
         public static int SelectedVehicle;           // 0 Balance, 1 Speedy, 2 Strong, 3 Custom
         public static string SelectedMatrix = "CENTRAL.MAT";   // file name chosen in the MATRIX dialog

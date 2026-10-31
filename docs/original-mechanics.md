@@ -475,4 +475,5 @@ Measured with collisions off, Balance craft, at 10 / 30 / 59 / 117 / 128 fps: sp
 - At draw time a value of 0, or a texture, takes the object's base colour plus a 0-15 shade; other values are fixed palette entries, shaded only if the low nibble is 0.
 - Base colour by object type comes from the same table. Palette: 16-entry ramps at 0x00 grey, 0x10 red, 0x20 green, 0x30 blue, 0x40 orange, 0x50 level object colour, 0x60 cyan, 0x70-0x8F sky, 0x90 magenta, 0xA0 pink, 0xB0 white, 0xC0-0xFF grey.
 - `_OBJ_COLORS` and `_SKY_COLORS` hold 30 levels of RGB. Level 1 is yellow objects under a magenta sky.
-- The remake reads these from SVRWIN.EXE at import, uses a fixed point on each ramp (lighting does the shading), and treats textured faces as flat. The wireframe option draws the old edge strips.
+- Face colours 6000-6015 name a PCX in TEXTURES (`_TEXTURE_FILE_NAMES`; 1000-1999 are movie faces). `_SIZE_TEXTURE_POINTS` stretches the whole image over the face's extent in its plane. The original's textured-object option is off by default; the remake's Textures option defaults on.
+- The remake reads these from SVRWIN.EXE at import and uses a fixed point on each ramp (lighting does the shading). Movie faces stay flat. The wireframe option draws the old edge strips.

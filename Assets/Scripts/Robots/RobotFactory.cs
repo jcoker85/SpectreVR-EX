@@ -55,6 +55,7 @@ namespace SpectreEX
                 t.SetParent(model, false);
                 t.localPosition = part.offset;
                 Mesh("Panels", t, part.shape.Coloured(colour), look.shapes, ShadowCastingMode.On);
+                foreach (var face in part.shape.TexturedFaces) Mesh("Panels", t, face.Value, ShapeTextures.Material(face.Key, look.shapes), ShadowCastingMode.On);
                 Mesh("Edges", t, part.shape.Edges(edgeThickness), glow, ShadowCastingMode.Off);
                 var b = part.shape.Body.bounds;
                 b.center += part.offset;

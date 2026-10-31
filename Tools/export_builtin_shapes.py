@@ -115,7 +115,7 @@ def make_layout(exe_path, c_path, sym_path):
     exe.w32 = lambda sel, o, v: (writes.append([sel, o, 4, v]), w32(sel, o, v))
     replay(exe, sym, lines, "_BUILD_OBJECTS")
     replay(exe, sym, lines, "_SET_FACES")
-    names = ["_" + n for n in TEMPLATES] + ["_OT_TO_SHAPE", "_OBJ_COLORS", "_SKY_COLORS"]
+    names = ["_" + n for n in TEMPLATES] + ["_OT_TO_SHAPE", "_OBJ_COLORS", "_SKY_COLORS", "_TEXTURE_FILE_NAMES"]
     with open(LAYOUT, "w") as f:
         json.dump({"sha256": hashlib.sha256(open(exe_path, "rb").read()).hexdigest(),
                    "symbols": {n: sym[n] for n in names}, "writes": writes}, f, separators=(",", ":"))
@@ -125,6 +125,21 @@ def make_layout(exe_path, c_path, sym_path):
 def colour_table(exe, at):
     """30 levels of 16-bit RGB (three words each), as 8-bit values."""
     return [exe.u16(at[0], at[1] + i * 2) >> 8 for i in range(90)]
+
+
+def texture_files(exe, at):
+    """The file behind each texture face colour, 6000-6015: far pointers, filled by relocations."""
+    names = []
+    for i in range(16):
+        target = exe.relocs.get(at[0], {}).get(at[1] + i * 4)
+        name = bytearray()
+        while target and len(name) < 32:
+            c = exe.u16(target[0], target[1] + len(name)) & 0xFF
+            if c == 0:
+                break
+            name.append(c)
+        names.append(name.decode("latin1").split("\\")[-1].upper())
+    return names
 
 
 def main():
@@ -164,7 +179,8 @@ def main():
 
     with open(out_path, "w") as f:
         json.dump({"table": table, "shapes": shapes, "typeColors": [exe.u16(ds, 0x8FC + i * 2) & 0xFF for i in range(64)],
-                   "objColors": colour_table(exe, sym["_OBJ_COLORS"]), "skyColors": colour_table(exe, sym["_SKY_COLORS"])},
+                   "objColors": colour_table(exe, sym["_OBJ_COLORS"]), "skyColors": colour_table(exe, sym["_SKY_COLORS"]),
+                   "textures": texture_files(exe, sym["_TEXTURE_FILE_NAMES"])},
                   f, separators=(",", ":"))
     print(len(shapes), "built-in shapes,", len(table), "table entries ->", out_path)
 
