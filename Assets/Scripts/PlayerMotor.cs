@@ -210,9 +210,10 @@ namespace SpectreEX
                         break;
                     case ObstacleBehaviour.Kind.Pusher:
                     {
+                        // _HIT_A_GATE moves the craft's object, whose coordinates are the negative of these: along the arrow
                         int h = (gate.heading - 0x40) & 0xFF;
-                        moveX = (long)Sin[h] * PushSpeed;
-                        moveY = -(long)Cos[h] * PushSpeed;
+                        moveX = -(long)Sin[h] * PushSpeed;
+                        moveY = (long)Cos[h] * PushSpeed;
                         onIce = false;
                         break;
                     }
