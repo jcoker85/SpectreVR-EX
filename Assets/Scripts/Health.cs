@@ -51,6 +51,7 @@ namespace SpectreEX
             Shields -= points;
             Damaged?.Invoke(points);
             if (Shields <= 0) { Die(); return; }
+            if (team == Team.Player) DeRes.Play(gameObject, 5, 0.55f, true);   // _D_P_DE_RES: any damage at all
             if (!sound) return;
             if (team == Team.Player) Sfx.Play(Shields <= DangerPoints && hitMultiplier > 1 ? Snd.HeavyDamage : hitSound);
             else Sfx.PlayAt(hitSound, transform.position);

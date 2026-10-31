@@ -531,3 +531,9 @@ Back-to-back panels are not a change: the billboards (10106, 10107) have one fac
 Checked and needing no change: `_TIME_ALLOWED` counts the player's slot in `_MAX_TANK` (`_LOAD_WAVE` adds it as an enemy of type 6) and `_MAX_SUPER_TANKS` is never set, so the remake's formula is right. Level 1 differs between runs because the robot count is random: Bonus 360 is two robots, 400 three. `_REPLACE_TANK` has no de-res: a robot just reappears, as in the remake.
 
 Left alone: one non-splash shot can hit two overlapping tanks in the same tick in the original (the remake stops at the first); a splash's sound uses a fixed `_DAMAGE < 0x1E` test.
+
+## Validation pass (no eyes on the original)
+
+- Every level on Hard (73 starts, wrapping past 55) loads clean with all robot types, obstacles and flags. Level 4's grid, 10116, is 18 flag entries and nothing else, so an empty arena is correct.
+- `_HIT_A_GATE`, `_DO_COLLIDE_DAMAGE` and the main loop's gate handling checked line by line. Fixed: `_D_P_DE_RES` fires on all damage, including acid, contact and splash; the blocking robots (7, 8, 25, 27) make no damage sound on contact.
+- Scripted in Unity: teleport lands on the other gate; slow pad cuts speed to a quarter; a pusher moves an idle craft; acid costs the level's points every third tick (Central Systems: 3, from Smart Acid's data); a down transport sinks to -0xF00; a windmill blocks; level 49's ten robot types ran for 30 s with none leaving the arena.

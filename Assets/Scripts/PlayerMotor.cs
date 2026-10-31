@@ -427,7 +427,7 @@ namespace SpectreEX
             {
                 bool slicer = type == 21 && contactSoundTimer == 0;
                 if (slicer) Sfx.Play(Snd.SlicerBite);
-                DamageSelf(damage, !slicer);
+                DamageSelf(damage, !slicer && !blocks);   // the blocking kinds only bounce you
             }
             return !blocks;
         }
