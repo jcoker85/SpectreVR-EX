@@ -491,3 +491,10 @@ Measured with collisions off, Balance craft, at 10 / 30 / 59 / 117 / 128 fps: sp
 - Every life starts at a random clear spot (`_PLACE_XY`) at a random heading, facing the middle near a corner, as hyperspace does.
 - `_LOAD_WRLD`: object X = (512 - file y) * 0x200, Y = (512 - file x) * 0x200, and wrld headings are in degrees. The remake's world is that frame turned a quarter (Unity x = -Y, z = X); a frame of the running original matched its layout, and its pusher arrow matches at heading 32. Unity's robot code uses its own frame, consistent within the remake.
 - Pushers move the craft along the way the arrow points: seen on the running original (Hard level 1), where driving into an arrow facing you shoves you back in jerks. `_HIT_A_GATE`'s (-sin h, cos h) is in object coordinates, and the player's simulation runs in their negative (`*(+0xC) = -local_12`), so the motor flips it. Teleports already convert their heading.
+
+## Music and sound flow
+
+- Songs: ids 20001-20011, 21001-, 22001-, 23001- index 11-entry style tables, 24001-24004 are 5theme, award, higame, 5theme (table at DS:0x33B6, slot 0 unused). SPECTRE.MID and CANON.MID are never played. `_PICK_SONG` keeps the song number and moves to the next ticked style. All four styles are on by default.
+- `_START_LEVEL`: sound 0 stops the music, 0xF plays five ticks in, the banner lasts about 32 ticks, and the level's song (`DS:0x8F6`) starts as it ends.
+- Level end plays the AWARD sample over the level's song. There is no game-over sound. `_CHECK_HIGHSCORES` plays higame for a new best score, award for any other table entry.
+- `_SOUNDTABLE` entries are (priority, kind, sample). The original plays one sample at a time by priority; the remake lets them overlap.

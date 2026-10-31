@@ -90,6 +90,7 @@ namespace SpectreEX.Menu
                 gm.Suspend += () => Open(keepMusic: true);
             }
             if (Keyboard.current != null) Keyboard.current.onTextInput += OnTextInput;
+            Sfx.Play(Snd.Logo);
             matrixChoices = Matrix.MatrixLibrary.ChooseAtStartup();
             main.refresh();
             Open();
@@ -142,6 +143,9 @@ namespace SpectreEX.Menu
             Open();
             if (HighScores.Qualifies(score))
             {
+                // _CHECK_HIGHSCORES: its own song for the best score of all, the award song otherwise
+                var best = HighScores.Load();
+                if (MusicPlayer.Instance != null) MusicPlayer.Instance.PlayTrack(best.Count == 0 || score > best[0].score ? "HIGAME" : "AWARD");
                 enteringName = true;
                 pendingName = "";
                 pendingScore = score;
@@ -709,6 +713,7 @@ namespace SpectreEX.Menu
             var now = stack[stack.Count - 1];
             now.root.gameObject.SetActive(true);
             now.refresh?.Invoke();
+            if (now == main && !GameSuspended && MusicPlayer.Instance != null) MusicPlayer.Instance.PlayMenuTheme();
             ignoreClickFrame = Time.frameCount;
         }
 
@@ -740,7 +745,7 @@ namespace SpectreEX.Menu
             bool click = Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame && Time.frameCount != ignoreClickFrame;
             if (click)
             {
-                if (hovered != null) { hovered.action(); return; }
+                if (hovered != null) { Sfx.Play(Snd.TimeTick); hovered.action(); return; }
                 if (top.onAnyClick != null) { top.onAnyClick(); return; }
             }
 
@@ -757,7 +762,7 @@ namespace SpectreEX.Menu
             if (k.escapeKey.wasPressedThisFrame && Time.frameCount != ignoreClickFrame) { top.onEscape?.Invoke(); return; }
             if (k.enterKey.wasPressedThisFrame || k.numpadEnterKey.wasPressedThisFrame) { top.onEnter?.Invoke(); return; }
             foreach (var h in top.hotspots)
-                if (h.key != Key.None && h.action != null && k[h.key].wasPressedThisFrame) { h.action(); return; }
+                if (h.key != Key.None && h.action != null && k[h.key].wasPressedThisFrame) { Sfx.Play(Snd.TimeTick); h.action(); return; }
             if (top.onAnyClick != null && k.anyKey.wasPressedThisFrame) top.onAnyClick();
         }
     }

@@ -84,7 +84,7 @@ namespace SpectreEX
             loaded = true;
             Joystick = PlayerPrefs.GetInt("opt.joystick", 1) == 1;
             Sound = (SoundCard)PlayerPrefs.GetInt("opt.sound", (int)SoundCard.SoundBlaster);
-            for (int i = 0; i < Music.Length; i++) Music[i] = PlayerPrefs.GetInt("opt.music" + i, i == 0 ? 1 : 0) == 1;
+            for (int i = 0; i < Music.Length; i++) Music[i] = PlayerPrefs.GetInt("opt.music" + i, 1) == 1;
             Difficulty = (Difficulty)PlayerPrefs.GetInt("opt.difficulty", (int)Difficulty.Easy);
             DisplayComplex = PlayerPrefs.GetInt("opt.complex", 1) == 1;
             DisplayFilled = PlayerPrefs.GetInt("opt.filled", 1) == 1;

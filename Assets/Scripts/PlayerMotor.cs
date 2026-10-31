@@ -408,7 +408,12 @@ namespace SpectreEX
             bool blocks = type == 7 || type == 8 || type == 25 || type == 27;   // robot / super tanks, cyber mud, cloaked tank
             if (type == 24 && damage == 0) return true;                        // harmless smart wall
             if (blocks && damage == 0) return false;
-            if (damage > 0 && tickEnds) DamageSelf(damage, true);
+            if (damage > 0 && tickEnds)
+            {
+                bool slicer = type == 21 && contactSoundTimer == 0;
+                if (slicer) Sfx.Play(Snd.SlicerBite);
+                DamageSelf(damage, !slicer);
+            }
             return !blocks;
         }
 

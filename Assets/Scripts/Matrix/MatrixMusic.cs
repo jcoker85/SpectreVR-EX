@@ -15,9 +15,9 @@ namespace SpectreEX.Matrix
             { 21006, "CHANT" }, { 21007, "4FLYING1" }, { 21008, "SUBMERG1" }, { 21009, "SPACEWA" }, { 21010, "MELLOW1" }, { 21011, "4FLYING1" },
             { 22001, "VRGUITA" }, { 22002, "HENDRIX" }, { 22003, "RAVER20" }, { 22004, "SITARSH" }, { 22005, "CW" },
             { 22006, "FUNKY0" }, { 22007, "MARKY" }, { 22008, "HOUSEVR" }, { 22009, "HENDRIX" }, { 22010, "SITARSH" }, { 22011, "FUNKY0" },
-            { 23001, "JBSON" }, { 23002, "FUGUE1" }, { 23003, "FUGUE2" }, { 23004, "FUGUE9" }, { 23005, "FUGUE3" },
-            { 23006, "FUGUE7" }, { 23007, "FUGUE5" }, { 23008, "FUGUE8" }, { 23009, "FUGUE4" }, { 23010, "FUGUE4" },
-            { 24001, "SPECTRE" }, { 24002, "AWARD" }, { 24003, "HIGAME" }, { 24004, "5THEME" },
+            { 23001, "JBSON" }, { 23002, "BACHIN" }, { 23003, "FUGUE1" }, { 23004, "FUGUE2" }, { 23005, "FUGUE9" },
+            { 23006, "FUGUE3" }, { 23007, "FUGUE7" }, { 23008, "FUGUE5" }, { 23009, "FUGUE8" }, { 23010, "FUGUE4" }, { 23011, "FUGUE4" },
+            { 24001, "5THEME" }, { 24002, "AWARD" }, { 24003, "HIGAME" }, { 24004, "5THEME" },
         };
 
         // Every track in each style, for levels without a matrix song
@@ -38,15 +38,11 @@ namespace SpectreEX.Matrix
             if (style == 4) return Tracks.TryGetValue(songId, out var theme) ? theme : null;
             if (style >= 0 && style < 4 && GameSettings.Music[style] && Tracks.TryGetValue(songId, out var exact)) return exact;
 
-            // Same song number in the first ticked style (wrapping if that style has fewer songs)
-            for (int s = 0; s < 4; s++)
+            // _PICK_SONG: the same song number in the next ticked style round
+            for (int i = 1; i <= 4; i++)
             {
-                if (!GameSettings.Music[s]) continue;
-                int count = 0;
-                while (Tracks.ContainsKey(20000 + s * 1000 + count + 1)) count++;
-                if (count == 0) continue;
-                int id = 20000 + s * 1000 + ((index - 1) % count + count) % count + 1;
-                return Tracks[id];
+                int s = (style + i) % 4;
+                if (GameSettings.Music[s] && Tracks.TryGetValue(20000 + s * 1000 + index, out var next)) return next;
             }
             return null;
         }

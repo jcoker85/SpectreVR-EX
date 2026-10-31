@@ -133,7 +133,11 @@ namespace SpectreEX
             session = StartCoroutine(NewGame(Mathf.Max(1, startLevel)));
         }
 
-        public void QuitToMenu() => EndSession(0, 0);
+        public void QuitToMenu()
+        {
+            Sfx.Play(Snd.Leave);
+            EndSession(0, 0);
+        }
 
         // Back from the menu to the paused game (Esc again, or the menu's resume)
         public void Resume()
@@ -234,7 +238,6 @@ namespace SpectreEX
                 var list = catchUp.Levels[Mathf.Clamp((int)GameSettings.Difficulty, 0, 2)];
                 for (int i = 0; i < startLevel - 1 && list.Count > 0; i++) player.Weapon.Unlock(list[i % list.Count].tip);
             }
-            if (!Demo) Sfx.Play(Snd.Welcome);
             yield return NextLevel();
         }
 
@@ -249,12 +252,21 @@ namespace SpectreEX
                 levelDifficulty = Plan.difficulty * GameSettings.DifficultyMultiplier;
                 BuildGeneratedLevel(Plan);
                 tip = Plan.tip;
-                if (MusicPlayer.Instance != null) MusicPlayer.Instance.PlayForLevel(Level);
             }
 
+            // _START_LEVEL: the music stops, the banner shows with its sound five ticks in, and the
+            // level's song starts as the banner goes
+            if (MusicPlayer.Instance != null) MusicPlayer.Instance.Stop();
             ShowBanner?.Invoke($"LEVEL {Level}", tip);
-            yield return new WaitForSeconds(3f);
+            yield return new WaitForSeconds(5f / PlayerMotor.TickRate);
+            Sfx.Play(Snd.LevelStart);
+            yield return new WaitForSeconds(27f / PlayerMotor.TickRate);
             HideOverlays?.Invoke();
+            if (MusicPlayer.Instance != null)
+            {
+                if (CurrentMatrix != null) MusicPlayer.Instance.PlayTrackOrStop(levelSong);
+                else MusicPlayer.Instance.PlayForLevel(Level);
+            }
             Playing = true;
         }
 
@@ -289,6 +301,7 @@ namespace SpectreEX
         }
 
         public int LevelTicks { get; private set; }
+        string levelSong;
         int repairTimer;
 
         // _TIME_ALLOWED and the bonus, at the start of a level and of every life
@@ -411,7 +424,7 @@ namespace SpectreEX
             AcidDamage = m.TryGetEnemyData(lv.enemyData, 23, out var acid) ? acid.collideDamage : 10;
             StartBonus();
 
-            if (MusicPlayer.Instance != null) MusicPlayer.Instance.PlayTrackOrStop(MatrixMusic.TrackFor(lv.song));
+            levelSong = MatrixMusic.TrackFor(lv.song);
             return m.Tip(lv.tip);
         }
 
@@ -691,7 +704,6 @@ namespace SpectreEX
         {
             yield return new WaitForSeconds(18f / PlayerMotor.TickRate);
             Playing = false;
-            if (MusicPlayer.Instance != null) MusicPlayer.Instance.PlayTrack("AWARD", loop: false);
             Sfx.Play(Snd.Award);
 
             AddScore(Bonus);
@@ -761,7 +773,6 @@ namespace SpectreEX
             if (Lives <= 0)
             {
                 Playing = false;
-                Sfx.Play(Snd.GameOver);
                 ShowBanner?.Invoke("GAME OVER", $"FINAL SCORE {Score}");
                 yield return new WaitForSeconds(5f);
                 // Demo games don't go on the score table

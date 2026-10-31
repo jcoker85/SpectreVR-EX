@@ -20,16 +20,17 @@ namespace SpectreEX
         public const string ShieldPickup = "SHLDPCK";
         public const string OutOfAmmo = "OUTOFAM";
         public const string LowAmmo = "LOONSHT";       // 0xA: a cannon shot with under 6 rounds left
-        public const string Danger = "DANGER";
         public const string Warp = "WARP";
         public const string Land = "PLYRLND";
         public const string Collision = "COLLSN";
-        public const string Welcome = "WELCOME";
+        public const string Logo = "SPCLOG";            // 0x3A: the game starting up
+        public const string LevelStart = "ECYBSHT";     // 0xF: under the level banner
+        public const string Leave = "LTRDUDE";          // 0x10: leaving a game
+        public const string SlicerBite = "SHKDAM";      // 0x19: touching a Slicer
         public const string Award = "AWARD";
         public const string NewLife = "NEWMAN";         // 0x2A: an extra tank
         public const string TimeTick = "TMTICK";
         public const string SlicerSpin = "SPINNER";
-        public const string GameOver = "URDMD";
         // Names from SVRWIN.EXE's own sound table, matched to where the code plays them
         public const string Repair = "REPPCKP";      // full repair / wings dump
         public const string Gate = "GATE";           // teleport gate
