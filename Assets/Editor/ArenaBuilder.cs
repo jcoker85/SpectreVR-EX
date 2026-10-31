@@ -622,9 +622,8 @@ namespace SpectreEX.EditorTools
             light.type = LightType.Directional;
             light.color = new Color(0.55f, 0.65f, 1f);
             light.intensity = 0.5f;
-            light.shadows = LightShadows.Soft;
-            var hdLight = lightGo.AddComponent<HDAdditionalLightData>();
-            hdLight.useRayTracedShadows = true;
+            light.shadows = LightShadows.None;   // HDRP allows one directional shadow: ShadeLight's
+            lightGo.AddComponent<HDAdditionalLightData>();
 
             // The light _SHADE shades faces by (x forward, y side, z up in the game's axes). The faces' glow
             // is the middle of the original's shade range; this light moves them up and down from there.

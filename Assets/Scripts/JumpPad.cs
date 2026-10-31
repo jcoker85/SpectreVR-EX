@@ -27,13 +27,13 @@ namespace SpectreEX
             var shape = BuiltinShapes.Named("FUEL");
             if (shape != null)
             {
-                var edges = new GameObject("Edges");
-                edges.transform.SetParent(pad.spinner, false);
-                edges.transform.localPosition = Vector3.up * 0.05f;
-                edges.AddComponent<MeshFilter>().sharedMesh = shape.Edges(edgeThickness);
-                var r = edges.AddComponent<MeshRenderer>();
-                r.sharedMaterial = glow;
+                var face = new GameObject("Panels");
+                face.transform.SetParent(pad.spinner, false);
+                face.transform.localPosition = Vector3.up * 0.05f;
+                face.AddComponent<MeshFilter>().sharedMesh = shape.Body;
+                var r = face.AddComponent<MeshRenderer>();
                 r.shadowCastingMode = ShadowCastingMode.Off;
+                SpectrePalette.Paint(r, SpectrePalette.Entry(0x30), GameManager.Instance.obstacleLook.shapes);   // _FIXUP_COLORS
             }
 
             var label = new GameObject("Label").AddComponent<TextMesh>();

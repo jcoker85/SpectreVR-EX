@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace SpectreEX.Matrix
@@ -23,6 +24,30 @@ namespace SpectreEX.Matrix
         static int Shaded(int ramp) => ramp >= 0xFE ? 0xB0 + Lit : (ramp & 0xF0) + Lit;
 
         public static Vector2 Uv(int entry) => new Vector2((entry + 0.5f) / 256f, 0.5f);
+
+        // A ramp's usual point, for things that aren't drawn from a shape's own face colours
+        public static int Entry(int ramp) => Shaded(ramp);
+
+        static readonly Dictionary<(Mesh, int), Mesh> painted = new Dictionary<(Mesh, int), Mesh>();
+
+        // Turns a renderer's whole mesh one palette colour, on a shared copy of the mesh
+        public static void Paint(Renderer r, int entry, Material shapes)
+        {
+            var filter = r.GetComponent<MeshFilter>();
+            if (filter == null || filter.sharedMesh == null) return;
+            var source = filter.sharedMesh;
+            if (!painted.TryGetValue((source, entry), out var mesh) || mesh == null)
+            {
+                mesh = Object.Instantiate(source);
+                var uv = new Vector2[mesh.vertexCount];
+                System.Array.Fill(uv, Uv(entry));
+                mesh.uv = uv;
+                painted[(source, entry)] = mesh;
+                painted[(mesh, entry)] = mesh;
+            }
+            filter.sharedMesh = mesh;
+            r.sharedMaterial = shapes;
+        }
 
         // A level's colours on the shape material. level is the original's, from 0.
         public static void Apply(Material material, int level)

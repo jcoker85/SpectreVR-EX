@@ -74,7 +74,7 @@ namespace SpectreEX
         // _EXPLODE_TANK: five pieces thrown out of a destroyed craft, in its colour
         public void Explode(Robot r)
         {
-            debrisColour = BuiltinShapes.TypeColour(r.matrixType);
+            debrisColour = DebrisColour(r.matrixType);
             for (int i = 0; i < 0x500; i += 0x100)
                 Fire(r, false, r.x, r.y, r.z, r.heading + i / 5 + (10 - Random.Range(0, 20)), Debris);
         }
@@ -91,6 +91,16 @@ namespace SpectreEX
         }
 
         int debrisColour;
+
+        // A craft's colour, or plain grey for one drawn in a texture, which has no one colour to match
+        int DebrisColour(int type)
+        {
+            var parts = GameManager.Instance.Shapes?.ForType(type);
+            if (parts != null)
+                foreach (var part in parts)
+                    if (part.shape.TexturedFaces.Count > 0) return 0;
+            return BuiltinShapes.TypeColour(type);
+        }
 
         // The colour _DO_SHOOT gives each weapon's shot; most are red
         int ShotColour(int weapon) => weapon switch

@@ -1,4 +1,5 @@
 using UnityEngine;
+using SpectreEX.Matrix;
 
 namespace SpectreEX
 {
@@ -12,7 +13,13 @@ namespace SpectreEX
 
         void Start()
         {
-            if (visual != null) visualBase = visual.localPosition;
+            if (visual == null) return;
+            visualBase = visual.localPosition;
+            // The stand in the level's object colour, the pennant red
+            var gm = GameManager.Instance;
+            if (gm == null) return;
+            foreach (var r in visual.GetComponentsInChildren<MeshRenderer>())
+                SpectrePalette.Paint(r, SpectrePalette.Entry(r.name == "Pennant" ? 0x10 : 0x50), gm.obstacleLook.shapes);
         }
 
         void Update()
@@ -26,8 +33,6 @@ namespace SpectreEX
         {
             var player = other.GetComponentInParent<PlayerTank>();
             if (player == null || player.Health.IsDead) return;
-            var mat = visual != null ? visual.GetComponentInChildren<Renderer>().sharedMaterial : null;
-            Derez.Burst(transform.position + Vector3.up * 2f, mat, 20, 6f);
             if (GameManager.Instance != null) GameManager.Instance.OnFlagCollected(this);
             Destroy(gameObject);
         }
