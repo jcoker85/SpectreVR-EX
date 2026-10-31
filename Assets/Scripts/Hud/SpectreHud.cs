@@ -157,17 +157,17 @@ namespace SpectreEX.Hud
             for (int i = 0; i < names.Length; i++)
             {
                 float y = RecapY(i);
-                MakeText(stats, names[i], RecapX(10), y, 13, LabelGreen, TextAnchor.MiddleLeft);
+                MakeText(stats, names[i], RecapX(6), y, 18, FrameWhite, TextAnchor.MiddleLeft);
                 var wedge = new GameObject("Wedge", typeof(RectTransform), typeof(CanvasRenderer)).AddComponent<RecapWedge>();
                 wedge.transform.SetParent(stats, false);
-                wedge.color = FrameWhite;
+                wedge.color = RecapGrey;
                 wedge.raycastTarget = false;
                 var rt = wedge.rectTransform;
                 rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
                 rt.pivot = new Vector2(0f, 0.5f);
                 rt.anchoredPosition = new Vector2(RecapX(100), -y);
                 recapWedges.Add(wedge);
-                recapWords.Add(MakeText(stats, "", RecapX(250), y, 13, DigitGreen, TextAnchor.MiddleLeft));
+                recapWords.Add(MakeText(stats, "", RecapX(246), y, 18, DigitGreen, TextAnchor.MiddleLeft));
             }
             statsRoot.SetActive(false);
 
@@ -313,11 +313,14 @@ namespace SpectreEX.Hud
             bannerTip.text = Seg(tip ?? "");
         }
 
-        // _SHOW_RECAP / _SHOW_TRIANGLE, laid out on the original's 320-wide screen: a wedge from x = 100
-        // that reaches value * step / 16 pixels, 20 high at its open end, and the rating at x = 250
+        // _SHOW_RECAP / _SHOW_TRIANGLE, measured off the running original: x in SCALE_X units on a 320-wide
+        // screen (wedge from 100, value * step / 16 long, rating at 246), lines and wedge height in its
+        // 532-wide window's pixels (30 apart from the middle of the screen, 20 high)
         const float RecapScale = 2.6f;
+        const float RecapPixel = RecapScale * 320f / 532f;
+        static readonly Color RecapGrey = new Color(0.75f, 0.75f, 0.75f);
         static float RecapX(float x) => (x - 160f) * RecapScale;
-        static float RecapY(int line) => (line * 30 - 10) * RecapScale;
+        static float RecapY(int line) => line * 30 * RecapPixel;
 
         void OnRecap(int[] rates, int step)
         {
@@ -326,7 +329,7 @@ namespace SpectreEX.Hud
             for (int i = 0; i < recapWedges.Count; i++)
             {
                 int rate = Mathf.Clamp(rates[i], 0, 0x80);
-                recapWedges[i].rectTransform.sizeDelta = new Vector2(rate * step / 16f * RecapScale, 20f * RecapScale);
+                recapWedges[i].rectTransform.sizeDelta = new Vector2(rate * step / 16f * RecapScale, 20f * RecapPixel);
                 recapWords[i].text = Seg(rate == 0x80 ? "PERFECT" : rate > 100 ? "RADICAL" : rate > 64 ? "NOT BAD" : rate > 32 ? "MARGINAL" : "GET HELP");
                 recapWords[i].color = rate > 100 ? DigitGreen : rate > 64 ? FrameWhite : AlertRed;
             }

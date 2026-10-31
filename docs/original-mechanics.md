@@ -450,7 +450,8 @@ DOS `SVR.EXE` in `Tools/SpectreVR` is the one to run for side-by-side checks.
 
 - The bonus goes on the score, the view is blanked, the three lines animate over 16 ticks, then 18 ticks or a key press.
 - Rates out of 128, clamped: Quickness = seconds taken * 128 / TIME_ALLOWED; Accuracy = my hits * 128 / my shots; Avoidance = (robot shots - robot hits on the player) * 128 / robot shots. A zero divisor gives 128.
-- Quickness is confirmed from the disassembly (DI = `_LEVEL_TIMER` / 18 at [BP+C], `_TIME_ALLOWED` at [BP+A]): it rises the longer a level takes. Whether that was intended is unknown, and it has not been seen on the running original yet.
+- Quickness comes from the disassembly (DI = `_LEVEL_TIMER` / 18 at [BP+C], `_TIME_ALLOWED` at [BP+A]): it rises the longer a level takes. Seen on the running original: a demo level finished with Bonus 0 (over the allowed time) rated PERFECT, which fits this formula. Whether the designers meant it is unknown; no fast finish has been observed yet.
 - `_LEVEL_TIMER` restarts with each life; the shot counts only with each level. Debris (weapon 0x7F) isn't counted; each of a triple shot's three is.
 - Words: 128 Perfect, 101-127 Radical, 65-100 Not Bad, 33-64 Marginal, 0-32 Get Help (colours 0x2F, 0x2F, 0xF, 0x1F, 0x1F; wedge 0xC).
-- Layout at SCALE_X 256 on what appears to be a 320-wide screen: labels x = 10, wedge from x = 100, up to value * step / 16 long and 20 high, words x = 250, lines at HEIGHT/2 + 0, 30, 60. The remake's colours and the 320-wide reading are not yet compared with the original.
+- Layout measured on the original (532-wide game window): labels at the left edge in white, wedge from about 0.31 to 0.69 of the width in light grey, words at about 0.77, lines 30 pixels apart from the middle of the screen, wedge 20 high. PERFECT and RADICAL green, MARGINAL and GET HELP red.
+- In the demo the recap stayed up for over 3 minutes although `_END_LEVEL` reads as 18 ticks or a key. Not explained: a hold in demo mode or a hang under emulation. A normal level finish hasn't been timed; the remake keeps 18 ticks.
