@@ -71,12 +71,37 @@ namespace SpectreEX
             else if (weapon >= 0) Fire(r, false, r.x, r.y, z, r.heading, weapon);
         }
 
-        // _EXPLODE_TANK: five pieces thrown out of a destroyed robot
+        // _EXPLODE_TANK: five pieces thrown out of a destroyed craft, in its colour
         public void Explode(Robot r)
         {
+            debrisColour = BuiltinShapes.TypeColour(r.matrixType);
             for (int i = 0; i < 0x500; i += 0x100)
                 Fire(r, false, r.x, r.y, r.z, r.heading + i / 5 + (10 - Random.Range(0, 20)), Debris);
         }
+
+        public void ExplodePlayer()
+        {
+            var motor = director.Motor;
+            if (motor == null) return;
+            debrisColour = BuiltinShapes.TypeColour(6);
+            Vector3 p = motor.SimPosition;
+            long x = OriginalMath.ToUnits(p.x), y = OriginalMath.ToUnits(p.z);
+            for (int i = 0; i < 0x500; i += 0x100)
+                Fire(null, false, x, y, motor.ZUnits, motor.OriginalHeading + i / 5 + (10 - Random.Range(0, 20)), Debris);
+        }
+
+        int debrisColour;
+
+        // The colour _DO_SHOOT gives each weapon's shot; most are red
+        int ShotColour(int weapon) => weapon switch
+        {
+            0 => 0x20,
+            7 or 16 => 0x40,
+            9 => 0xB0,
+            11 => 0x60,
+            Debris => debrisColour,
+            _ => 0x10,
+        };
 
         // _DO_SHOOT. The player's own fire sounds come from its weapon (the original's later call wins).
         void Fire(Robot owner, bool fromPlayer, long x, long y, long z, int heading, int weapon)
@@ -112,37 +137,29 @@ namespace SpectreEX
             s.vy = (long)OriginalMath.Sin[s.heading] * s.speed >> 8;
             s.x += s.vx >> 1;
             s.y += s.vy >> 1;
-            s.visual = MakeVisual(shape, fromPlayer);
+            s.visual = MakeVisual(shape, ShotColour(weapon));
             s.curPos = s.prevPos = s.Position;
             Place(s, s.curPos);
             shots.Add(s);
             if (sound != null && owner != null) Sfx.PlayAt(sound, owner.transform.position);
         }
 
-        Transform MakeVisual(int shape, bool fromPlayer)
+        // A shot's own shape, or the built-in shot for the plain ones, in solid colour
+        Transform MakeVisual(int shape, int colour)
         {
             var gm = GameManager.Instance;
-            var material = fromPlayer && gm.player.Weapon.projectileMaterial != null ? gm.player.Weapon.projectileMaterial : gm.robotLook.bolt;
-            ShapeGeometry geometry = null;
+            ShapeGeometry geometry = BuiltinShapes.Named("SHOT");
             if (shape != 0)
             {
                 var central = MatrixLibrary.Central();
                 if (central != null) central.Shapes.TryGetValue(shape, out geometry);
             }
-            if (geometry == null)
-            {
-                var bolt = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-                bolt.name = "Bolt";
-                Object.Destroy(bolt.GetComponent<Collider>());
-                bolt.transform.localScale = new Vector3(0.25f, 0.6f, 0.25f);
-                bolt.GetComponent<MeshRenderer>().sharedMaterial = material;
-                return bolt.transform;
-            }
             var root = new GameObject("Shot").transform;
-            var go = new GameObject("Edges");
+            if (geometry == null) return root;
+            var go = new GameObject("Panels");
             go.transform.SetParent(root, false);
-            go.AddComponent<MeshFilter>().sharedMesh = geometry.Edges(gm.obstacleLook.edgeThickness);
-            go.AddComponent<MeshRenderer>().sharedMaterial = material;
+            go.AddComponent<MeshFilter>().sharedMesh = geometry.Coloured(colour);
+            go.AddComponent<MeshRenderer>().sharedMaterial = gm.obstacleLook.shapes;
             return root;
         }
 

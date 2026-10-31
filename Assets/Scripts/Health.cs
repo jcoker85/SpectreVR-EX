@@ -67,7 +67,6 @@ namespace SpectreEX
         {
             IsDead = true;
             Shields = 0;
-            Derez.Burst(transform.position + Vector3.up, derezMaterial, team == Team.Player ? 80 : 50, 12f);
             if (team == Team.Player) Sfx.Play(deathSound); else Sfx.PlayAt(deathSound, transform.position);
             SetAlive(false);
             if (GameManager.Instance != null) GameManager.Instance.OnDestroyed(this);

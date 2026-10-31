@@ -725,6 +725,7 @@ namespace SpectreEX
             if (!InGame) return;
             if (h.team == Team.Player)
             {
+                director.Shots.ExplodePlayer();
                 StartCoroutine(PlayerDown());
                 return;
             }
