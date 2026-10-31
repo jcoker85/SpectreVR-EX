@@ -15,8 +15,6 @@ To record a real game from memory while playing, run `python Tools/win31/memtrac
 These match the code but haven't been compared with the original on screen.
 
 - [ ] **Teleport facing:** which way you face coming out of a gate.
-- [ ] **Textured faces:** now turned the way `_POLY_2D` sets them. Billboards are confirmed by their movie pictures; check the Super Tank's steel and the other textures look right.
-- [ ] **Movies:** the startup movie, and wall movies on billboards. Their timing and brightness against the original.
 - [ ] **Floor dots:** spacing of the rebuilt pattern at each F3 setting.
 - [ ] **Death camera:** the swing around the wreck.
 - [ ] **Hidden map:** G, O, then F3. Its colours are a guess, because the decompile doesn't show them.

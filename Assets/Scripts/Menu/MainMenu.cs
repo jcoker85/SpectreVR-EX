@@ -67,7 +67,7 @@ namespace SpectreEX.Menu
         bool enteringName;
         string pendingName = "";
         int pendingScore, pendingLevel;
-        readonly List<PixelSegmentText> scoreRows = new List<PixelSegmentText>();
+        readonly List<PixelSegmentText[]> scoreRows = new List<PixelSegmentText[]>();
 
         public bool IsOpen => canvas != null && canvas.enabled;
 
@@ -488,56 +488,73 @@ namespace SpectreEX.Menu
             controls.onAnyClick = controls.onEscape = controls.onEnter = Pop;
         }
 
+        // _SHOW_HIGHSCORES: all ten rows on the SPCP15 panel, blank ones as score 0, level 1
         void BuildScores()
         {
-            // Drawn over the robot artwork on the main menu, in the HUD's green segment display style
-            scores = NewScreen("Scores", new Vector2(MainW, MainH));
-            AddRect(scores, new Rect(9, 9, 362, 283), Color.black);
-            var title = AddText(scores, new Rect(9, 16, 362, 24), 15, new Color(0.25f, 0.78f, 0.27f), TextAnchor.MiddleCenter);
-            title.Text = Seg("HIGH SCORES");
+            scores = ImageScreen("Scores", "Scores");
+            AddRect(scores, new Rect(-2000, -2000, 4284, 4220), Color.black).transform.SetAsFirstSibling();   // on black, not over the menu
+            var ink = Color.black;
+            var title = AddText(scores, new Rect(8, 8, 268, 14), 9, ink, TextAnchor.MiddleCenter);
+            AddText(scores, new Rect(46, 28, 100, 12), 8, ink, TextAnchor.MiddleLeft).Text = Seg("Name");
+            AddText(scores, new Rect(140, 28, 74, 12), 8, ink, TextAnchor.MiddleRight).Text = Seg("Score");
+            AddText(scores, new Rect(216, 28, 48, 12), 8, ink, TextAnchor.MiddleRight).Text = Seg("Level");
             for (int i = 0; i < HighScores.Count; i++)
-                scoreRows.Add(AddText(scores, new Rect(24, 50 + i * 22, 332, 20), 11, new Color(0.25f, 0.78f, 0.27f), TextAnchor.MiddleLeft));
-            var footer = AddText(scores, new Rect(9, 270, 362, 18), 8, new Color(0.2f, 0.6f, 0.22f), TextAnchor.MiddleCenter);
+            {
+                float y = 47 + i * 15;
+                scoreRows.Add(new[]
+                {
+                    AddText(scores, new Rect(10, y, 30, 12), 8, ink, TextAnchor.MiddleRight),
+                    AddText(scores, new Rect(46, y, 100, 12), 8, ink, TextAnchor.MiddleLeft),
+                    AddText(scores, new Rect(140, y, 74, 12), 8, ink, TextAnchor.MiddleRight),
+                    AddText(scores, new Rect(226, y, 26, 12), 8, ink, TextAnchor.MiddleRight),
+                });
+            }
+            var footer = AddText(scores, new Rect(8, 197, 268, 14), 8, ink, TextAnchor.MiddleCenter);
             scores.refresh = () =>
             {
                 var list = HighScores.Load();
-                int insertAt = -1;
+                int typing = -1;
                 if (enteringName)
                 {
-                    insertAt = list.FindIndex(e => pendingScore > e.score);
-                    if (insertAt < 0) insertAt = list.Count;
-                    list.Insert(insertAt, new HighScores.Entry { name = pendingName + (Time.unscaledTime % 1f < 0.5f ? "_" : " "), score = pendingScore, level = pendingLevel });
+                    typing = HighScores.Place(pendingScore, list);
+                    list.Insert(typing, new HighScores.Entry { name = pendingName + (Time.unscaledTime % 1f < 0.5f ? "_" : ""), score = pendingScore, level = pendingLevel });
                 }
                 for (int i = 0; i < scoreRows.Count; i++)
                 {
-                    if (i < list.Count)
-                    {
-                        var e = list[i];
-                        scoreRows[i].Text = Seg($"{i + 1,2} {e.name,-9} {e.score,7} L{e.level:00}");
-                        scoreRows[i].color = i == insertAt ? new Color(0.95f, 0.16f, 0.12f) : new Color(0.25f, 0.78f, 0.27f);
-                    }
-                    else scoreRows[i].Text = "";
+                    var e = i < list.Count ? list[i] : new HighScores.Entry { name = "", score = 0, level = 1 };
+                    var row = scoreRows[i];
+                    row[0].Text = Seg($"{i + 1}.");
+                    row[1].Text = Seg(e.name);
+                    row[2].Text = Seg(e.score.ToString());
+                    row[3].Text = Seg(e.level.ToString());
                 }
-                footer.Text = Seg(enteringName ? "TYPE YOUR NAME AND PRESS ENTER" : "PRESS ANY KEY");
+                title.Text = Seg(enteringName ? "Enter your name:" : "VR Virtuosos");
+                footer.Text = enteringName ? "" : Seg("Press a key to Continue");
             };
-            scores.onAnyClick = () => { if (!enteringName) Pop(); };
-            scores.onEscape = () => { enteringName = false; Pop(); };
+            scores.onAnyClick = () => { if (!enteringName) CloseScores(); };
+            scores.onEscape = () => { if (!enteringName) CloseScores(); };
             scores.onEnter = () =>
             {
-                if (enteringName)
-                {
-                    HighScores.Add(pendingName.Length > 0 ? pendingName : "SPECTRE", pendingScore, pendingLevel);
-                    enteringName = false;
-                    scores.refresh();
-                }
-                else Pop();
+                if (!enteringName) { CloseScores(); return; }
+                HighScores.Add(pendingName, pendingScore, pendingLevel);
+                enteringName = false;
+                scoresCloseAt = Time.unscaledTime + 182f / PlayerMotor.TickRate;
+                scores.refresh();
             };
+        }
+
+        float scoresCloseAt = -1f;
+
+        void CloseScores()
+        {
+            scoresCloseAt = -1f;
+            Pop();
         }
 
         void OnTextInput(char c)
         {
             if (!enteringName || stack.Count == 0 || stack[stack.Count - 1] != scores) return;
-            if (char.IsLetterOrDigit(c) && pendingName.Length < 8) pendingName += char.ToUpperInvariant(c);
+            if (c >= ' ' && c < 127 && pendingName.Length < 8) pendingName += char.ToUpperInvariant(c);
         }
 
         void BuildNotice()
@@ -739,6 +756,7 @@ namespace SpectreEX.Menu
 
             var top = stack[stack.Count - 1];
             if (top == scores && enteringName) scores.refresh();   // blink the cursor
+            if (top == scores && scoresCloseAt > 0f && Time.unscaledTime >= scoresCloseAt) { CloseScores(); return; }
 
             // Mouse position in the top screen's image pixels (y down)
             Vector2 mouse = Mouse.current != null ? Mouse.current.position.ReadValue() : new Vector2(-1, -1);

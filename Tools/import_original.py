@@ -31,7 +31,7 @@ SHAPES_JSON = os.path.join(ROOT, "Assets", "Editor", "Data", "SpectreShapes.json
 PICTURES = {
     "Menu/MainMenu": "SPCP25", "Menu/Buttons": "SPCP35", "Menu/Matrix": "SPCP34", "Menu/About": "SPCP10",
     "Menu/Help": "SPCP14", "Menu/Custom": "SPCP13", "Menu/Options": "SPCP20", "Menu/Vehicles": "SPCP21",
-    "HUD/WeaponIcons": "SPCP36",
+    "Menu/Scores": "SPCP15", "HUD/WeaponIcons": "SPCP36",
 }
 MATRIX_FILES = ["CENTRAL.MAT", "CENTRAL.BIG", "CENTRAL.PCX", "BASIC.MAT"]
 

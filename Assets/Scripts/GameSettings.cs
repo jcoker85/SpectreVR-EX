@@ -142,18 +142,24 @@ namespace SpectreEX
             return list;
         }
 
+        // _CHECK_HIGHSCORES: a new score goes above any it ties with
+        public static int Place(int score, List<Entry> list)
+        {
+            int at = list.FindIndex(e => e.score <= score);
+            return at < 0 ? list.Count : at;
+        }
+
         public static bool Qualifies(int score)
         {
             if (score <= 0) return false;
             var list = Load();
-            return list.Count < Count || score > list[list.Count - 1].score;
+            return list.Count < Count || score >= list[list.Count - 1].score;
         }
 
         public static void Add(string name, int score, int level)
         {
             var list = Load();
-            list.Add(new Entry { name = name, score = score, level = level });
-            list.Sort((a, b) => b.score.CompareTo(a.score));
+            list.Insert(Place(score, list), new Entry { name = name, score = score, level = level });
             if (list.Count > Count) list.RemoveRange(Count, list.Count - Count);
             for (int i = 0; i < list.Count; i++)
             {
