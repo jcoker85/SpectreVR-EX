@@ -48,7 +48,6 @@ namespace SpectreEX.EditorTools
 
         static Material shapeMat, floorMat, bodyMat, wallMat, blockMat, dotMat, cyanMat, flagMat, poleMat, dumpMat;
         static Material roverMat, turretMat, orbiterMat, slicerMat, enemyBoltMat;
-        static Material playerPanel, roverPanel, turretPanel, orbiterPanel, slicerPanel;
         static Material acidMat, teleportMat, pusherMat, transportMat;
         static Bounds playerBounds;
 
@@ -171,11 +170,6 @@ namespace SpectreEX.EditorTools
             enemyBoltMat = GlowMaterial("EnemyBolt", new Color(1f, 0.3f, 0.2f), 12.5f);
 
             // Craft panels take the craft's own colour (Options "Filled"), dimmer than the edges
-            playerPanel = PanelMaterial("PanelCyan", Cyan);
-            roverPanel = PanelMaterial("PanelPink", RoverPink);
-            turretPanel = PanelMaterial("PanelRed", Red);
-            orbiterPanel = PanelMaterial("PanelBlue", OrbiterBlue);
-            slicerPanel = PanelMaterial("PanelOrange", SlicerOrange);
 
             // Matrix floor features
             acidMat = GlowMaterial("GlowAcid", new Color(0.3f, 1f, 0.15f), 12f);
@@ -187,18 +181,6 @@ namespace SpectreEX.EditorTools
 
         // A solid face in a craft's colour: lit, slightly self-lit so it reads in the dark arena
         // Ship-coloured panels are only made once: the owner tunes them by hand, so a rebuild keeps them
-        static Material PanelMaterial(string name, Color color)
-        {
-            var existing = AssetDatabase.LoadAssetAtPath<Material>($"{MaterialDir}/{name}.mat");
-            if (existing != null) return existing;
-            var mat = GlowMaterial(name, color, 8.5f);
-            mat.SetColor("_BaseColor", color * 0.35f);
-            mat.SetFloat("_Smoothness", 0.6f);
-            mat.SetFloat("_Metallic", 0.3f);
-            EditorUtility.SetDirty(mat);
-            return mat;
-        }
-
         static Material GetOrCreate(string name)
         {
             string path = $"{MaterialDir}/{name}.mat";
@@ -407,14 +389,14 @@ namespace SpectreEX.EditorTools
         // An original Spectre VR shape in the Spectre VR-EX style: solid panels (black, or a craft's
         // own colour) with glowing edges.
         static Transform SpectreModel(string name, Transform parent, int shapeId, float scale, Material glow, out Bounds bounds,
-                                      System.Func<Vector3, Vector3> warp = null, string variant = "", Material panel = null)
+                                      System.Func<Vector3, Vector3> warp = null, string variant = "")
         {
             string key = $"Spectre_{shapeId}_{Mathf.RoundToInt(scale * 1000)}{variant}";
             var body = SaveMesh(ShapeLibrary.BodyMesh(shapeId, scale, warp), key + "_Body");
             var edges = SaveMesh(ShapeLibrary.EdgeMesh(shapeId, scale, EdgeThickness, warp), key + "_Edges");
             var model = new GameObject(name).transform;
             model.SetParent(parent, false);
-            MeshObj("Panels", model, body, panel != null ? panel : bodyMat, Vector3.zero, Vector3.one, Quaternion.identity);
+            MeshObj("Panels", model, body, bodyMat, Vector3.zero, Vector3.one, Quaternion.identity);
             var e = MeshObj("Edges", model, edges, glow, Vector3.zero, Vector3.one, Quaternion.identity);
             e.GetComponent<MeshRenderer>().shadowCastingMode = ShadowCastingMode.Off;
             bounds = body.bounds;
@@ -541,7 +523,7 @@ namespace SpectreEX.EditorTools
             rb.isKinematic = true;
 
             // Default "Balance" Spectre: the original's low wedge hull with its raised canopy
-            var model = SpectreModel("Model", root.transform, PlayerShape, 0.25f, cyanMat, out var b, panel: playerPanel);
+            var model = SpectreModel("Model", root.transform, PlayerShape, 0.25f, cyanMat, out var b);
             FitCollider(root, b).sharedMaterial = NoFriction();
             NoShadows(model.gameObject);
             int layer = LayerMask.NameToLayer(PlayerLayer);
