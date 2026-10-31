@@ -91,6 +91,7 @@ namespace SpectreEX.Menu
                 gm.Suspend += () => Open(keepMusic: true);
             }
             if (Keyboard.current != null) Keyboard.current.onTextInput += OnTextInput;
+            GraphicsOptions.Load();
             Sfx.Play(Snd.Logo);
             matrixChoices = Matrix.MatrixLibrary.ChooseAtStartup();
             main.refresh();
@@ -206,7 +207,7 @@ namespace SpectreEX.Menu
             rt.offsetMin = rt.offsetMax = Vector2.zero;
         }
 
-        IEnumerable<MenuScreen> AllScreens() => new[] { main, vehicles, custom, options, matrix, about, help, controls, scores, notice };
+        IEnumerable<MenuScreen> AllScreens() => new[] { main, vehicles, custom, options, graphics, pick, matrix, about, help, controls, scores, notice };
 
         void BuildScreens()
         {
@@ -223,6 +224,7 @@ namespace SpectreEX.Menu
             BuildControls();
             BuildScores();
             BuildNotice();
+            BuildGraphics();
             Relayout();
         }
 
@@ -258,7 +260,9 @@ namespace SpectreEX.Menu
             AddRaw(main, buttonsTex, new Rect(377, 229, 64, 64), TileUv(0, 3));   // the menu art has MATRIX here
             Tile(main, 377, 25, 1, 0, () => Push(vehicles), Key.P);
             Tile(main, 449, 25, 3, 0, () => ShowNotice("CYBERNET NETWORK PLAY\nIS NOT AVAILABLE\nIN THIS VERSION"), Key.C);
-            Tile(main, 377, 93, 1, 1, () => Push(options), Key.O);
+            Tile(main, 377, 93, 1, 1, () => Push(ShiftHeld ? graphics : options), Key.O);
+            optionsHue = AddRect(main, new Rect(377, 93, 64, 64), new Color(0.55f, 0.1f, 1f, 0.5f));
+            optionsHue.enabled = false;
             Tile(main, 449, 93, 3, 1, () => { enteringName = false; Push(scores); }, Key.S);
             Tile(main, 377, 161, 1, 2, () => Push(help), Key.H);
             Tile(main, 449, 161, 3, 2, () => Push(about), Key.A);
@@ -266,6 +270,15 @@ namespace SpectreEX.Menu
             Tile(main, 449, 229, 3, 3, Quit, Key.Q);
             main.onEnter = () => Push(vehicles);
             main.onEscape = ResumeGame;
+        }
+
+        static bool ShiftHeld
+        {
+            get
+            {
+                var k = Keyboard.current;
+                return k != null && (k.leftShiftKey.isPressed || k.rightShiftKey.isPressed);
+            }
         }
 
         // A main-menu button: hovering swaps in the original's highlighted tile from Buttons.png
@@ -490,6 +503,224 @@ namespace SpectreEX.Menu
 
         // _SHOW_HIGHSCORES: all ten rows, blank ones as score 0, level 1, laid out as on the original's
         // panel but in the HUD's green on black
+        // ---------- the modern settings: Shift + Options ----------
+
+        // One line of the settings list. A new option is one more entry in Settings(): a drop-down, an
+        // on/off choice or a number, and shown can hide it until something else makes it apply.
+        class SettingRow
+        {
+            public string label;
+            public System.Func<string> value;
+            public System.Action open;        // a drop-down
+            public System.Action<int> step;   // a number
+            public System.Func<bool> shown;   // leave null for always
+        }
+
+        const int PickRows = 10, SettingRows = 7;
+        MenuScreen graphics, pick;
+        Image optionsHue;
+        List<SettingRow> settingRows, shownRows = new List<SettingRow>();
+        int settingsTop;
+        List<string> pickChoices = new List<string>();
+        System.Action<int> pickChosen;
+        int pickTop, pickCurrent;
+
+        SettingRow Drop(string label, System.Func<string> value, System.Func<List<string>> choices, System.Func<int> current, System.Action<int> chosen) =>
+            new SettingRow { label = label, value = value, open = () => OpenPick(choices(), current(), chosen) };
+
+        SettingRow Choice(string label, string key, string[] names) =>
+            Drop(label, () => names[GraphicsOptions.Get(key)], () => new List<string>(names), () => GraphicsOptions.Get(key), i => GraphicsOptions.Set(key, i));
+
+        SettingRow Toggle(string label, string key) =>
+            Drop(label, () => GraphicsOptions.On(key) ? "On" : "Off", () => new List<string> { "On", "Off" },
+                () => GraphicsOptions.On(key) ? 0 : 1, i => GraphicsOptions.Set(key, i == 0 ? 1 : 0));
+
+        SettingRow Number(string label, string key, int min, int max, int by, string unit = "") => new SettingRow
+        {
+            label = label,
+            value = () => GraphicsOptions.Get(key) + unit,
+            step = sign => GraphicsOptions.Set(key, Mathf.Clamp(GraphicsOptions.Get(key) + sign * by, min, max)),
+        };
+
+        static SettingRow When(System.Func<bool> shown, SettingRow row)
+        {
+            row.shown = shown;
+            return row;
+        }
+
+        List<SettingRow> Settings()
+        {
+            List<Vector2Int> sizes = null;
+            System.Func<bool> tracing = () => GraphicsOptions.On(GraphicsOptions.RayTracing);
+            System.Func<bool> reflecting = () => tracing() && GraphicsOptions.On(GraphicsOptions.Reflections);
+            System.Func<bool> lighting = () => tracing() && GraphicsOptions.On(GraphicsOptions.Lighting);
+            System.Func<bool> occluding = () => tracing() && GraphicsOptions.On(GraphicsOptions.Occlusion);
+            System.Func<bool> taa = () => GraphicsOptions.Get(GraphicsOptions.AntiAliasing) == GraphicsOptions.AaTaa;
+            System.Func<bool> dlss = () => GraphicsOptions.Get(GraphicsOptions.AntiAliasing) == GraphicsOptions.AaDlss;
+            return new List<SettingRow>
+            {
+                Drop("RESOLUTION", () => $"{Screen.width} X {Screen.height}",
+                    () => { sizes = GraphicsOptions.Resolutions(); return sizes.ConvertAll(r => $"{r.x} X {r.y}"); },
+                    () => sizes.FindIndex(r => r.x == Screen.width && r.y == Screen.height),
+                    i => GraphicsOptions.SetResolution(sizes[i])),
+                Drop("DISPLAY MODE", () => GraphicsOptions.ModeNames[GraphicsOptions.ModeIndex],
+                    () => new List<string>(GraphicsOptions.ModeNames), () => GraphicsOptions.ModeIndex, GraphicsOptions.SetMode),
+                Drop("QUALITY", () => QualitySettings.names[QualitySettings.GetQualityLevel()],
+                    () => new List<string>(QualitySettings.names), QualitySettings.GetQualityLevel, GraphicsOptions.SetQuality),
+
+                Choice("ANTI-ALIASING", GraphicsOptions.AntiAliasing, GraphicsOptions.AaNames),
+                When(taa, Choice("TAA QUALITY", GraphicsOptions.TaaQuality, GraphicsOptions.TaaNames)),
+                When(dlss, Choice("DLSS MODE", GraphicsOptions.DlssMode, GraphicsOptions.DlssNames)),
+                When(dlss, Number("DLSS SHARPNESS", GraphicsOptions.DlssSharpness, 0, 100, 5, "%")),
+
+                Toggle("RAY TRACING", GraphicsOptions.RayTracing),
+                When(tracing, Toggle("RT SHADOWS", GraphicsOptions.Shadows)),
+                When(tracing, Toggle("RT REFLECTIONS", GraphicsOptions.Reflections)),
+                When(reflecting, Number("REFLECT DISTANCE", GraphicsOptions.ReflectionDistance, 25, 500, 25, " M")),
+                When(reflecting, Number("REFLECT SAMPLES", GraphicsOptions.ReflectionSamples, 1, 8, 1)),
+                When(reflecting, Number("REFLECT BOUNCES", GraphicsOptions.ReflectionBounces, 1, 4, 1)),
+                When(reflecting, Toggle("REFLECT DENOISER", GraphicsOptions.ReflectionDenoise)),
+                When(reflecting, Toggle("REFLECT FULL RES", GraphicsOptions.ReflectionFull)),
+                When(tracing, Toggle("RT LIGHTING", GraphicsOptions.Lighting)),
+                When(lighting, Number("LIGHT DISTANCE", GraphicsOptions.LightingDistance, 10, 200, 10, " M")),
+                When(lighting, Number("LIGHT SAMPLES", GraphicsOptions.LightingSamples, 1, 8, 1)),
+                When(lighting, Number("LIGHT BOUNCES", GraphicsOptions.LightingBounces, 1, 4, 1)),
+                When(lighting, Toggle("LIGHT DENOISER", GraphicsOptions.LightingDenoise)),
+                When(tracing, Toggle("RT OCCLUSION", GraphicsOptions.Occlusion)),
+                When(occluding, Number("OCCLUDE DISTANCE", GraphicsOptions.OcclusionDistance, 5, 100, 5, " M")),
+                When(occluding, Number("OCCLUDE SAMPLES", GraphicsOptions.OcclusionSamples, 1, 16, 1)),
+                When(occluding, Toggle("OCCLUDE DENOISER", GraphicsOptions.OcclusionDenoise)),
+            };
+        }
+
+        void BuildGraphics()
+        {
+            var green = new Color(0.25f, 0.78f, 0.27f);
+            var dim = new Color(0.2f, 0.6f, 0.22f);
+            var glow = new Color(0.25f, 0.78f, 0.27f, 0.22f);
+            settingRows = Settings();
+            graphics = NewScreen("Graphics", new Vector2(420, 340));
+            AddRect(graphics, new Rect(-2000, -2000, 4420, 4340), Color.black);
+            Frame(graphics, new Rect(0, 0, 420, 340), green, 4f);
+            AddText(graphics, new Rect(8, 14, 404, 18), 12, green, TextAnchor.MiddleCenter).Text = Seg("SETTINGS");
+
+            // Only a page of rows exists on screen; the list scrolls through them, however long it grows
+            var labels = new List<PixelSegmentText>();
+            var values = new List<PixelSegmentText>();
+            var minus = new List<PixelSegmentText>();
+            var plus = new List<PixelSegmentText>();
+            var boxes = new List<Image[]>();
+            for (int i = 0; i < SettingRows; i++)
+            {
+                int row = i;
+                float y = 44 + i * 32;
+                labels.Add(AddText(graphics, new Rect(22, y, 180, 22), 9, green, TextAnchor.MiddleLeft));
+                boxes.Add(Frame(graphics, new Rect(206, y - 2, 192, 26), green, 1f));
+                values.Add(AddText(graphics, new Rect(240, y, 124, 22), 9, green, TextAnchor.MiddleCenter));
+                minus.Add(AddText(graphics, new Rect(206, y, 34, 22), 10, green, TextAnchor.MiddleCenter));
+                plus.Add(AddText(graphics, new Rect(364, y, 34, 22), 10, green, TextAnchor.MiddleCenter));
+                void Press(int sign)
+                {
+                    if (settingsTop + row >= shownRows.Count) return;
+                    var setting = shownRows[settingsTop + row];
+                    if (setting.step != null) setting.step(sign == 0 ? 1 : sign);
+                    else setting.open();
+                    graphics.refresh();
+                }
+                Button(graphics, new Rect(206, y - 2, 34, 26), () => Press(-1), Key.None, glow);
+                Button(graphics, new Rect(240, y - 2, 124, 26), () => Press(0), Key.None, glow);
+                Button(graphics, new Rect(364, y - 2, 34, 26), () => Press(1), Key.None, glow);
+            }
+            var more = AddText(graphics, new Rect(8, 270, 404, 14), 8, dim, TextAnchor.MiddleCenter);
+            Frame(graphics, new Rect(160, 292, 100, 28), green, 1f);
+            AddText(graphics, new Rect(160, 295, 100, 22), 9, green, TextAnchor.MiddleCenter).Text = Seg("DONE");
+            Button(graphics, new Rect(160, 292, 100, 28), Pop, Key.None, glow);
+
+            graphics.refresh = () =>
+            {
+                shownRows = settingRows.FindAll(r => r.shown == null || r.shown());
+                settingsTop = Mathf.Clamp(settingsTop, 0, Mathf.Max(0, shownRows.Count - SettingRows));
+                for (int i = 0; i < SettingRows; i++)
+                {
+                    bool used = settingsTop + i < shownRows.Count;
+                    var setting = used ? shownRows[settingsTop + i] : null;
+                    labels[i].Text = used ? Seg(setting.label) : "";
+                    values[i].Text = used ? Seg(setting.value()) : "";
+                    minus[i].Text = used && setting.step != null ? "-" : "";
+                    plus[i].Text = used && setting.step != null ? "+" : "";
+                    foreach (var edge in boxes[i]) edge.enabled = used;
+                }
+                more.Text = shownRows.Count > SettingRows ? Seg("WHEEL OR ARROWS FOR MORE") : "";
+            };
+            graphics.onEscape = graphics.onEnter = Pop;
+
+            // The drop-down list: one for every setting above
+            pick = NewScreen("Pick", new Vector2(240, 44 + PickRows * 22));
+            AddRect(pick, new Rect(-2000, -2000, 4240, 4300), Color.black);
+            Frame(pick, new Rect(0, 0, 240, 44 + PickRows * 22), green, 4f);
+            var pickMore = AddText(pick, new Rect(8, 10, 224, 16), 8, dim, TextAnchor.MiddleCenter);
+            var rows = new List<PixelSegmentText>();
+            for (int i = 0; i < PickRows; i++)
+            {
+                int row = i;
+                rows.Add(AddText(pick, new Rect(18, 32 + i * 22, 204, 20), 9, green, TextAnchor.MiddleLeft));
+                Button(pick, new Rect(10, 31 + i * 22, 220, 22), () =>
+                {
+                    int chosen = pickTop + row;
+                    if (chosen >= pickChoices.Count) return;
+                    Pop();
+                    pickChosen(chosen);
+                    graphics.refresh();
+                }, Key.None, glow);
+            }
+            pick.refresh = () =>
+            {
+                for (int i = 0; i < PickRows; i++)
+                {
+                    int at = pickTop + i;
+                    rows[i].Text = at < pickChoices.Count ? Seg((at == pickCurrent ? "> " : "  ") + pickChoices[at]) : "";
+                }
+                pickMore.Text = pickChoices.Count > PickRows ? Seg("WHEEL OR ARROWS FOR MORE") : "";
+            };
+            pick.onEscape = pick.onEnter = Pop;
+        }
+
+        void OpenPick(List<string> choices, int current, System.Action<int> chosen)
+        {
+            pickChoices = choices;
+            pickCurrent = current;
+            pickChosen = chosen;
+            pickTop = Mathf.Clamp(current - PickRows / 2, 0, Mathf.Max(0, choices.Count - PickRows));
+            Push(pick);
+        }
+
+        // The wheel or arrow keys, as a step through a list
+        static int ListStep()
+        {
+            var k = Keyboard.current;
+            var m = Mouse.current;
+            if (k != null && k.upArrowKey.wasPressedThisFrame) return -1;
+            if (k != null && k.downArrowKey.wasPressedThisFrame) return 1;
+            float wheel = m != null ? m.scroll.ReadValue().y : 0f;
+            return wheel > 0f ? -1 : wheel < 0f ? 1 : 0;
+        }
+
+        void ScrollLists(MenuScreen top)
+        {
+            int step = ListStep();
+            if (step == 0) return;
+            if (top == pick)
+            {
+                pickTop = Mathf.Clamp(pickTop + step, 0, Mathf.Max(0, pickChoices.Count - PickRows));
+                pick.refresh();
+            }
+            else
+            {
+                settingsTop = Mathf.Clamp(settingsTop + step, 0, Mathf.Max(0, shownRows.Count - SettingRows));
+                graphics.refresh();
+            }
+        }
+
         void BuildScores()
         {
             scores = NewScreen("Scores", new Vector2(284, 220));
@@ -755,8 +986,10 @@ namespace SpectreEX.Menu
         {
             if (!IsOpen || stack.Count == 0) return;
             if (Screen.width != lastScreen.x || Screen.height != lastScreen.y) Relayout();
+            optionsHue.enabled = ShiftHeld;
 
             var top = stack[stack.Count - 1];
+            if (top == pick || top == graphics) ScrollLists(top);
             if (top == scores && enteringName) scores.refresh();   // blink the cursor
             if (top == scores && scoresCloseAt > 0f && Time.unscaledTime >= scoresCloseAt) { CloseScores(); return; }
 
