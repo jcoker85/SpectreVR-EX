@@ -31,7 +31,9 @@ namespace SpectreEX.EditorTools
         // so matrix layouts land where their designers put them. Floor dots every 32 units.
         public const float ArenaHalfSize = 512f * GameManager.GridScale;
         const float DotSpacing = 32f * GameManager.GridScale;
-        const float WallHeight = 24f;
+        const float HorizonRadius = 900f;   // inside the camera's far plane of 1000
+        const float HorizonHeight = 260f;
+        const int HorizonSides = 64;
 
         static readonly Color Cyan = new Color(0.1f, 0.85f, 1f);
         static readonly Color Magenta = new Color(0.85f, 0.1f, 0.9f);
@@ -63,7 +65,7 @@ namespace SpectreEX.EditorTools
             RenderSettings.skybox = null;   // black void; no legacy skybox
             var arena = new GameObject("Arena").transform;
             BuildFloor(arena);
-            var walls = BuildWalls(arena);
+            var horizon = BuildHorizon(arena);
             BuildLightingAndVolume();
 
             var player = BuildPlayer(new Vector3(0f, 0.1f, 0f));
@@ -71,7 +73,7 @@ namespace SpectreEX.EditorTools
             var gmGo = new GameObject("GameManager");
             var gm = gmGo.AddComponent<GameManager>();
             gm.player = player;
-            gm.wallRenderers = walls;
+            gm.horizon = horizon;
             gm.arenaHalfSize = ArenaHalfSize;
             gm.flagPrefab = prefabs.flag;
             gm.ammoDumpPrefab = prefabs.dump;
@@ -486,7 +488,8 @@ namespace SpectreEX.EditorTools
 
         static void BuildFloor(Transform arena)
         {
-            float size = ArenaHalfSize * 2f;
+            // Runs on to the horizon wherever the camera is; the dots mark the part in bounds
+            float size = (ArenaHalfSize + HorizonRadius) * 2f;
             Box("Floor", arena, new Vector3(0f, -0.5f, 0f), new Vector3(size, 1f, size), floorMat);
             var dots = new GameObject("FloorDots");
             dots.transform.SetParent(arena, false);
@@ -496,43 +499,40 @@ namespace SpectreEX.EditorTools
             r.shadowCastingMode = ShadowCastingMode.Off;
         }
 
-        static Renderer[] BuildWalls(Transform arena)
+        // The original has no walls: the bounds are the motors' clamp, and past them is only the sky colour's
+        // band at the horizon. So this is a ring with no collider, far enough off that nothing gets behind it.
+        static Renderer BuildHorizon(Transform arena)
         {
-            var walls = new GameObject("Walls").transform;
-            walls.SetParent(arena, false);
-            float len = ArenaHalfSize * 2f + 2f;
-            var defs = new[]
+            var verts = new List<Vector3>();
+            var uvs = new List<Vector2>();
+            var tris = new List<int>();
+            for (int i = 0; i <= HorizonSides; i++)
             {
-                (new Vector3(0f, WallHeight / 2f, ArenaHalfSize + 1f), new Vector3(len, WallHeight, 2f)),
-                (new Vector3(0f, WallHeight / 2f, -ArenaHalfSize - 1f), new Vector3(len, WallHeight, 2f)),
-                (new Vector3(ArenaHalfSize + 1f, WallHeight / 2f, 0f), new Vector3(2f, WallHeight, len)),
-                (new Vector3(-ArenaHalfSize - 1f, WallHeight / 2f, 0f), new Vector3(2f, WallHeight, len)),
-            };
-            // The cube primitive's UVs run upside down on some faces, flipping the gradient. So each wall is
-            // an invisible box collider plus an inward-facing quad whose UVs always put the bright end at the floor.
-            var faceYaw = new[] { 0f, 180f, 90f, -90f };   // quad front (-Z) turned to face the arena centre
-            var renderers = new List<Renderer>();
-            for (int i = 0; i < defs.Length; i++)
-            {
-                var (pos, size) = defs[i];
-                var w = Box("Wall", walls, pos, size, wallMat);
-                Object.DestroyImmediate(w.GetComponent<MeshRenderer>());
-                Object.DestroyImmediate(w.GetComponent<MeshFilter>());
-
-                var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
-                q.name = "Glow";
-                Object.DestroyImmediate(q.GetComponent<Collider>());
-                q.transform.SetParent(walls, false);
-                Vector3 inward = -new Vector3(Mathf.Sign(pos.x) * (Mathf.Abs(pos.x) > 1f ? 1f : 0f), 0f, Mathf.Sign(pos.z) * (Mathf.Abs(pos.z) > 1f ? 1f : 0f));
-                q.transform.localPosition = new Vector3(pos.x, WallHeight / 2f, pos.z) + inward * 1.01f;
-                q.transform.localRotation = Quaternion.Euler(0f, faceYaw[i], 0f);
-                q.transform.localScale = new Vector3(len, WallHeight, 1f);
-                var r = q.GetComponent<MeshRenderer>();
-                r.sharedMaterial = wallMat;
-                r.shadowCastingMode = ShadowCastingMode.Off;
-                renderers.Add(r);
+                float a = i * Mathf.PI * 2f / HorizonSides;
+                var edge = new Vector3(Mathf.Sin(a), 0f, Mathf.Cos(a)) * HorizonRadius;
+                verts.Add(edge);
+                verts.Add(edge + Vector3.up * HorizonHeight);
+                uvs.Add(new Vector2(0f, 0f));   // bright end at the floor
+                uvs.Add(new Vector2(0f, 1f));
+                if (i == HorizonSides) break;
+                int b = i * 2;
+                tris.AddRange(new[] { b, b + 1, b + 2, b + 1, b + 3, b + 2 });
             }
-            return renderers.ToArray();
+            var mesh = new Mesh { name = "Horizon" };
+            mesh.SetVertices(verts);
+            mesh.SetUVs(0, uvs);
+            mesh.SetTriangles(tris, 0);
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+
+            var go = new GameObject("Horizon");
+            go.transform.SetParent(arena, false);
+            go.AddComponent<MeshFilter>().sharedMesh = SaveMesh(mesh, "Horizon");
+            var r = go.AddComponent<MeshRenderer>();
+            r.sharedMaterial = wallMat;
+            r.shadowCastingMode = ShadowCastingMode.Off;
+            go.AddComponent<Horizon>();
+            return r;
         }
 
         // ---------- player ----------

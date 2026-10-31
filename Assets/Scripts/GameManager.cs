@@ -32,7 +32,7 @@ namespace SpectreEX
 
         [Header("Scene")]
         public PlayerTank player;
-        public Renderer[] wallRenderers;
+        public Renderer horizon;
         public Renderer floorDots;
         public float arenaHalfSize = 82f;
 
@@ -90,7 +90,7 @@ namespace SpectreEX
         int robotsLeft, bankedBonus;
         readonly int[] flagGuards = new int[64];   // _FLAG_TURRETS: robots placed by each flag
         public ShapeSet Shapes => shapes;
-        float wallNits = -1f;
+        float horizonNits = -1f;
         float levelDifficulty = 1f;
         Coroutine session;
         DemoPilot demoPilot;
@@ -188,7 +188,7 @@ namespace SpectreEX
             Sfx.Enabled = GameSettings.SoundEffectsOn;
             ApplyComplex(GameSettings.DisplayComplex);
             if (floorDots != null) floorDots.enabled = GameSettings.DisplayTextures;
-            foreach (var r in wallRenderers) if (r != null) r.enabled = GameSettings.DisplayTextures;
+            if (horizon != null) horizon.enabled = GameSettings.DisplayTextures;
             foreach (var r in FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None)) ApplyFilled(r);
         }
 
@@ -376,7 +376,7 @@ namespace SpectreEX
             ClearLevel();
             director.Shots.ResetCounts();
             SpectrePalette.Apply(obstacleLook.shapes, levelNumber - 1);
-            SetWallColor(SpectrePalette.Sky(levelNumber - 1));
+            SetHorizonColor(SpectrePalette.Sky(levelNumber - 1));
             PlacePlayerAtStart();
             UseShapes(m);
 
@@ -441,7 +441,7 @@ namespace SpectreEX
         {
             ClearLevel();
             director.Shots.ResetCounts();
-            SetWallColor(plan.wallColor);
+            SetHorizonColor(plan.wallColor);
             PlacePlayerAtStart();
             UseShapes(null);
 
@@ -643,19 +643,16 @@ namespace SpectreEX
             return false;
         }
 
-        void SetWallColor(Color c)
+        void SetHorizonColor(Color c)
         {
-            foreach (var r in wallRenderers)
+            if (horizon == null) return;
+            var m = horizon.material;
+            if (horizonNits < 0f)
             {
-                if (r == null) continue;
-                var m = r.material;
-                if (wallNits < 0f)
-                {
-                    Color cur = m.GetColor("_EmissiveColor");
-                    wallNits = Mathf.Max(cur.r, Mathf.Max(cur.g, cur.b));
-                }
-                m.SetColor("_EmissiveColor", c * wallNits);
+                Color cur = m.GetColor("_EmissiveColor");
+                horizonNits = Mathf.Max(cur.r, Mathf.Max(cur.g, cur.b));
             }
+            m.SetColor("_EmissiveColor", c * horizonNits);
         }
 
         // ---------- events ----------
