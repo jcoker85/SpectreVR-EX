@@ -275,7 +275,7 @@ namespace SpectreEX.Matrix
                 if (n < 0 || !Has(n * 2 + 2)) break;
                 var idx = new int[n];
                 for (int k = 0; k < n; k++) idx[k] = Word() - 1;
-                colours.Add(Word());
+                colours.Add(BuiltinShapes.FaceColour(Word()));
                 faces.Add(idx);
             }
             return new ShapeGeometry(verts, faces.ToArray(), colours.ToArray());

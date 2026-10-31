@@ -8,15 +8,15 @@ namespace SpectreEX.Matrix
     // HDRP's lights do that, so faces take a fixed point on the ramp.
     public static class SpectrePalette
     {
-        const int Lit = 10;   // the point on a ramp a shaded face uses
+        const int Lit = 14;   // the point on a ramp a shaded face uses
 
         static Texture2D texture;
         static readonly Color32[] colours = new Color32[256];
 
-        // Which palette entry a face shows: 0, 255 and textures take the object's own colour
+        // Which palette entry a face shows: 0 and textures take the object's own colour
         public static int Entry(int faceColour, int objectColour)
         {
-            if (faceColour == 0 || faceColour == 0xFF || faceColour > 0xFF) return Shaded(objectColour);
+            if (faceColour == 0 || faceColour > 0xFF) return Shaded(objectColour);
             return (faceColour & 0xF) == 0 ? Shaded(faceColour) : faceColour;
         }
 

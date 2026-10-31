@@ -160,11 +160,20 @@ namespace SpectreEX.Matrix
         static Dictionary<int, Entry> byId;
         static File data;
 
-        // The colour an object of this type is drawn in (the table _ADD_SHAPE reads)
+        // The colour an object of this type is drawn in (_SHAPE_COLORS, read by _ADD_SHAPE)
         public static int TypeColour(int type)
         {
             Load();
             return data != null && type >= 0 && type < data.typeColors.Length ? data.typeColors[type] : 0;
+        }
+
+        // A shap resource's face colour as the loader turns it into a palette value: an index into the
+        // same table, with 0xFE and 0xFF the special values. Above 0xFF is a texture, kept as it is.
+        public static int FaceColour(int value)
+        {
+            if (value > 0xFF) return value;
+            int v = value == 0xFE ? 0xFE : value == 0xFF ? 0xFF : TypeColour(value);
+            return v == 0xFF ? 0 : v == 0xFE ? 1 : v;
         }
 
         public static Color32 ObjectColour(int level) => LevelColour(data => data.objColors, level);
