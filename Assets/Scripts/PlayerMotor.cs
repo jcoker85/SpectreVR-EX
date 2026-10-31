@@ -21,6 +21,7 @@ namespace SpectreEX
         public const int HyperMax = 0x1900;
         const int HyperRecharge = 0xB, JumpCost = 0x640;
         const int Arena = 0x40000, FaceCentreBeyond = 0x38000;
+        public const int GroundUnits = GroundZ;
         const int GroundZ = 0x500, UnderZ = -0xF00, LifeDropZ = 0xC800, HyperDropZ = 0x5000;
         const int Gravity = 0x100, JumpVz = 0xC00, HardLanding = -0xF00;
         const int PushSpeed = 0x12;

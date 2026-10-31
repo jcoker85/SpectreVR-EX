@@ -560,3 +560,20 @@ Wireframe lines take each face's colour (`_POLYWIRE`). When the player dies the 
 Demo (`_MOVE_ATTRACT_TANK`): a dump when within 20 points of destruction or under 10 rounds, else any robot within 500 (backing off under 0x50, cannon on Robot Tanks from the ground, otherwise missiles, inside 0x244), else the nearest flag unless it needs a dump and one is nearer. Pushers count as solid, and hitting something hops if it can. After 0x10E ticks on one target it moves elsewhere. Steering here is the remake's own, not `_FIND_CLEAR_PATH`.
 
 Robots don't bump each other: the path check keeps them apart, and nothing sets the tank record's +0xE stop flag that `_MOVE_TANKS` clears. The recap has no demo hold in the code, so the 3-minute wait on the running original looks like the emulator. Texture orientation: `_POLY_2D`'s basis is the remake's, with the image's vertical negated.
+
+## Measured from the running original
+
+`Tools/win31/memtrace.py` reads robots and shots out of DOSBox-X's emulated memory, and `traceview.py` summarises a trace; the remake logs the same format through `ShotSystem.Trace`. Units a tick, original against remake:
+
+| Thing | Original | Remake |
+|---|---|---|
+| Robot Tank | 1275 | 1276 |
+| Super Tank | 1787 | 1787 |
+| Slicer | 1532 | 1532 |
+| Cannon shot | 8162 | 8167 |
+| Missile | 4084 | 4084 |
+| Robot muzzle height above base | 1024 | 1024 |
+| Turning, most ticks | 4 | 4 |
+| Longest firing range | 140900 | 141800 |
+
+That measured a real difference: homing shots aim at the middle of the craft's first shape, 1764 for the player on the ground, not its whole collision box. Fixed. The demo freezes under emulation after anything from a few ticks to a level, so Flyers, Cyber Mud, Smart Acid, Smart Walls, Orbiters and moving Invisible or Cloaked Tanks have no measurements yet. `memlevels.py` sets level and difficulty in the emulator's RAM, but the demo loads its own wave list, so robot sets differ from the Hard list.

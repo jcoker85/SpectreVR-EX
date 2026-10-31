@@ -40,6 +40,16 @@ namespace SpectreEX
             shots.Clear();
         }
 
+        // The live shots, for comparing traces with the running original (Tools/win31/traceview.py)
+        public IEnumerable<(long x, long y, long z, int heading, int life, int weapon, Robot owner, bool fromPlayer, int slot)> Trace()
+        {
+            for (int i = 0; i < shots.Count; i++)
+            {
+                var s = shots[i];
+                if (s.fading == 0 && s.life > 0) yield return (s.x, s.y, s.z, s.heading, s.life, s.weapon, s.owner, s.fromPlayer, s.GetHashCode());
+            }
+        }
+
         // The level's shots and hits, for the recap's Accuracy and Avoidance; dying doesn't reset them
         public int MyShots, MyHits, RobotShots, RobotHits;
 
@@ -299,13 +309,13 @@ namespace SpectreEX
                 var r = ClosestRobot(s);
                 haveTarget = r != null;
                 target = haveTarget ? r.Position : default;
-                targetZ = haveTarget ? r.z + MidHeight(r) : 0x500;   // the middle of its collision box
+                targetZ = haveTarget ? r.z + MidHeight(r.matrixType) : 0x500;   // the middle of its collision box
             }
             else
             {
                 haveTarget = true;
                 target = director.PlayerPos;
-                targetZ = PlayerMidHeight();
+                targetZ = MidHeight(6) + director.PlayerZ - PlayerMotor.GroundUnits;
             }
             if (haveTarget)
             {
@@ -338,16 +348,19 @@ namespace SpectreEX
             return false;
         }
 
-        static long PlayerMidHeight()
+        // The middle of a craft's first shape, which is the object homing shots read (+0x2C, +0x2E)
+        static long MidHeight(int type)
         {
-            var box = GameManager.Instance.player.GetComponent<BoxCollider>();
-            return box != null ? OriginalMath.ToUnits(box.bounds.center.y) : 0;
-        }
-
-        static long MidHeight(Robot r)
-        {
-            var box = r.GetComponent<BoxCollider>();
-            return box != null ? OriginalMath.ToUnits(box.center.y) : 0;
+            var parts = GameManager.Instance.Shapes?.ForType(type);
+            if (parts == null || parts.Count == 0) return 0;
+            int[] v = parts[0].shape.verts;
+            int low = int.MaxValue, high = int.MinValue;
+            for (int i = 2; i < v.Length; i += 3)
+            {
+                low = Mathf.Min(low, v[i]);
+                high = Mathf.Max(high, v[i]);
+            }
+            return (low + high) / 2;
         }
 
         // _FIND_CLOSEST_TANK: nothing beyond 2000 counts
