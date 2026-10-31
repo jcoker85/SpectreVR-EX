@@ -433,8 +433,8 @@ namespace SpectreEX
         }
 
         // Weapons 1 and 17: robots within 0x0E / 0x40 / 0x80 lose 5 / 2 / 2, the player 10 per band
-        // (never the one who fired it). Every other robot still flinches and scores, however far off:
-        // the original's loop only checks the range for the loss.
+        // (never the one who fired it). The original's loop also stuns and scores every robot out of range,
+        // which reads as an oversight, so here a blast only touches what it reaches.
         void Splash(Shot s)
         {
             foreach (var r in director.Robots)
@@ -443,7 +443,6 @@ namespace SpectreEX
                 int q = OriginalMath.QDist(r.x - s.x, r.y - s.y);
                 int loss = (q < 0xE ? 5 : 0) + (q < 0x40 ? 2 : 0) + (q < 0x80 ? 2 : 0);
                 if (loss > 0) r.Health.TakeDamage(loss);
-                else r.HitWithoutDamage();
             }
             if (s.fromPlayer || !director.PlayerAlive) return;
             var p = director.PlayerPos;

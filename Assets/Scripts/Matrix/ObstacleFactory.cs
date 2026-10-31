@@ -102,8 +102,67 @@ namespace SpectreEX.Matrix
                     col.center -= Vector3.up * extra * 0.5f;
                     col.size += Vector3.up * extra;
                 }
+                if (!beh.IsGate) SplitCollider(root, col, parts);
             }
             return root;
+        }
+
+        // The original boxes each part's whole shape, so a tree blocks at the width of its top. The remake
+        // gives each part its own box (as _ADD_SHAPE's separate objects have) and a narrow stem its own
+        // box under what it carries, so a craft can reach the stem.
+        static void SplitCollider(GameObject root, BoxCollider col, List<ShapeSet.Part> parts)
+        {
+            var boxes = new List<Bounds>();
+            foreach (var part in parts) Slice(part.shape.UnityPoints(), part.offset, boxes);
+            if (boxes.Count < 2) return;
+            for (int i = 0; i < boxes.Count; i++)
+            {
+                var box = i == 0 ? col : root.AddComponent<BoxCollider>();
+                box.center = boxes[i].center;
+                box.size = Vector3.Max(boxes[i].size, new Vector3(0.6f, 0.1f, 0.6f));
+            }
+        }
+
+        const float StemWidening = 1.5f;   // this much wider than its base, and a shape counts as top-heavy
+
+        static void Slice(Vector3[] v, Vector3 offset, List<Bounds> boxes)
+        {
+            float bottom = float.MaxValue;
+            foreach (var p in v) bottom = Mathf.Min(bottom, p.y);
+            var foot = Around(v, p => p.y <= bottom + 0.01f);
+            float reach = Mathf.Max(foot.extents.x, foot.extents.z) * StemWidening;
+            bool Wide(Vector3 p) => Mathf.Max(Mathf.Abs(p.x - foot.center.x), Mathf.Abs(p.z - foot.center.z)) > reach;
+
+            float firstWide = float.MaxValue, split = bottom;
+            foreach (var p in v) if (Wide(p)) firstWide = Mathf.Min(firstWide, p.y);
+            foreach (var p in v) if (!Wide(p) && p.y < firstWide) split = Mathf.Max(split, p.y);
+
+            if (reach <= 0f || firstWide == float.MaxValue || split <= bottom)
+            {
+                boxes.Add(Moved(Around(v, p => true), offset));
+                return;
+            }
+            boxes.Add(Moved(Around(v, p => p.y <= split && !Wide(p)), offset));
+            boxes.Add(Moved(Around(v, p => p.y >= split), offset));
+        }
+
+        static Bounds Moved(Bounds b, Vector3 offset)
+        {
+            b.center += offset;
+            return b;
+        }
+
+        static Bounds Around(Vector3[] v, System.Func<Vector3, bool> wanted)
+        {
+            Bounds b = default;
+            bool first = true;
+            foreach (var p in v)
+            {
+                if (!wanted(p)) continue;
+                if (first) { b = new Bounds(p, Vector3.zero); first = false; }
+                else b.Encapsulate(p);
+            }
+            return b;
         }
 
         static Transform AddShape(Transform parent, ShapeGeometry shape, Vector3 offset, int colour, Material panel, Material glow, float thickness)

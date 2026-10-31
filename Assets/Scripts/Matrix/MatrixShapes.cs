@@ -85,6 +85,7 @@ namespace SpectreEX.Matrix
             var verts = new List<Vector3>();
             var uvs = new List<Vector2>();
             var tris = new List<int>();
+            var backed = BackToBack(faces);
             for (int i = 0; i < faces.Length; i++)
             {
                 var f = faces[i];
@@ -98,9 +99,12 @@ namespace SpectreEX.Matrix
                     if (a < 0 || b < 0 || c < 0 || a >= v.Length || b >= v.Length || c >= v.Length) continue;
                     int n = verts.Count;
                     verts.Add(v[a]); verts.Add(v[b]); verts.Add(v[c]);
+                    for (int u = 0; u < 3; u++) uvs.Add(uv);
+                    tris.AddRange(new[] { n, n + 1, n + 2 });
+                    if (backed.Contains(i)) continue;
                     verts.Add(v[a]); verts.Add(v[c]); verts.Add(v[b]);
-                    for (int u = 0; u < 6; u++) uvs.Add(uv);
-                    tris.AddRange(new[] { n, n + 1, n + 2, n + 3, n + 4, n + 5 });
+                    for (int u = 0; u < 3; u++) uvs.Add(uv);
+                    tris.AddRange(new[] { n + 3, n + 4, n + 5 });
                 }
             }
             var mesh = new Mesh { name = name };
@@ -112,6 +116,24 @@ namespace SpectreEX.Matrix
             return mesh;
         }
 
+        // Faces that share their corners with another face: the two sides of one panel, as on the billboards.
+        // Each shows only from its own side, or they'd fight over the same plane.
+        static HashSet<int> BackToBack(int[][] faces)
+        {
+            var seen = new Dictionary<string, int>();
+            var backed = new HashSet<int>();
+            for (int i = 0; i < faces.Length; i++)
+            {
+                if (faces[i].Length < 3) continue;
+                var corners = (int[])faces[i].Clone();
+                Array.Sort(corners);
+                string key = string.Join(",", corners);
+                if (seen.TryGetValue(key, out int other)) { backed.Add(i); backed.Add(other); }
+                else seen[key] = i;
+            }
+            return backed;
+        }
+
         // The faces showing one texture: as _SIZE_TEXTURE_POINTS does it, the image is stretched over
         // each face's own extent in the face's plane.
         public static Mesh Textured(Vector3[] v, int[][] faces, int[] colours, int texture)
@@ -119,6 +141,7 @@ namespace SpectreEX.Matrix
             var verts = new List<Vector3>();
             var uvs = new List<Vector2>();
             var tris = new List<int>();
+            var backed = BackToBack(faces);
             for (int i = 0; i < faces.Length; i++)
             {
                 var f = faces[i];
@@ -137,12 +160,13 @@ namespace SpectreEX.Matrix
                 for (int k = 1; k + 1 < f.Length; k++)
                 {
                     int n = verts.Count;
-                    foreach (int p in new[] { f[0], f[k], f[k + 1], f[0], f[k + 1], f[k] })
+                    var corners = backed.Contains(i) ? new[] { f[0], f[k], f[k + 1] } : new[] { f[0], f[k], f[k + 1], f[0], f[k + 1], f[k] };
+                    foreach (int p in corners)
                     {
                         verts.Add(v[p]);
                         uvs.Add(Uv(p));
                     }
-                    tris.AddRange(new[] { n, n + 1, n + 2, n + 3, n + 4, n + 5 });
+                    for (int c = 0; c < corners.Length; c++) tris.Add(n + c);
                 }
             }
             var mesh = new Mesh { name = "Shape_Textured" };

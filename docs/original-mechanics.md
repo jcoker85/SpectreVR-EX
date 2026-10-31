@@ -509,10 +509,21 @@ Checked line by line: `_DO_SHOOT`, `_MY_SHOOT`, `_MOVE_SHOTS`, `_KEY_WEAPON`, th
 
 - `_CHECK_MISSILE_PATH` is a flat rectangle against obstacles taller than a floor pad, at any height. The remake's box also caught the floor, so homing shots near it kept climbing.
 - Homing shots ignore robots at `_QFIND_DIST` 2000 or more, and aim at the middle of the player's box too.
-- A splash's robot loop only uses the range for the loss. Every other visible robot still takes the 18-tick stun, sound 4 and a score, however far off, even from a robot's shot. A splash throws no debris of its own.
+- A splash throws no debris of its own. Its robot loop only uses the range for the loss, so in the original every other visible robot still takes the 18-tick stun, sound 4 and a score, however far off. The remake treats that as an oversight (see below): only robots in range are touched.
 - Shots end in a de-res: +0x5F rises 3 a tick and the shot goes above 0x1E. One that runs out starts at 4 and keeps moving (9 ticks); one that strikes a robot, an obstacle, a shield or the arena edge starts at 10 and stops there (7 ticks). A hit on the player, a Spinner hit and a splash remove the shot at once.
 - Shots draw flat at their heading, never pitched. +0x3A turns the heading (grenade-type lobs and bombs 4), +0x3E rolls them (0x10 by default).
 - Debris cycles shapes 10102-10104 by life; a landed Pulse Burst becomes shape 10096.
 - A Spinner hit spins the player as well as robots: 0x10 a tick for 0xB4 ticks, with no steering or thrust.
+
+## Deliberate fixes to the original's intent
+
+Where the original looks like an oversight rather than a design, the remake does what it evidently meant (owner's rule, 2026-10-31):
+
+- A destroyed textured craft throws grey pieces, not its base colour.
+- A grenade or bomb blast stuns and scores only robots in range, not the whole map.
+- Top-heavy obstacles (the trees, shapes 10004 and 10007): the original's one box per shape blocks at the width of the top. The remake gives a narrow stem its own box. Each part of a multi-part shape has its own box in both.
+- Damage sounds use the player's real maximum rather than the fixed 0x1E in the splash code.
+
+Back-to-back panels are not a change: the billboards (10106, 10107) have one face per side, and the remake draws those one-sided so they don't fight.
 
 Left alone: one non-splash shot can hit two overlapping tanks in the same tick in the original (the remake stops at the first); a splash's sound uses a fixed `_DAMAGE < 0x1E` test.
