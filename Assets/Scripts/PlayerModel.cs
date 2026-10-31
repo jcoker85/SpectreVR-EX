@@ -42,7 +42,7 @@ namespace SpectreEX
                 AddMesh("Panels", t, p.shape.Coloured(colour), faces, layer);
                 foreach (var face in p.shape.TexturedFaces) AddMesh("Textured", t, face.Value, ShapeTextures.Material(face.Key, faces), layer);
                 if (p.shape.TexturedFaces.Count > 0) AddMesh("Flat", t, p.shape.FlatFaces(colour), faces, layer);
-                AddMesh("Edges", t, p.shape.Edges(edgeThickness), glow, layer);
+                AddMesh("Edges", t, p.shape.Wires(edgeThickness, colour), faces, layer);
                 int tag = p.id & 0xFF;
                 if (tag == 0x5F) wings.Add((t, -1));
                 else if (tag == 0x60) wings.Add((t, 1));

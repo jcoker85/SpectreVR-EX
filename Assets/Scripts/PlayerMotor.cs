@@ -225,6 +225,14 @@ namespace SpectreEX
                         break;
                     case ObstacleBehaviour.Kind.Pusher:
                     {
+                        // The demo treats pushers as solid and hops them (_PLAY_LEVEL)
+                        if (GameManager.Instance != null && GameManager.Instance.Demo)
+                        {
+                            blocked = true;
+                            blockerAt = gate.transform.position;
+                            DemoHop(blockerAt);
+                            break;
+                        }
                         // _HIT_A_GATE moves the craft's object, whose coordinates are the negative of these: along the arrow
                         int h = (gate.heading - 0x40) & 0xFF;
                         moveX = -(long)Sin[h] * PushSpeed;
@@ -277,6 +285,7 @@ namespace SpectreEX
             {
                 blocked = true;
                 blockerAt = solid.position;
+                if (GameManager.Instance != null && GameManager.Instance.Demo) DemoHop(blockerAt);
             }
             if (gate == null) { lastGate = null; onIce = false; acidTimer = 0; }
             if (Floating > 0) blocked = false;   // wings carry you over anything
@@ -430,6 +439,15 @@ namespace SpectreEX
                 DamageSelf(damage, !slicer && !blocks);   // the blocking kinds only bounce you
             }
             return !blocks;
+        }
+
+        // In the demo a craft that hits something jumps if it can, and moves away if it's right on top of it
+        void DemoHop(Vector3 at)
+        {
+            if (!under && z == minZ && Hyper >= JumpCost) { Hyper -= JumpCost; vz = JumpVz; }
+            var gm = GameManager.Instance;
+            if (OriginalMath.QDist(x - ToUnits(at.x), y - ToUnits(at.z)) < 0xF && gm.TryFindSpawnPoint(out var p, 0f))
+                Place(p, Yaw(), false);
         }
 
         // Raw damage points (collisions and acid count in the original's units, unlike weapon hits)

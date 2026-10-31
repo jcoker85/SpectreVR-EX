@@ -185,36 +185,11 @@ namespace SpectreEX
         // Options-dialog settings that affect the running scene
         public void ApplySettings()
         {
-            Sfx.Enabled = GameSettings.SoundEffectsOn;
-            ApplyComplex(GameSettings.DisplayComplex);
-            if (floorDots != null) floorDots.enabled = GameSettings.DisplayTextures;
-            if (horizon != null) horizon.enabled = GameSettings.DisplayTextures;
+            Sfx.Enabled = GameSettings.SoundEffectsOn && !GameSettings.SoundMuted;
+            ShowFloorDots();
             foreach (var r in FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None)) ApplyFilled(r);
         }
 
-        float aoIntensity = -1f;
-
-        // Options "Complex": ray-traced reflections, global illumination, ambient occlusion and shadows.
-        // Off forces each effect off in the arena profile rather than deactivating it, because a
-        // deactivated component falls back to HDRP's default profile (which has screen-space reflections on).
-        void ApplyComplex(bool on)
-        {
-            var vol = FindFirstObjectByType<Volume>();
-            if (vol != null)
-            {
-                var profile = vol.profile;   // runtime instance, so the hand-tuned asset on disk is untouched
-                if (profile.TryGet<ScreenSpaceReflection>(out var ssr)) { ssr.active = true; ssr.enabled.Override(on); }
-                if (profile.TryGet<GlobalIllumination>(out var gi)) { gi.active = true; gi.enable.Override(on); }
-                if (profile.TryGet<ScreenSpaceAmbientOcclusion>(out var ao))
-                {
-                    if (aoIntensity < 0f) aoIntensity = ao.intensity.value;
-                    ao.active = true;
-                    ao.intensity.Override(on ? aoIntensity : 0f);
-                }
-            }
-            foreach (var light in FindObjectsByType<HDAdditionalLightData>(FindObjectsSortMode.None))
-                light.useRayTracedShadows = on;
-        }
 
         // Options "Filled": the solid faces of craft and obstacles (named "Panels"); off draws their edges insteads
         public static void ApplyFilled(Renderer r)
@@ -277,10 +252,76 @@ namespace SpectreEX
             Playing = true;
         }
 
+        readonly Dictionary<int, Mesh> dotMeshes = new Dictionary<int, Mesh>();
+
+        // _DRAW_LEVEL: dotted lines 0x10000 apart both ways, the dots 0x2000 apart and halving each level
+        void ShowFloorDots()
+        {
+            if (floorDots == null) return;
+            int level = GameSettings.DrawLevel;
+            floorDots.enabled = level > 0;
+            if (level <= 0) return;
+            if (!dotMeshes.TryGetValue(level, out var mesh) || mesh == null) dotMeshes[level] = mesh = BuildDots(0x4000 >> level);
+            floorDots.GetComponent<MeshFilter>().sharedMesh = mesh;
+        }
+
+        static Mesh BuildDots(int spacing)
+        {
+            const int Line = 0x10000, Edge = 0x40000;
+            const float Size = 0.15f, Height = 0.012f;
+            var verts = new List<Vector3>();
+            var tris = new List<int>();
+            void Dot(int x, int y)
+            {
+                var c = new Vector3(x, 0f, y) * PlayerMotor.UnitsToMetres;
+                int b = verts.Count;
+                verts.Add(new Vector3(c.x - Size, Height, c.z - Size));
+                verts.Add(new Vector3(c.x - Size, Height, c.z + Size));
+                verts.Add(new Vector3(c.x + Size, Height, c.z + Size));
+                verts.Add(new Vector3(c.x + Size, Height, c.z - Size));
+                tris.AddRange(new[] { b, b + 1, b + 2, b, b + 2, b + 3 });
+            }
+            for (int a = -Edge; a <= Edge; a += Line)
+                for (int d = -Edge; d <= Edge; d += spacing)
+                {
+                    Dot(a, d);
+                    if (d % Line != 0) Dot(d, a);   // the crossings are already there
+                }
+            var mesh = new Mesh { name = "FloorDots", indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
+            mesh.SetVertices(verts);
+            mesh.SetTriangles(tris, 0);
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            return mesh;
+        }
+
+        int godKeys;   // G then O, then the draw-level key, opens the map view
+
+        // The original's other keys while playing. Its S, D are taken by the modern driving keys, so those
+        // two live on F2 and F3; the rest are where it had them.
+        void DisplayKeys(Keyboard k)
+        {
+            bool changed = false;
+            if (k.f2Key.wasPressedThisFrame) { GameSettings.SoundMuted = !GameSettings.SoundMuted; changed = true; }
+            if (k.gKey.wasPressedThisFrame) godKeys = 1;
+            if (k.oKey.wasPressedThisFrame) godKeys = godKeys == 1 ? 2 : 0;
+            if (k.f3Key.wasPressedThisFrame)
+            {
+                if (godKeys == 2) FindFirstObjectByType<ViewCamera>().mode = ViewMode.Map;
+                else { GameSettings.DrawLevel = (GameSettings.DrawLevel + 1) % 4; changed = true; }
+                godKeys = 0;
+            }
+            if (k.f5Key.wasPressedThisFrame) { GameSettings.DisplayTextures = !GameSettings.DisplayTextures; changed = true; }
+            if (k.f6Key.wasPressedThisFrame) { GameSettings.DisplayMovies = !GameSettings.DisplayMovies; changed = true; }
+            if (k.fKey.wasPressedThisFrame && !Demo) { GameSettings.DisplayFilled = !GameSettings.DisplayFilled; changed = true; }
+            if (changed) ApplySettings();
+        }
+
         void Update()
         {
             if (!InGame || Suspended) return;
             var k = Keyboard.current;
+            if (k != null) DisplayKeys(k);
 
             if (Demo)
             {

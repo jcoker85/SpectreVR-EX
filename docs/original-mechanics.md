@@ -537,3 +537,26 @@ Left alone: one non-splash shot can hit two overlapping tanks in the same tick i
 - Every level on Hard (73 starts, wrapping past 55) loads clean with all robot types, obstacles and flags. Level 4's grid, 10116, is 18 flag entries and nothing else, so an empty arena is correct.
 - `_HIT_A_GATE`, `_DO_COLLIDE_DAMAGE` and the main loop's gate handling checked line by line. Fixed: `_D_P_DE_RES` fires on all damage, including acid, contact and splash; the blocking robots (7, 8, 25, 27) make no damage sound on contact.
 - Scripted in Unity: teleport lands on the other gate; slow pad cuts speed to a quarter; a pusher moves an idle craft; acid costs the level's points every third tick (Central Systems: 3, from Smart Acid's data); a down transport sinks to -0xF00; a windmill blocks; level 49's ten robot types ran for 30 s with none leaving the arena.
+
+## Keys and display options
+
+`_TEXTURES` bits: 1 Complex (Options C) picks the shape column, textured or plain, read as a level loads; 2 Filled (L, in play F); 4 Textures (T, in play F5); 8 Movies (M, in play F6, `_SHOW_A_MOVIE_FRAME`); 0x10 custom matrices (U). Textures doesn't touch the floor dots or the sky: the dots belong to `_DRAW_LEVEL` and the sky is always drawn. Ray tracing is the remake's own and stays on.
+
+| Original key | Does | Remake |
+|---|---|---|
+| S | sound on or off | F2, S is driving |
+| D | `_DRAW_LEVEL` 0-3 | F3, D is driving |
+| G, O, then D | `_DRAW_GOD_VIEW`, a map of every object, flags blinking | G, O, F3 |
+| F | filled or wireframe | F |
+| F5 / F6 | textures / movie faces | F5 / F6 (movies not built) |
+| Shift | cockpit look: left, right, both behind | same |
+| Home, PgUp, End, PgDn, Ins | diagonal driving, fire | same |
+| J | re-calibrate joystick | not needed; J stays the remake's jump |
+
+Floor (`_DRAW_LEVEL`): dotted lines 0x10000 apart both ways, dots every 0x2000 at level 1, halving each level, none at 0. The original only draws those near the camera; the remake draws them all.
+
+Wireframe lines take each face's colour (`_POLYWIRE`). When the player dies the view swings round the wreck: heading `_DEAD_TIMER` >> 4, distance (timer + 15) * 32, height timer * 0.75 * 16.
+
+Demo (`_MOVE_ATTRACT_TANK`): a dump when within 20 points of destruction or under 10 rounds, else any robot within 500 (backing off under 0x50, cannon on Robot Tanks from the ground, otherwise missiles, inside 0x244), else the nearest flag unless it needs a dump and one is nearer. Pushers count as solid, and hitting something hops if it can. After 0x10E ticks on one target it moves elsewhere. Steering here is the remake's own, not `_FIND_CLEAR_PATH`.
+
+Robots don't bump each other: the path check keeps them apart, and nothing sets the tank record's +0xE stop flag that `_MOVE_TANKS` clears. The recap has no demo hold in the code, so the 3-minute wait on the running original looks like the emulator. Texture orientation: `_POLY_2D`'s basis is the remake's, with the image's vertical negated.

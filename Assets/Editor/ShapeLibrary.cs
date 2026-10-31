@@ -54,7 +54,7 @@ namespace SpectreEX.EditorTools
         public static Mesh EdgeMesh(int id, float scale, float thickness, Func<Vector3, Vector3> warp = null)
         {
             var s = Get(id);
-            return Matrix.ShapeMeshes.Edges(Verts(s, scale, warp), Faces(s), thickness, $"Spectre_{id}_Edges");
+            return Matrix.ShapeMeshes.Edges(Verts(s, scale, warp), new System.Collections.Generic.List<int[]>(Faces(s)).ToArray(), thickness, $"Spectre_{id}_Edges");
         }
 
         static IEnumerable<int[]> Faces(ShapeDef s)

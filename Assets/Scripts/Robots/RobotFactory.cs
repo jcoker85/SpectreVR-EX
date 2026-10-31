@@ -56,7 +56,7 @@ namespace SpectreEX
                 Mesh("Panels", t, part.shape.Coloured(colour), look.shapes, ShadowCastingMode.On);
                 foreach (var face in part.shape.TexturedFaces) Mesh("Textured", t, face.Value, ShapeTextures.Material(face.Key, look.shapes), ShadowCastingMode.On);
                 if (part.shape.TexturedFaces.Count > 0) Mesh("Flat", t, part.shape.FlatFaces(colour), look.shapes, ShadowCastingMode.On);
-                Mesh("Edges", t, part.shape.Edges(edgeThickness), glow, ShadowCastingMode.Off);
+                Mesh("Edges", t, part.shape.Wires(edgeThickness, colour), look.shapes, ShadowCastingMode.Off);
                 var b = part.shape.Body.bounds;
                 b.center += part.offset;
                 if (i == 0) bounds = b; else bounds.Encapsulate(b);

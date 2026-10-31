@@ -42,9 +42,12 @@ namespace SpectreEX
         public static SoundCard Sound = SoundCard.SoundBlaster;
         public static bool[] Music = { true, false, false, false };
         public static Difficulty Difficulty = Difficulty.Easy;
-        public static bool DisplayComplex = true;    // ray-traced lighting and reflections
+        public static bool DisplayComplex = true;    // the detailed shape set; off is the plain one, from the next level
         public static bool DisplayFilled = true;     // solid faces; off is the wireframe view
-        public static bool DisplayTextures = true;   // floor dots, wall glow and textured faces
+        public static bool DisplayTextures = true;   // textured faces
+        public static bool DisplayMovies;            // movie faces, off as in the original
+        public static int DrawLevel = 1;             // floor dots: 0 none, 1-3 ever finer (_DRAW_LEVEL)
+        public static bool SoundMuted;               // the in-game sound key
         public static VehicleSpec Custom = new VehicleSpec("CUSTOM", 5, 5, 5);
         public static int SelectedVehicle;           // 0 Balance, 1 Speedy, 2 Strong, 3 Custom
         public static string SelectedMatrix = "CENTRAL.MAT";   // file name chosen in the MATRIX dialog
@@ -89,6 +92,7 @@ namespace SpectreEX
             DisplayComplex = PlayerPrefs.GetInt("opt.complex", 1) == 1;
             DisplayFilled = PlayerPrefs.GetInt("opt.filled", 1) == 1;
             DisplayTextures = PlayerPrefs.GetInt("opt.textures", 1) == 1;
+            DisplayMovies = PlayerPrefs.GetInt("opt.movies", 0) == 1;
             Custom = new VehicleSpec("CUSTOM", PlayerPrefs.GetInt("custom.speed", 5), PlayerPrefs.GetInt("custom.shields", 5), PlayerPrefs.GetInt("custom.ammo", 5));
             SelectedVehicle = PlayerPrefs.GetInt("vehicle", 0);
             SelectedMatrix = PlayerPrefs.GetString("matrix", "CENTRAL.MAT");
@@ -104,6 +108,7 @@ namespace SpectreEX
             PlayerPrefs.SetInt("opt.complex", DisplayComplex ? 1 : 0);
             PlayerPrefs.SetInt("opt.filled", DisplayFilled ? 1 : 0);
             PlayerPrefs.SetInt("opt.textures", DisplayTextures ? 1 : 0);
+            PlayerPrefs.SetInt("opt.movies", DisplayMovies ? 1 : 0);
             PlayerPrefs.SetInt("custom.speed", Custom.speed);
             PlayerPrefs.SetInt("custom.shields", Custom.shields);
             PlayerPrefs.SetInt("custom.ammo", Custom.ammo);

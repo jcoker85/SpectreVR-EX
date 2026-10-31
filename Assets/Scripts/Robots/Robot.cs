@@ -475,7 +475,7 @@ namespace SpectreEX
             var part = model != null ? model.Find("Shape") : null;
             if (part == null) return;
             foreach (var f in part.GetComponentsInChildren<MeshFilter>(true))
-                f.sharedMesh = f.name == "Panels" ? geometry.Coloured(BuiltinShapes.TypeColour(matrixType)) : geometry.Edges(gm.obstacleLook.edgeThickness);
+                f.sharedMesh = f.name == "Panels" ? geometry.Coloured(BuiltinShapes.TypeColour(matrixType)) : geometry.Wires(gm.obstacleLook.edgeThickness, BuiltinShapes.TypeColour(matrixType));
         }
 
         // ---------- _FIND_CLEAR_PATH / _CHECK_TANK_PATH ----------

@@ -173,7 +173,7 @@ namespace SpectreEX.Matrix
             MeshObject("Panels", t, shape.Coloured(colour), panel, ShadowCastingMode.On);
             foreach (var face in shape.TexturedFaces) MeshObject("Textured", t, face.Value, ShapeTextures.Material(face.Key, panel), ShadowCastingMode.On);
             if (shape.TexturedFaces.Count > 0) MeshObject("Flat", t, shape.FlatFaces(colour), panel, ShadowCastingMode.On);
-            MeshObject("Edges", t, shape.Edges(thickness), glow, ShadowCastingMode.Off);
+            MeshObject("Edges", t, shape.Wires(thickness, colour), panel, ShadowCastingMode.Off);
             return t;
         }
 

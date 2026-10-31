@@ -45,11 +45,11 @@ namespace SpectreEX
             var k = Keyboard.current;
             if (k != null)
             {
-                if (k.wKey.isPressed || k.upArrowKey.isPressed || k.numpad8Key.isPressed || k.numpad7Key.isPressed || k.numpad9Key.isPressed) throttle += 1f;
-                if (k.sKey.isPressed || k.downArrowKey.isPressed || k.numpad2Key.isPressed || k.numpad1Key.isPressed || k.numpad3Key.isPressed) throttle -= 1f;
-                if (k.dKey.isPressed || k.rightArrowKey.isPressed || k.numpad6Key.isPressed || k.numpad9Key.isPressed || k.numpad3Key.isPressed) turn += 1f;
-                if (k.aKey.isPressed || k.leftArrowKey.isPressed || k.numpad4Key.isPressed || k.numpad7Key.isPressed || k.numpad1Key.isPressed) turn -= 1f;
-                fire |= k.spaceKey.isPressed || k.numpad0Key.isPressed;
+                if (k.wKey.isPressed || k.upArrowKey.isPressed || k.numpad8Key.isPressed || k.numpad7Key.isPressed || k.numpad9Key.isPressed || k.homeKey.isPressed || k.pageUpKey.isPressed) throttle += 1f;
+                if (k.sKey.isPressed || k.downArrowKey.isPressed || k.numpad2Key.isPressed || k.numpad1Key.isPressed || k.numpad3Key.isPressed || k.endKey.isPressed || k.pageDownKey.isPressed) throttle -= 1f;
+                if (k.dKey.isPressed || k.rightArrowKey.isPressed || k.numpad6Key.isPressed || k.numpad9Key.isPressed || k.numpad3Key.isPressed || k.pageUpKey.isPressed || k.pageDownKey.isPressed) turn += 1f;
+                if (k.aKey.isPressed || k.leftArrowKey.isPressed || k.numpad4Key.isPressed || k.numpad7Key.isPressed || k.numpad1Key.isPressed || k.homeKey.isPressed || k.endKey.isPressed) turn -= 1f;
+                fire |= k.spaceKey.isPressed || k.numpad0Key.isPressed || k.insertKey.isPressed;
                 hyper |= k.backspaceKey.wasPressedThisFrame || k.backquoteKey.wasPressedThisFrame;
                 jump |= k.numpad5Key.wasPressedThisFrame || k.jKey.wasPressedThisFrame;
                 if (k.leftAltKey.wasPressedThisFrame || k.rightAltKey.wasPressedThisFrame) Weapon.PressAlt();

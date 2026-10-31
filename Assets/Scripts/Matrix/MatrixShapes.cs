@@ -20,6 +20,15 @@ namespace SpectreEX.Matrix
         }
 
         readonly Dictionary<int, Mesh> bodies = new Dictionary<int, Mesh>();
+        readonly Dictionary<int, Mesh> wires = new Dictionary<int, Mesh>();
+
+        // The wireframe view's lines, in each face's own colour
+        public Mesh Wires(float thickness, int objectColour)
+        {
+            if (!wires.TryGetValue(objectColour, out var mesh) || mesh == null)
+                wires[objectColour] = mesh = ShapeMeshes.Edges(UnityPoints(), faces, thickness, "Shape_Wires", colours, objectColour);
+            return mesh;
+        }
         Mesh edges;
         float edgeThickness;
 
@@ -179,13 +188,17 @@ namespace SpectreEX.Matrix
         }
 
         // Glow lines: one thin square prism per unique polygon edge, merged into one mesh.
-        public static Mesh Edges(Vector3[] v, IEnumerable<int[]> faces, float thickness, string name)
+        // With colours, each line takes its face's colour, as _POLYWIRE draws them.
+        public static Mesh Edges(Vector3[] v, int[][] faces, float thickness, string name, int[] colours = null, int objectColour = 0)
         {
             var seen = new HashSet<long>();
             var verts = new List<Vector3>();
+            var uvs = new List<Vector2>();
             var tris = new List<int>();
-            foreach (var f in faces)
+            for (int i = 0; i < faces.Length; i++)
             {
+                var f = faces[i];
+                var uv = colours != null ? SpectrePalette.Uv(SpectrePalette.Entry(i < colours.Length ? colours[i] : 0, objectColour)) : Vector2.zero;
                 for (int k = 0; k < f.Length; k++)
                 {
                     int a = f[k], b = f[(k + 1) % f.Length];
@@ -193,10 +206,12 @@ namespace SpectreEX.Matrix
                     long key = a < b ? ((long)a << 32) | (uint)b : ((long)b << 32) | (uint)a;
                     if (!seen.Add(key)) continue;
                     AddPrism(verts, tris, v[a], v[b], thickness);
+                    while (uvs.Count < verts.Count) uvs.Add(uv);
                 }
             }
             var mesh = new Mesh { name = name };
             mesh.SetVertices(verts);
+            if (colours != null) mesh.SetUVs(0, uvs);
             mesh.SetTriangles(tris, 0);
             mesh.RecalculateNormals();
             mesh.RecalculateBounds();
@@ -345,18 +360,25 @@ namespace SpectreEX.Matrix
             this.central = central;
         }
 
-        // _LOAD_WRLD clears every random list's pick at the start of a level
-        public void NewLevel() => picks.Clear();
+        // _LOAD_WRLD clears every random list's pick at the start of a level, and shapes load then, so
+        // the Complex option applies from the next level
+        public void NewLevel()
+        {
+            picks.Clear();
+            plain = !GameSettings.DisplayComplex;
+        }
+
+        bool plain = !GameSettings.DisplayComplex;
 
         int[] Table => matrix?.ShapeTable ?? central?.ShapeTable;
 
-        // The textured column, which the game uses with its default settings (_TEXTURES = 3)
+        // Complex picks the textured column, off the plain one (_TEXTURES bit 1)
         public List<Part> ForType(int type)
         {
             var parts = new List<Part>();
             var table = Table;
             if (table == null || type < 0 || type * 3 >= table.Length) return parts;
-            int id = table[type * 3];
+            int id = table[type * 3 + (plain ? 1 : 0)];
             id = id switch { 16 => 10030, 17 => 10027, 20 => 10087, _ => id };
 
             if (id >= 2000 && id < 3000)

@@ -310,12 +310,6 @@ namespace SpectreEX.EditorTools
             return mesh;
         }
 
-        static Mesh Pennant()
-        {
-            var v = new[] { new Vector3(0, 0, 0), new Vector3(0, 1, 0), new Vector3(1.6f, 0.5f, 0) };
-            return FlatMesh("Pennant", v, new[] { 0, 1, 2, 0, 2, 1 });
-        }
-
         // All the floor dots as one mesh: one renderer instead of thousands.
         static Mesh FloorDots()
         {
@@ -403,10 +397,9 @@ namespace SpectreEX.EditorTools
 
         static Prefabs BuildPrefabs()
         {
-            var pennant = Pennant();
 
             var p = new Prefabs();
-            p.flag = SavePrefab(BuildFlag(pennant)).GetComponent<Flag>();
+            p.flag = SavePrefab(BuildFlag()).GetComponent<Flag>();
             p.dump = SavePrefab(BuildAmmoDump()).GetComponent<AmmoDump>();
             return p;
         }
@@ -428,7 +421,7 @@ namespace SpectreEX.EditorTools
             return model;
         }
 
-        static GameObject BuildFlag(Mesh pennant)
+        static GameObject BuildFlag()
         {
             var f = new GameObject("Flag");
             // The flag's own extent, 0x800 units out and 0x1200 high (_CUBE_COLLIDE)

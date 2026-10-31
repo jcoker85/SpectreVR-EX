@@ -3,7 +3,7 @@ using UnityEngine.InputSystem;
 
 namespace SpectreEX
 {
-    public enum ViewMode { Internal, External, Overhead }
+    public enum ViewMode { Internal, External, Overhead, Map }
 
     // Spectre's three views, cycled with Tab / numpad *: internal (cockpit), external (behind the
     // tank) and overhead map. + / - zoom the external and overhead views.
@@ -34,9 +34,40 @@ namespace SpectreEX
             playerMask = layer >= 0 ? 1 << layer : 0;
         }
 
-        float demoClock;
+        float demoClock, deadTimer;
+        Health health;
+
+        // _DRAW_GOD_VIEW: a plain map of everything in the matrix, the flags blinking
+        void OnGUI()
+        {
+            if (mode != ViewMode.Map) return;
+            var gm = GameManager.Instance;
+            if (gm == null) return;
+            GUI.color = Color.black;
+            GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
+            float size = Screen.height * 0.6f, half = size * 0.5f;
+            var centre = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
+            float scale = half / gm.arenaHalfSize;
+            void Dot(Vector3 p, Color c)
+            {
+                GUI.color = c;
+                GUI.DrawTexture(new Rect(centre.x + p.x * scale - 1f, centre.y - p.z * scale - 1f, 3f, 3f), Texture2D.whiteTexture);
+            }
+            GUI.color = Color.white;
+            foreach (var r in new[] { new Rect(centre.x - half, centre.y - half, size, 1f), new Rect(centre.x - half, centre.y + half, size, 1f), new Rect(centre.x - half, centre.y - half, 1f, size), new Rect(centre.x + half, centre.y - half, 1f, size) })
+                GUI.DrawTexture(r, Texture2D.whiteTexture);
+            foreach (var o in gm.Obstacles) if (o != null) Dot(o.transform.position, Color.grey);
+            foreach (var d in gm.Dumps) if (d != null) Dot(d.transform.position, Color.green);
+            foreach (var r in gm.Robots) if (r != null && !r.IsDead) Dot(r.transform.position, Color.red);
+            if (((int)(Time.time * PlayerMotor.TickRate) & 8) != 0)
+                foreach (var f in gm.Flags) if (f != null) Dot(f.transform.position, Color.yellow);
+            Dot(target.position, Color.cyan);
+            GUI.color = Color.white;
+        }
 
         // In demo mode the view moves on every 126 ticks (_PLAY_LEVEL), and a real game starts inside
+        void NextMode() => mode = (int)mode >= 2 ? ViewMode.Internal : mode + 1;
+
         void CycleInDemo()
         {
             var gm = GameManager.Instance;
@@ -45,7 +76,7 @@ namespace SpectreEX
                 demoClock += Time.deltaTime;
                 if (demoClock < 126f / PlayerMotor.TickRate) return;
                 demoClock = 0f;
-                mode = (ViewMode)(((int)mode + 1) % 3);
+                NextMode();
             }
             else if (demoClock > 0f)
             {
@@ -63,8 +94,7 @@ namespace SpectreEX
             var k = Keyboard.current;
             if (k != null)
             {
-                if (k.tabKey.wasPressedThisFrame || k.numpadMultiplyKey.wasPressedThisFrame)
-                    mode = (ViewMode)(((int)mode + 1) % 3);
+                if (k.tabKey.wasPressedThisFrame || k.numpadMultiplyKey.wasPressedThisFrame) NextMode();
                 float zoom = 0f;
                 if (k.equalsKey.isPressed || k.numpadPlusKey.isPressed) zoom -= 1f;
                 if (k.minusKey.isPressed || k.numpadMinusKey.isPressed) zoom += 1f;
@@ -72,9 +102,13 @@ namespace SpectreEX
                 if (mode == ViewMode.Overhead) overheadHeight = Mathf.Clamp(overheadHeight + zoom * 80f * Time.deltaTime, 30f, 320f);
             }
 
+            health = health != null ? health : target.GetComponent<Health>();
+            bool dead = health != null && health.IsDead;
+            deadTimer = dead ? Mathf.Min(deadTimer + 0x32 * PlayerMotor.TickRate * Time.deltaTime, 0x9C3) : 0f;
+
             // Hide our own hull from the inside
             if (playerMask != 0)
-                cam.cullingMask = mode == ViewMode.Internal ? cam.cullingMask & ~playerMask : cam.cullingMask | playerMask;
+                cam.cullingMask = mode == ViewMode.Internal && !dead ? cam.cullingMask & ~playerMask : cam.cullingMask | playerMask;
 
             Quaternion yaw = Quaternion.Euler(0f, target.eulerAngles.y, 0f);
             float t = 1f - Mathf.Exp(-followSharpness * Time.deltaTime);
@@ -95,10 +129,31 @@ namespace SpectreEX
             }
             Quaternion smoothRot = Quaternion.Euler(0f, smoothYaw, 0f);
 
+            // _DEAD_TIMER: the view swings round the wreck from further and further up
+            if (dead)
+            {
+                float heading = deadTimer / 16f;
+                var turn = Quaternion.Euler(0f, 180f - heading * 360f / 256f, 0f);
+                float units = PlayerMotor.UnitsToMetres;
+                transform.SetPositionAndRotation(target.position - turn * Vector3.forward * ((deadTimer + 15f) * 32f * units)
+                    + Vector3.up * (deadTimer * 0.75f * 16f * units), turn);
+                return;
+            }
+
             switch (mode)
             {
                 case ViewMode.Internal:
-                    transform.SetPositionAndRotation(smoothPos + smoothRot * cockpitOffset, smoothRot);
+                {
+                    // Shift looks to the side, both Shifts behind
+                    var keys = Keyboard.current;
+                    bool left = keys != null && keys.leftShiftKey.isPressed, right = keys != null && keys.rightShiftKey.isPressed;
+                    float look = left ? (right ? 180f : -90f) : right ? 90f : 0f;
+                    Quaternion eye = smoothRot * Quaternion.Euler(0f, look, 0f);
+                    transform.SetPositionAndRotation(smoothPos + smoothRot * cockpitOffset, eye);
+                    break;
+                }
+                case ViewMode.Map:
+                    transform.SetPositionAndRotation(smoothPos, smoothRot);
                     break;
                 case ViewMode.External:
                 {

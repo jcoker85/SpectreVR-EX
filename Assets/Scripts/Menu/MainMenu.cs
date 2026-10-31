@@ -397,6 +397,7 @@ namespace SpectreEX.Menu
             Check(169, 174, () => GameSettings.DisplayComplex, () => GameSettings.DisplayComplex = !GameSettings.DisplayComplex);
             Check(169, 202, () => GameSettings.DisplayFilled, () => GameSettings.DisplayFilled = !GameSettings.DisplayFilled);
             Check(169, 230, () => GameSettings.DisplayTextures, () => GameSettings.DisplayTextures = !GameSettings.DisplayTextures);
+            Check(169, 258, () => GameSettings.DisplayMovies, () => GameSettings.DisplayMovies = !GameSettings.DisplayMovies);
 
             Button(options, new Rect(11, 287, 170, 41), () => ShowNotice("NETWORK PLAY\nIS NOT AVAILABLE\nIN THIS VERSION"));
             System.Action done = () =>
@@ -459,12 +460,15 @@ namespace SpectreEX.Menu
                 "DRIVE        ARROWS, WASD OR KEYPAD\n" +
                 "FIRE         SPACE, KEYPAD 0 OR MOUSE\n" +
                 "HYPERSPACE   BACKSPACE OR TILDE\n" +
+                "LOOK         LEFT, RIGHT SHIFT, BOTH BEHIND\n" +
                 "JUMP         KEYPAD 5 OR J\n" +
                 "VIEW         TAB OR KEYPAD *\n" +
                 "ZOOM         + AND -\n" +
                 "PAUSE        P\n" +
                 "MAIN MENU    ESC\n" +
                 "MUSIC        M ON-OFF, N NEXT TRACK\n" +
+                "SOUND F2     FLOOR DOTS F3     WIRE F\n" +
+                "TEXTURES F5  MOVIES F6\n" +
                 "GAMEPAD      STICK, RT OR A FIRE\n" +
                 "             Y HYPERSPACE, B JUMP\n\n" +
                 "COLLECT EVERY FLAG TO FINISH A LEVEL.\n" +
