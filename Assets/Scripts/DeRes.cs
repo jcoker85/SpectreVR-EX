@@ -24,6 +24,9 @@ namespace SpectreEX
             public Vector2? uv;   // one colour for the whole part, for textured faces
         }
 
+        static readonly HashSet<GameObject> playing = new HashSet<GameObject>();   // one at a time on a craft
+
+        GameObject source;
         readonly List<Part> parts = new List<Part>();
         readonly List<Vector3> verts = new List<Vector3>();
         readonly List<Vector2> uvs = new List<Vector2>();
@@ -36,12 +39,13 @@ namespace SpectreEX
         public static void Play(GameObject source, int peak, float seconds, bool returns)
         {
             var gm = GameManager.Instance;
-            if (gm == null) return;
+            if (gm == null || !playing.Add(source)) return;
             var go = new GameObject("DeRes");
             var d = go.AddComponent<DeRes>();
             d.peak = peak;
             d.seconds = seconds;
             d.returns = returns;
+            d.source = source;
             foreach (var f in source.GetComponentsInChildren<MeshFilter>(true))
             {
                 bool shown = f.name == "Panels" || f.name == (GameSettings.DisplayTextures ? "Textured" : "Flat");
@@ -67,14 +71,24 @@ namespace SpectreEX
             own.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         }
 
+        bool Dead
+        {
+            get
+            {
+                var health = source != null ? source.GetComponent<Health>() : null;
+                return health != null && health.IsDead;
+            }
+        }
+
         void LateUpdate()
         {
             age += Time.deltaTime;
             if (age >= seconds)
             {
+                playing.Remove(source);
                 if (returns)
                     foreach (var p in parts)
-                        if (p.renderer != null) GameManager.ApplyFilled(p.renderer);
+                        if (p.renderer != null && !Dead) GameManager.ApplyFilled(p.renderer);
                 Destroy(mesh);
                 Destroy(gameObject);
                 return;

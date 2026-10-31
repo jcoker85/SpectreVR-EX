@@ -132,29 +132,25 @@ namespace SpectreEX
 
         public void EndTick()
         {
-            Flash(stun > 0 && (stun & 1) == 1 && (matrixType == 7 || matrixType == 8));
+            ShowStun();
             curPos = Position;
             curYaw = OriginalMath.Yaw(heading);
             curRoll = RollDegrees();
         }
 
         // _MOVE_TANKS: a stunned Robot / Super Tank swaps colour every tick
-        MeshRenderer[] edges;
-        Material[] edgeMats;
-        bool flashing;
+        int stunRamp = 0x40;
 
-        void Flash(bool on)
+        // A stunned Super Tank's colour swaps between orange and red. Only faces in the object's own
+        // colour show it, which here means the flat ones, not the steel texture.
+        void ShowStun()
         {
-            if (on == flashing) return;
-            var look = GameManager.Instance != null ? GameManager.Instance.robotLook : null;
-            if (look == null || look.flash == null) return;
-            if (edges == null)
-            {
-                edges = GetComponentsInChildren<MeshRenderer>(true);
-                edgeMats = System.Array.ConvertAll(edges, r => r.sharedMaterial);
-            }
-            flashing = on;
-            for (int i = 0; i < edges.Length; i++) edges[i].sharedMaterial = on ? look.flash : edgeMats[i];
+            if (matrixType != 8 || GameSettings.DisplayTextures) return;
+            int ramp = (stun & 1) == 1 ? 0x10 : 0x40;
+            if (ramp == stunRamp) return;
+            stunRamp = ramp;
+            foreach (var r in GetComponentsInChildren<MeshRenderer>(true))
+                if (r.name == "Flat") SpectrePalette.Paint(r, SpectrePalette.Entry(ramp), GameManager.Instance.obstacleLook.shapes);
         }
 
         public void Interpolate(float t)
@@ -209,6 +205,9 @@ namespace SpectreEX
             x = System.Math.Clamp(x, -Arena, Arena);
             y = System.Math.Clamp(y, -Arena, Arena);
         }
+
+        // _RESET_TANKS_CHASE: back to patrolling or hunting from scratch
+        public void ResetChase() => mode = matrixType == 7 ? ModePatrol : ModeChase;
 
         public void SpinFromHit()
         {
@@ -371,7 +370,7 @@ namespace SpectreEX
 
             // Firing
             if (data.weapon < 0 || director.PlayerUnder) return;
-            int level = GameManager.Instance.Level;
+            int level = GameManager.Instance.Level - 1;   // the original counts levels from 0
             int wait = Mathf.Max((d >> 3) - (level >> 1), 0x10 - (level >> 3));
             fireCounter = Mathf.Min(fireCounter + 1, 0x708);
             if (wait * data.interval / 0x78 < fireCounter && dying == 0 && (reverse == 0 || level > 14) && d2 < data.FiringRangeSq)
@@ -427,13 +426,13 @@ namespace SpectreEX
             }
             if (z == 0 && moveTimer == 0)
             {
-                if (director.PlayerUnder) { ChangeShape(10023); z = -0x1400; }   // burrows to follow you under the floor
+                if (director.PlayerUnderInCockpit) { ChangeShape(10023); z = -0x1400; }   // burrows to follow you under the floor
                 return;
             }
             if (moveTimer > 0) moveTimer--;
             if (z < 0)
             {
-                if (!director.PlayerUnder) { ChangeShape(10002); z = 0; vz = 0; moveTimer = 0x24; }
+                if (!director.PlayerUnderInCockpit) { ChangeShape(10002); z = 0; vz = 0; moveTimer = 0x24; }
                 else { ChangeShape(10023); z = -0x1400; }
             }
             // The hop's frames: rising, falling, in between
@@ -457,7 +456,6 @@ namespace SpectreEX
             if (part == null) return;
             foreach (var f in part.GetComponentsInChildren<MeshFilter>(true))
                 f.sharedMesh = f.name == "Panels" ? geometry.Coloured(BuiltinShapes.TypeColour(matrixType)) : geometry.Edges(gm.obstacleLook.edgeThickness);
-            edges = null;   // the stun flash re-reads its renderers
         }
 
         // ---------- _FIND_CLEAR_PATH / _CHECK_TANK_PATH ----------

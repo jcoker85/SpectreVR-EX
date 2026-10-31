@@ -80,7 +80,6 @@ namespace SpectreEX.EditorTools
             {
                 shapes = shapeMat, tank = roverMat, superTank = turretMat, turret = turretMat, slicer = slicerMat,
                 flyer = orbiterMat, acid = acidMat, wall = pusherMat, mud = transportMat, orbiter = orbiterMat, bolt = enemyBoltMat,
-                flash = poleMat,
             };
             // Obstacles are built at runtime from each matrix's own shapes (Matrix.ObstacleFactory)
             gm.obstacleLook = new Matrix.ObstacleLook

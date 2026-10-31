@@ -21,7 +21,7 @@ namespace SpectreEX
         public const int HyperMax = 0x1900;
         const int HyperRecharge = 0xB, JumpCost = 0x640;
         const int Arena = 0x40000, FaceCentreBeyond = 0x38000;
-        const int GroundZ = 0x500, UnderZ = -0xF00, DropZ = 0x5000;
+        const int GroundZ = 0x500, UnderZ = -0xF00, LifeDropZ = 0xC800, HyperDropZ = 0x5000;
         const int Gravity = 0x100, JumpVz = 0xC00, HardLanding = -0xF00;
         const int PushSpeed = 0x12;
         public const int FloatMax = 0x546;
@@ -113,7 +113,7 @@ namespace SpectreEX
             heading = HeadingFromYaw(yaw);
             under = false;
             minZ = GroundZ;
-            z = dropIn ? DropZ : GroundZ + System.Math.Max(0, ToUnits(position.y));
+            z = dropIn ? LifeDropZ : GroundZ + System.Math.Max(0, ToUnits(position.y));
             vz = 0;
             Floating = 0;
             bounceI = turningSteps = heightStep = acidTimer = nothingTimer = 0;
@@ -464,7 +464,7 @@ namespace SpectreEX
             FaceRandomly();
             under = false;
             minZ = GroundZ;
-            z = DropZ;
+            z = HyperDropZ;
             vz = 0;
             Hyper = 0;
             onIce = false;
@@ -472,6 +472,7 @@ namespace SpectreEX
             Sfx.Play(Snd.Warp);
             Snap();
             DeRes.Play(gameObject, 5, 0.5f, true);
+            gm.ResetRobotChase();
         }
 
         // Any way round, but out near a corner you come in facing the middle

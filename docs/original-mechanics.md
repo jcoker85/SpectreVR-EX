@@ -397,7 +397,7 @@ robots within `_QFIND_DIST` 0x0E / 0x40 / 0x80 lose 5 / 2 / 2, the player takes 
      10000 below 60000, then every 20000, nine at most, sound NEWMAN.
    - Every 0x21C ticks (~30 s) 10 points of damage are mended (TMTICK).
    - Death: CYBOVRL, a life goes 50 ticks later, and the level carries on from the start position
-     (drop-in) with flags and robots as they were, shots cleared, ammo full, the bonus restarted.
+     (drop-in) with flags as they were, shots cleared, ammo full, the bonus restarted. Robots still in play are re-placed (`_PLACE_TANKS`) and their chase states reset; hyperspace resets chase too.
    - First level only: two spinning pads labelled Level 5 / Level 10 (`_JUMP_OBJ`, the fuel shape,
      random spots); driving onto one sets the score to 5000 / 10000, unlocks the heavy weapons of
      levels before (pad level - 2), mends damage and ends the level.
@@ -498,3 +498,7 @@ Measured with collisions off, Balance craft, at 10 / 30 / 59 / 117 / 128 fps: sp
 - `_START_LEVEL`: sound 0 stops the music, 0xF plays five ticks in, the banner lasts about 32 ticks, and the level's song (`DS:0x8F6`) starts as it ends.
 - Level end plays the AWARD sample over the level's song. There is no game-over sound. `_CHECK_HIGHSCORES` plays higame for a new best score, award for any other table entry.
 - `_SOUNDTABLE` entries are (priority, kind, sample). The original plays one sample at a time by priority; the remake lets them overlap.
+
+## Robot audit against the decompile
+
+Checked line by line: `_MOVE_TANKS`, `_CHASE_PLAYER`, `_FIND_CLEAR_PATH`, `_PATROL`, `_CIRCLE_SPOT`, `_LEAVE_THING`, `_FIX_HEADING` and `_MOVE_SHOTS`'s direct hits. Differences fixed: firing used the 1-based level (`_LEVEL` counts from 0); `_PLACE_TANKS` and `_RESET_TANKS_CHASE` run at every life, the reset also after hyperspace; lives drop from 0xC800 and hyperspace from 0x5000, after the banner; a stunned robot's object colour swaps (orange and red) rather than flashing, visible only on faces in the object colour; Slicers burrow only in cockpit view; hits on the player set `_D_P_DE_RES`. `_DZ` at a hit is a camera value overwritten each frame, so it isn't ported.

@@ -34,7 +34,7 @@ namespace SpectreEX
                 accumulator -= StepSeconds;
                 bool tickEnds = ++subStep == SubSteps;
                 if (tickEnds) subStep = 0;
-                if (motor != null) motor.SubStep(tickEnds);
+                if (motor != null && gm.Playing) motor.SubStep(tickEnds);
                 if (tickEnds)
                 {
                     if (director != null) director.SimTick();

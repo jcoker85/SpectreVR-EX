@@ -10,7 +10,6 @@ namespace SpectreEX
     {
         public Material shapes;   // solid faces, the level's palette
         public Material tank, superTank, turret, slicer, flyer, acid, wall, mud, orbiter, bolt;   // wireframe and debris
-        public Material flash;   // Robot / Super Tanks flash between their own colours and this while stunned
 
         public Material GlowFor(int type) => type switch
         {

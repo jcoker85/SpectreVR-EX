@@ -791,7 +791,22 @@ namespace SpectreEX
 
             director.Shots.Clear();
             PlacePlayerAtStart();
+            PlaceRobotsAgain();
             StartBonus();
+        }
+
+        // _PLACE_TANKS, at the start of every life: each robot still in play goes somewhere new
+        void PlaceRobotsAgain()
+        {
+            System.Array.Clear(flagGuards, 0, flagGuards.Length);
+            foreach (var r in director.Robots)
+                if (r != null && r.visible) r.Place(RobotSpot(r));
+            ResetRobotChase();
+        }
+
+        public void ResetRobotChase()
+        {
+            foreach (var r in director.Robots) if (r != null) r.ResetChase();
         }
     }
 }

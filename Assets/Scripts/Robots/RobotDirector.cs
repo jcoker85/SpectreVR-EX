@@ -10,6 +10,7 @@ namespace SpectreEX
     {
         public readonly List<Robot> Robots = new List<Robot>();
         public ShotSystem Shots { get; private set; }
+        ViewCamera view;
 
         GameManager gm;
 
@@ -17,6 +18,7 @@ namespace SpectreEX
         {
             gm = GetComponent<GameManager>();
             Shots = new ShotSystem(this);
+            if (Camera.main != null) view = Camera.main.GetComponent<ViewCamera>();
         }
 
         public void Clear()
@@ -59,6 +61,7 @@ namespace SpectreEX
         public bool PlayerOnGround => Motor == null || Motor.OnGround;
         public bool PlayerAirborne => Motor != null && Motor.Airborne;
         public bool PlayerUnder => Motor != null && Motor.Under;
+        public bool PlayerUnderInCockpit => PlayerUnder && (view == null || view.mode == ViewMode.Internal);
         public bool PlayerFloating => Motor != null && Motor.Floating > 0;
 
         // _GUESS_AT: where the player will be, d2 / 0x2000 ticks on

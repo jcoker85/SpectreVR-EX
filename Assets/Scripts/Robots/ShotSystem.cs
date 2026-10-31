@@ -331,6 +331,7 @@ namespace SpectreEX
             int damage = Damage(s.weapon);
             if (damage <= 0 && robot != null) robot.HitWithoutDamage();   // Spinners: still scores and stuns
             else health.TakeDamage(damage);
+            if (health.team == Team.Player && !health.IsDead) DeRes.Play(health.gameObject, 5, 0.55f, true);   // _D_P_DE_RES
             return true;
         }
 
