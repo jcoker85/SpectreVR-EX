@@ -95,7 +95,7 @@ namespace SpectreEX
         // A craft's colour, or plain grey for one drawn in a texture, which has no one colour to match
         int DebrisColour(int type)
         {
-            var parts = GameManager.Instance.Shapes?.ForType(type);
+            var parts = GameSettings.DisplayTextures ? GameManager.Instance.Shapes?.ForType(type) : null;
             if (parts != null)
                 foreach (var part in parts)
                     if (part.shape.TexturedFaces.Count > 0) return 0;

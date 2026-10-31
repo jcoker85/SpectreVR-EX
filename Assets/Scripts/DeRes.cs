@@ -44,7 +44,8 @@ namespace SpectreEX
             d.returns = returns;
             foreach (var f in source.GetComponentsInChildren<MeshFilter>(true))
             {
-                if (f.name != "Panels" || f.sharedMesh == null || !f.sharedMesh.isReadable) continue;
+                bool shown = f.name == "Panels" || f.name == (GameSettings.DisplayTextures ? "Textured" : "Flat");
+                if (!shown || f.sharedMesh == null || !f.sharedMesh.isReadable) continue;
                 var r = f.GetComponent<Renderer>();
                 go.layer = f.gameObject.layer;
                 d.parts.Add(new Part

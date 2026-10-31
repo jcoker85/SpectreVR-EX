@@ -34,33 +34,34 @@ namespace SpectreEX.Matrix
 
         public Mesh Body => Coloured(0);
 
-        // The faces, coloured for an object of this colour (UVs into SpectrePalette). With Options
-        // "Textures" on, textured faces are left to TexturedFaces.
-        public Mesh Coloured(int objectColour)
+        // The plain faces, coloured for an object of this colour (UVs into SpectrePalette). Textured faces
+        // come in two forms the Options "Textures" setting switches between: TexturedFaces and FlatFaces.
+        public Mesh Coloured(int objectColour) => Faces(objectColour, false);
+
+        // The textured faces in plain colour
+        public Mesh FlatFaces(int objectColour) => Faces(objectColour, true);
+
+        Mesh Faces(int objectColour, bool texturedOnes)
         {
-            bool skip = GameSettings.DisplayTextures;
-            int key = objectColour * 2 + (skip ? 1 : 0);
+            int key = objectColour * 2 + (texturedOnes ? 1 : 0);
             if (!bodies.TryGetValue(key, out var mesh))
-                bodies[key] = mesh = ShapeMeshes.Body(UnityPoints(), faces, colours, objectColour, skip, "Shape_Body");
+                bodies[key] = mesh = ShapeMeshes.Body(UnityPoints(), faces, colours, objectColour, texturedOnes, "Shape_Body");
             return mesh;
         }
 
         readonly Dictionary<int, Mesh> textured = new Dictionary<int, Mesh>();
 
-        // One mesh per texture this shape uses; empty with Options "Textures" off
+        // One mesh per texture this shape uses
         public Dictionary<int, Mesh> TexturedFaces
         {
             get
             {
-                if (!GameSettings.DisplayTextures) return Empty;
                 if (textured.Count == 0 && colours != null)
                     foreach (int id in new HashSet<int>(colours))
                         if (ShapeTextures.Has(id)) textured[id] = ShapeMeshes.Textured(UnityPoints(), faces, colours, id);
                 return textured;
             }
         }
-
-        static readonly Dictionary<int, Mesh> Empty = new Dictionary<int, Mesh>();
 
         public Mesh Edges(float thickness)
         {
@@ -79,7 +80,7 @@ namespace SpectreEX.Matrix
     {
         // Panels: every face fan-triangulated, emitted with both windings and flat normals,
         // so the original's mixed face orientation never leaves holes.
-        public static Mesh Body(Vector3[] v, int[][] faces, int[] colours, int objectColour, bool skipTextured, string name)
+        public static Mesh Body(Vector3[] v, int[][] faces, int[] colours, int objectColour, bool texturedOnes, string name)
         {
             var verts = new List<Vector3>();
             var uvs = new List<Vector2>();
@@ -89,7 +90,7 @@ namespace SpectreEX.Matrix
                 var f = faces[i];
                 if (f.Length < 3) continue;
                 int colour = colours != null && i < colours.Length ? colours[i] : 0;
-                if (skipTextured && ShapeTextures.Has(colour)) continue;
+                if (ShapeTextures.Has(colour) != texturedOnes) continue;
                 var uv = SpectrePalette.Uv(SpectrePalette.Entry(colour, objectColour));
                 for (int k = 1; k + 1 < f.Length; k++)
                 {

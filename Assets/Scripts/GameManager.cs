@@ -148,7 +148,12 @@ namespace SpectreEX
             resumedFrame = Time.frameCount;   // the Esc that resumed us mustn't re-suspend this frame
             Time.timeScale = 1f;
             ApplySettings();
-            if (MusicPlayer.Instance != null) MusicPlayer.Instance.ResumeGameMusic();
+            if (MusicPlayer.Instance != null)
+            {
+                // The song again, in case Options changed which styles are on
+                if (CurrentMatrix != null) levelSong = MatrixMusic.TrackFor(levelSongId);
+                MusicPlayer.Instance.ResumeGameMusic(CurrentMatrix != null ? levelSong : null);
+            }
         }
 
         void EndSession(int finalScore, int finalLevel)
@@ -217,6 +222,8 @@ namespace SpectreEX
             if (r == null) return;
             if (r.name == "Panels") r.enabled = GameSettings.DisplayFilled;
             else if (r.name == "Edges") r.enabled = !GameSettings.DisplayFilled;
+            else if (r.name == "Textured") r.enabled = GameSettings.DisplayFilled && GameSettings.DisplayTextures;
+            else if (r.name == "Flat") r.enabled = GameSettings.DisplayFilled && !GameSettings.DisplayTextures;
         }
 
         static void ApplyFilled(GameObject go)
@@ -302,6 +309,7 @@ namespace SpectreEX
 
         public int LevelTicks { get; private set; }
         string levelSong;
+        int levelSongId;
         int repairTimer;
 
         // _TIME_ALLOWED and the bonus, at the start of a level and of every life
@@ -424,6 +432,7 @@ namespace SpectreEX
             AcidDamage = m.TryGetEnemyData(lv.enemyData, 23, out var acid) ? acid.collideDamage : 10;
             StartBonus();
 
+            levelSongId = lv.song;
             levelSong = MatrixMusic.TrackFor(lv.song);
             return m.Tip(lv.tip);
         }
