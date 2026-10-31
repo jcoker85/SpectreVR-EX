@@ -165,13 +165,22 @@ namespace SpectreEX
             max = Mathf.Max(max, x);
         }
 
+        // Front and back are separate faces: sharing corners would cancel their normals to nothing,
+        // which HDRP's lighting turns into black patches
         void AddLine(Vector3 a, Vector3 b, Vector2 uv)
         {
-            int n = verts.Count;
+            if ((b - a).sqrMagnitude < 1e-6f) return;
             Vector3 up = Vector3.up * LineHeight * 0.5f;
-            verts.Add(a - up); verts.Add(a + up); verts.Add(b + up); verts.Add(b - up);
+            AddFace(a - up, a + up, b + up, b - up, uv);
+            AddFace(b - up, b + up, a + up, a - up, uv);
+        }
+
+        void AddFace(Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3, Vector2 uv)
+        {
+            int n = verts.Count;
+            verts.Add(p0); verts.Add(p1); verts.Add(p2); verts.Add(p3);
             for (int i = 0; i < 4; i++) uvs.Add(uv);
-            tris.AddRange(new[] { n, n + 1, n + 2, n, n + 2, n + 3, n, n + 2, n + 1, n, n + 3, n + 2 });
+            tris.AddRange(new[] { n, n + 1, n + 2, n, n + 2, n + 3 });
         }
     }
 }
