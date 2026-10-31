@@ -41,7 +41,7 @@ namespace SpectreEX
         public static bool Joystick = true;
         public static SoundCard Sound = SoundCard.SoundBlaster;
         public static bool[] Music = { true, false, false, false };
-        public static Difficulty Difficulty = Difficulty.Normal;
+        public static Difficulty Difficulty = Difficulty.Easy;
         public static bool DisplayComplex = true;    // ray-traced lighting and reflections
         public static bool DisplayFilled = true;     // solid black panels behind the glowing edges
         public static bool DisplayTextures = true;   // floor dots and wall glow
@@ -85,7 +85,7 @@ namespace SpectreEX
             Joystick = PlayerPrefs.GetInt("opt.joystick", 1) == 1;
             Sound = (SoundCard)PlayerPrefs.GetInt("opt.sound", (int)SoundCard.SoundBlaster);
             for (int i = 0; i < Music.Length; i++) Music[i] = PlayerPrefs.GetInt("opt.music" + i, i == 0 ? 1 : 0) == 1;
-            Difficulty = (Difficulty)PlayerPrefs.GetInt("opt.difficulty", (int)Difficulty.Normal);
+            Difficulty = (Difficulty)PlayerPrefs.GetInt("opt.difficulty", (int)Difficulty.Easy);
             DisplayComplex = PlayerPrefs.GetInt("opt.complex", 1) == 1;
             DisplayFilled = PlayerPrefs.GetInt("opt.filled", 1) == 1;
             DisplayTextures = PlayerPrefs.GetInt("opt.textures", 1) == 1;
