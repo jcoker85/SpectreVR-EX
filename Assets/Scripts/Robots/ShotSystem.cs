@@ -36,6 +36,11 @@ namespace SpectreEX
             shots.Clear();
         }
 
+        // The level's shots and hits, for the recap's Accuracy and Avoidance; dying doesn't reset them
+        public int MyShots, MyHits, RobotShots, RobotHits;
+
+        public void ResetCounts() => MyShots = MyHits = RobotShots = RobotHits = 0;
+
         // _MY_SHOOT: from the craft, at its height, along its heading (weapon 5 three ways)
         public void PlayerShoot(int weapon)
         {
@@ -76,6 +81,11 @@ namespace SpectreEX
         // _DO_SHOOT. The player's own fire sounds come from its weapon (the original's later call wins).
         void Fire(Robot owner, bool fromPlayer, long x, long y, long z, int heading, int weapon)
         {
+            if (weapon != Debris)
+            {
+                if (fromPlayer) MyShots++;
+                else RobotShots++;
+            }
             if (shots.Count >= MaxShots) return;
             var s = new Shot { x = x, y = y, z = z, heading = heading & 0xFF, owner = owner, fromPlayer = fromPlayer, weapon = weapon, life = 0x12, speed = 0x2000 };
             string sound = Snd.RobotShot;
@@ -286,6 +296,8 @@ namespace SpectreEX
             var health = target.GetComponentInParent<Health>();
             var robot = health.GetComponent<Robot>();
             if (robot != null && robot.dying != 0) return false;
+            if (s.fromPlayer) MyHits++;
+            else if (health.team == Team.Player) RobotHits++;
             if (s.weapon == 1 || s.weapon == 17) return true;   // splash instead
             if (s.weapon == 11 && robot != null) robot.SpinFromHit();
             if (s.weapon == 16 && health.team == Team.Player) GameManager.Instance.player.Motor.DrainFloating(0x10E);

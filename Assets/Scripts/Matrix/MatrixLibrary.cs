@@ -66,7 +66,35 @@ namespace SpectreEX.Matrix
         // The bundled Central Systems matrix, whose shapes stand in for a matrix that has none
         public static MatrixFile Central() => Load(Path.Combine(BundledFolder, DefaultMatrix));
 
-        // The matrix chosen in the MATRIX dialog, falling back to Central Systems, then anything playable
+        // _SELECT_MATRIX, once at startup: Central Systems unless custom matrices are on; then the only
+        // one besides BASIC is taken at once, and with more the player chooses (returned here, BASIC left out)
+        public static List<string> ChooseAtStartup()
+        {
+            GameSettings.SelectedMatrix = DefaultMatrix;
+            if (!GameSettings.UseCustomMatrices) return null;
+            var all = Available(true);
+            var choices = all.FindAll(p => !string.Equals(Path.GetFileName(p), "BASIC.MAT", System.StringComparison.OrdinalIgnoreCase));
+            if (all.Count > 2) return choices;
+            if (all.Count == 2 && choices.Count > 0) GameSettings.SelectedMatrix = Path.GetFileName(choices[0]);
+            return null;
+        }
+
+        static readonly Dictionary<string, Texture2D> pictures = new Dictionary<string, Texture2D>();
+
+        // A matrix's own picture, beside its .MAT: ".big" for the main menu, ".pcx" for the chooser
+        public static Texture2D Picture(string matrixFile, string extension)
+        {
+            string mat = Available(true).Find(p => string.Equals(Path.GetFileName(p), matrixFile, System.StringComparison.OrdinalIgnoreCase));
+            if (mat == null) return null;
+            string path = Path.ChangeExtension(mat, extension);
+            if (pictures.TryGetValue(path, out var tex)) return tex;
+            try { if (File.Exists(path)) tex = PcxImage.Load(File.ReadAllBytes(path)); }
+            catch (System.Exception e) { Debug.LogWarning($"Spectre VR-EX: couldn't read picture {path}: {e.Message}"); }
+            pictures[path] = tex;
+            return tex;
+        }
+
+        // The matrix chosen at startup, falling back to Central Systems, then anything playable
         public static MatrixFile Current()
         {
             var available = Available(GameSettings.UseCustomMatrices);

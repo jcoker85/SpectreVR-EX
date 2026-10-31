@@ -79,7 +79,7 @@ namespace SpectreEX
         public int AcidDamage { get; private set; } = 10;   // raw points every third tick in acid
 
         public System.Action<string, string> ShowBanner;           // big title, red tip
-        public System.Action<string[], string[]> ShowStats;         // label rows, value rows
+        public System.Action<int[], int> ShowRecap;                 // Quickness, Accuracy, Avoidance out of 128; animation step
         public System.Action HideOverlays;
         public System.Action<int, int> ReturnedToMenu;              // final score and level (0 if abandoned)
         public System.Action Suspend;                               // Esc in game: show the menu over the paused game
@@ -356,6 +356,7 @@ namespace SpectreEX
             if (lap == 0) player.Weapon.Unlock(lv.tip);
 
             ClearLevel();
+            director.Shots.ResetCounts();
             SetWallColor(LevelPlan.WallColor(levelNumber));
             PlacePlayerAtStart();
             UseShapes(m);
@@ -419,6 +420,7 @@ namespace SpectreEX
         void BuildGeneratedLevel(LevelPlan plan)
         {
             ClearLevel();
+            director.Shots.ResetCounts();
             SetWallColor(plan.wallColor);
             PlacePlayerAtStart();
             UseShapes(null);
@@ -691,16 +693,34 @@ namespace SpectreEX
             if (MusicPlayer.Instance != null) MusicPlayer.Instance.PlayTrack("AWARD", loop: false);
             Sfx.Play(Snd.Award);
 
-            int taken = LevelTicks / 18;
-            int bonus = Bonus;
-            AddScore(bonus);
-            ShowStats?.Invoke(
-                new[] { "TIME ALLOWED", "TIME TAKEN", "BONUS", "SCORE" },
-                new[] { TimeAllowed.ToString(), taken.ToString(), bonus.ToString(), Score.ToString() });
-            yield return new WaitForSeconds(4.5f);
+            AddScore(Bonus);
+
+            // _SHOW_RECAP: the bars grow over 16 ticks, then 18 more or a key press. Quickness is as the
+            // original has it: seconds taken over seconds allowed, so it rises the longer a level takes.
+            var shots = director.Shots;
+            var rates = new[]
+            {
+                Rate(LevelTicks / 18, TimeAllowed),
+                Rate(shots.MyHits, shots.MyShots),
+                Rate(shots.RobotShots - shots.RobotHits, shots.RobotShots),
+            };
+            var tick = new WaitForSeconds(1f / PlayerMotor.TickRate);
+            for (int step = 0; step < 16; step++)
+            {
+                ShowRecap?.Invoke(rates, step);
+                yield return tick;
+            }
+            for (float t = 0f; t < 18f / PlayerMotor.TickRate; t += Time.deltaTime)
+            {
+                var keys = UnityEngine.InputSystem.Keyboard.current;
+                if (keys != null && keys.anyKey.wasPressedThisFrame) break;
+                yield return null;
+            }
             HideOverlays?.Invoke();
             yield return NextLevel();
         }
+
+        static int Rate(int part, int whole) => whole == 0 ? 0x80 : part * 0x80 / whole;
 
         public void OnDestroyed(Health h)
         {

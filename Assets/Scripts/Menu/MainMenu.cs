@@ -15,9 +15,11 @@ namespace SpectreEX.Menu
     //   SCORE     -> high scores (and name entry after a qualifying game)
     //   HELP      -> the original "Welcome to Spectre VR" page, then the controls
     //   ABOUT     -> the original credits
-    //   MATRIX    -> Choose Matrix (Central Systems is the only arena)
+    //   DEMO      -> demo mode
     //   QUIT      -> quit
-    // Keys: the first letter of each button, D for demo mode, and holding Alt while starting a game
+    // The big panel shows the matrix's own picture; the matrix is settled at startup, before the menu
+    // (with custom matrices on and several to pick from, the Choose Matrix dialog comes up first).
+    // Keys: the first letter of each button, and holding Alt while starting a game
     // begins at a higher level, as in the original.
     public class MainMenu : MonoBehaviour
     {
@@ -58,6 +60,7 @@ namespace SpectreEX.Menu
         MenuScreen main, vehicles, custom, options, matrix, about, help, controls, scores, notice;
         PixelSegmentText noticeText;
         GameManager gm;
+        List<string> matrixChoices;
 
         // Name entry for the high-score table
         bool enteringName;
@@ -81,7 +84,10 @@ namespace SpectreEX.Menu
                 gm.Suspend += () => Open(keepMusic: true);
             }
             if (Keyboard.current != null) Keyboard.current.onTextInput += OnTextInput;
+            matrixChoices = Matrix.MatrixLibrary.ChooseAtStartup();
+            main.refresh();
             Open();
+            if (matrixChoices != null) Push(matrix);
         }
 
         void OnDestroy()
@@ -223,15 +229,22 @@ namespace SpectreEX.Menu
         void BuildMain()
         {
             main = ImageScreen("Main", "MainMenu");
+            var picture = AddRaw(main, null, new Rect(7, 13, 368, 280), new Rect(0, 0, 1, 1));
+            main.refresh = () =>
+            {
+                picture.texture = Matrix.MatrixLibrary.Picture(GameSettings.SelectedMatrix, ".big")
+                    ?? Matrix.MatrixLibrary.Picture(Matrix.MatrixLibrary.DefaultMatrix, ".big");
+                picture.enabled = picture.texture != null;
+            };
+            AddRaw(main, buttonsTex, new Rect(377, 229, 64, 64), TileUv(0, 3));   // the menu art has MATRIX here
             Tile(main, 377, 25, 1, 0, () => Push(vehicles), Key.P);
             Tile(main, 449, 25, 3, 0, () => ShowNotice("CYBERNET NETWORK PLAY\nIS NOT AVAILABLE\nIN THIS VERSION"), Key.C);
             Tile(main, 377, 93, 1, 1, () => Push(options), Key.O);
             Tile(main, 449, 93, 3, 1, () => { enteringName = false; Push(scores); }, Key.S);
             Tile(main, 377, 161, 1, 2, () => Push(help), Key.H);
             Tile(main, 449, 161, 3, 2, () => Push(about), Key.A);
-            Tile(main, 377, 229, -1, -1, () => Push(matrix), Key.M);
+            Tile(main, 377, 229, 1, 3, () => StartGame(true), Key.D);
             Tile(main, 449, 229, 3, 3, Quit, Key.Q);
-            Button(main, new Rect(0, 0, 0, 0), () => StartGame(true), Key.D);   // demo: keyboard only, as in the original
             main.onEnter = () => Push(vehicles);
             main.onEscape = ResumeGame;
         }
@@ -240,19 +253,12 @@ namespace SpectreEX.Menu
         void Tile(MenuScreen s, int x, int y, int col, int row, System.Action action, Key key)
         {
             var h = new Hotspot { rect = new Rect(x, y, 64, 64), action = action, key = key };
-            if (col >= 0)
-            {
-                var uv = new Rect(col * 64f / buttonsTex.width, 1f - (row + 1) * 64f / buttonsTex.height, 64f / buttonsTex.width, 64f / buttonsTex.height);
-                h.hover = AddRaw(s, buttonsTex, h.rect, uv);
-                h.hover.enabled = false;
-            }
-            else
-            {
-                h.tint = AddRect(s, h.rect, new Color(1f, 1f, 1f, 0.18f));
-                h.tint.enabled = false;
-            }
+            h.hover = AddRaw(s, buttonsTex, h.rect, TileUv(col, row));
+            h.hover.enabled = false;
             s.hotspots.Add(h);
         }
+
+        Rect TileUv(int col, int row) => new Rect(col * 64f / buttonsTex.width, 1f - (row + 1) * 64f / buttonsTex.height, 64f / buttonsTex.width, 64f / buttonsTex.height);
 
         // A dialog button: hovering darkens it slightly, like a pressed Mac button (or brightens it, on our dark panels)
         Hotspot Button(MenuScreen s, Rect r, System.Action action, Key key = Key.None, Color? tint = null)
@@ -396,49 +402,42 @@ namespace SpectreEX.Menu
             options.refresh = () => { foreach (var r in refreshers) r(); };
         }
 
-        // Choose Matrix: Previous / Next step through the playable .MAT files (the bundled CENTRAL and
-        // BASIC, plus custom ones when Options "Use Custom Matrix Files" is ticked); Choose plays it
+        // _SELECT_MATRIX's dialog, at startup only: Previous / Next step through the matrices, each with
+        // its own small picture, and Choose settles it - there is no way out without choosing
         void BuildMatrix()
         {
             matrix = ImageScreen("Matrix", "Matrix");
             var name = AddText(matrix, new Rect(20, 29, 256, 12), 9, Color.black, TextAnchor.MiddleCenter);
-            var files = new List<string>();
+            var picture = AddRaw(matrix, null, new Rect(116, 52, 64, 64), new Rect(0, 0, 1, 1));
             int index = 0;
 
             void Show()
             {
-                if (files.Count == 0) { name.Text = Seg("NO MATRICES FOUND"); return; }
-                var m = Matrix.MatrixLibrary.Load(files[index]);
-                string label = m != null ? m.Name : System.IO.Path.GetFileNameWithoutExtension(files[index]) + " (UNREADABLE)";
-                name.Text = Seg(label);
+                string file = System.IO.Path.GetFileName(matrixChoices[index]);
+                var m = Matrix.MatrixLibrary.Load(matrixChoices[index]);
+                name.Text = Seg(m != null ? m.Name : System.IO.Path.GetFileNameWithoutExtension(file) + " (UNREADABLE)");
+                picture.texture = Matrix.MatrixLibrary.Picture(file, ".pcx");
+                picture.enabled = picture.texture != null;
             }
             void Step(int delta)
             {
-                if (files.Count < 2) { Sfx.Play(Snd.Collision); return; }
-                index = (index + delta + files.Count) % files.Count;
+                index = Mathf.Clamp(index + delta, 0, matrixChoices.Count - 1);
                 Show();
             }
             void Choose()
             {
-                if (files.Count > 0 && Matrix.MatrixLibrary.Load(files[index]) != null)
-                {
-                    GameSettings.SelectedMatrix = System.IO.Path.GetFileName(files[index]);
-                    GameSettings.Save();
-                }
+                if (Matrix.MatrixLibrary.Load(matrixChoices[index]) == null) { Sfx.Play(Snd.Collision); return; }
+                GameSettings.SelectedMatrix = System.IO.Path.GetFileName(matrixChoices[index]);
+                GameSettings.Save();
+                main.refresh();
                 Pop();
             }
 
-            Button(matrix, new Rect(15, 83, 77, 29), () => Step(-1), Key.LeftArrow);
-            Button(matrix, new Rect(203, 83, 77, 29), () => Step(1), Key.RightArrow);
-            Button(matrix, new Rect(108, 136, 77, 29), Choose);
+            Button(matrix, new Rect(15, 83, 77, 29), () => Step(-1), Key.P);
+            Button(matrix, new Rect(203, 83, 77, 29), () => Step(1), Key.N);
+            Button(matrix, new Rect(108, 136, 77, 29), Choose, Key.C);
             matrix.onEnter = Choose;
-            matrix.onEscape = Pop;
-            matrix.refresh = () =>
-            {
-                files = Matrix.MatrixLibrary.Available(GameSettings.UseCustomMatrices);
-                index = Mathf.Max(0, files.FindIndex(p => string.Equals(System.IO.Path.GetFileName(p), GameSettings.SelectedMatrix, System.StringComparison.OrdinalIgnoreCase)));
-                Show();
-            };
+            matrix.refresh = Show;
         }
 
         void BuildControls()

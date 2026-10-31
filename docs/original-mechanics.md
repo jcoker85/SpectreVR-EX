@@ -440,3 +440,17 @@ guesses, e.g. LowAmmo = SHKLOW, may not match the original's use - check in the 
 
 DOSBox-X (`Tools/dosbox-x/bin/x64/Release/dosbox-x.exe`) is unpacked but not yet launched; the
 DOS `SVR.EXE` in `Tools/SpectreVR` is the one to run for side-by-side checks.
+
+## Main menu and matrix choice (SVRWIN.EXE)
+
+- `_MAIN_MENU`: SPCP25 at 522x332, the matrix picture (`MATRIX_PIC`) at (7,13), tiles from SPCP35 at x = 377 / 449, y = 25 / 93 / 161 / 229. Column pairs on the sheet: normal, highlighted. DEMO takes the slot the SPCP25 art draws MATRIX in.
+- `_SELECT_MATRIX` runs once at startup, before the menu. Custom matrices off: central.mat / central.big. On: fewer than 2 .MAT files, keep what is loaded; exactly 2, take the one that isn't basic.mat; more, the SPCP34 chooser (N, P, Enter or C, BASIC skipped, no cancel) with `<name>.pcx` (64x64) as the small picture and `<name>.big` (368x280) for the menu.
+
+## End-of-level recap (_END_LEVEL, _SHOW_RECAP, _SHOW_TRIANGLE)
+
+- The bonus goes on the score, the view is blanked, the three lines animate over 16 ticks, then 18 ticks or a key press.
+- Rates out of 128, clamped: Quickness = seconds taken * 128 / TIME_ALLOWED; Accuracy = my hits * 128 / my shots; Avoidance = (robot shots - robot hits on the player) * 128 / robot shots. A zero divisor gives 128.
+- Quickness is confirmed from the disassembly (DI = `_LEVEL_TIMER` / 18 at [BP+C], `_TIME_ALLOWED` at [BP+A]): it rises the longer a level takes. Whether that was intended is unknown, and it has not been seen on the running original yet.
+- `_LEVEL_TIMER` restarts with each life; the shot counts only with each level. Debris (weapon 0x7F) isn't counted; each of a triple shot's three is.
+- Words: 128 Perfect, 101-127 Radical, 65-100 Not Bad, 33-64 Marginal, 0-32 Get Help (colours 0x2F, 0x2F, 0xF, 0x1F, 0x1F; wedge 0xC).
+- Layout at SCALE_X 256 on what appears to be a 320-wide screen: labels x = 10, wedge from x = 100, up to value * step / 16 long and 20 high, words x = 250, lines at HEIGHT/2 + 0, 30, 60. The remake's colours and the 320-wide reading are not yet compared with the original.

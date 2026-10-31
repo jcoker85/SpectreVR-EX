@@ -36,7 +36,8 @@ namespace SpectreEX.Hud
         readonly List<Image> radarDots = new List<Image>();
         GameObject crosshair, bannerRoot, statsRoot;
         Text bannerTitle, bannerTip, message, hint;
-        readonly List<Text> statLabels = new List<Text>(), statValues = new List<Text>();
+        readonly List<Text> recapWords = new List<Text>();
+        readonly List<RecapWedge> recapWedges = new List<RecapWedge>();
         readonly Dictionary<RectTransform, Vector2> fullSizes = new Dictionary<RectTransform, Vector2>();
         float messageUntil, hintUntil;
 
@@ -52,7 +53,7 @@ namespace SpectreEX.Hud
             if (gm != null)
             {
                 gm.ShowBanner += OnBanner;
-                gm.ShowStats += OnStats;
+                gm.ShowRecap += OnRecap;
                 gm.HideOverlays += HideOverlays;
             }
             hintUntil = Time.time + 12f;
@@ -129,6 +130,7 @@ namespace SpectreEX.Hud
 
             // Centre: crosshair (cockpit view only), level banner, end-of-level stats
             var centre = Group("Centre", new Vector2(0.5f, 0.5f), Vector2.zero);
+            centre.SetAsFirstSibling();   // under the readouts, which stay up over the recap's blank view
             var ch = NewRect("Crosshair", centre);
             crosshair = ch.gameObject;
             CrossLine(ch, new Vector2(0, 38), new Vector2(0, 52));
@@ -143,10 +145,29 @@ namespace SpectreEX.Hud
 
             var stats = NewRect("Stats", centre);
             statsRoot = stats.gameObject;
-            for (int i = 0; i < 4; i++)
+            // _ERASE_BOTTOM: the recap replaces the view
+            var blank = new GameObject("Blank", typeof(RectTransform)).AddComponent<Image>();
+            blank.transform.SetParent(stats, false);
+            blank.color = Color.black;
+            blank.raycastTarget = false;
+            blank.rectTransform.anchorMin = blank.rectTransform.anchorMax = blank.rectTransform.pivot = new Vector2(0.5f, 0.5f);
+            blank.rectTransform.sizeDelta = new Vector2(8000f, 8000f);
+
+            string[] names = { "QUICKNESS", "ACCURACY", "AVOIDANCE" };
+            for (int i = 0; i < names.Length; i++)
             {
-                statLabels.Add(MakeText(stats, "", -10, -20 + i * 28, 13, LabelGreen, TextAnchor.MiddleRight));
-                statValues.Add(MakeText(stats, "", 10, -20 + i * 28, 15, DigitGreen, TextAnchor.MiddleLeft));
+                float y = RecapY(i);
+                MakeText(stats, names[i], RecapX(10), y, 13, LabelGreen, TextAnchor.MiddleLeft);
+                var wedge = new GameObject("Wedge", typeof(RectTransform), typeof(CanvasRenderer)).AddComponent<RecapWedge>();
+                wedge.transform.SetParent(stats, false);
+                wedge.color = FrameWhite;
+                wedge.raycastTarget = false;
+                var rt = wedge.rectTransform;
+                rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+                rt.pivot = new Vector2(0f, 0.5f);
+                rt.anchoredPosition = new Vector2(RecapX(100), -y);
+                recapWedges.Add(wedge);
+                recapWords.Add(MakeText(stats, "", RecapX(250), y, 13, DigitGreen, TextAnchor.MiddleLeft));
             }
             statsRoot.SetActive(false);
 
@@ -292,14 +313,36 @@ namespace SpectreEX.Hud
             bannerTip.text = Seg(tip ?? "");
         }
 
-        void OnStats(string[] labels, string[] values)
+        // _SHOW_RECAP / _SHOW_TRIANGLE, laid out on the original's 320-wide screen: a wedge from x = 100
+        // that reaches value * step / 16 pixels, 20 high at its open end, and the rating at x = 250
+        const float RecapScale = 2.6f;
+        static float RecapX(float x) => (x - 160f) * RecapScale;
+        static float RecapY(int line) => (line * 30 - 10) * RecapScale;
+
+        void OnRecap(int[] rates, int step)
         {
             bannerRoot.SetActive(false);
             statsRoot.SetActive(true);
-            for (int i = 0; i < statLabels.Count; i++)
+            for (int i = 0; i < recapWedges.Count; i++)
             {
-                statLabels[i].text = i < labels.Length ? Seg(labels[i]) : "";
-                statValues[i].text = i < values.Length ? values[i] : "";
+                int rate = Mathf.Clamp(rates[i], 0, 0x80);
+                recapWedges[i].rectTransform.sizeDelta = new Vector2(rate * step / 16f * RecapScale, 20f * RecapScale);
+                recapWords[i].text = Seg(rate == 0x80 ? "PERFECT" : rate > 100 ? "RADICAL" : rate > 64 ? "NOT BAD" : rate > 32 ? "MARGINAL" : "GET HELP");
+                recapWords[i].color = rate > 100 ? DigitGreen : rate > 64 ? FrameWhite : AlertRed;
+            }
+        }
+
+        // A triangle pointing left, filling its rect
+        class RecapWedge : MaskableGraphic
+        {
+            protected override void OnPopulateMesh(VertexHelper vh)
+            {
+                var r = rectTransform.rect;
+                vh.Clear();
+                vh.AddVert(new Vector2(r.xMin, r.center.y), color, Vector2.zero);
+                vh.AddVert(new Vector2(r.xMax, r.yMin), color, Vector2.zero);
+                vh.AddVert(new Vector2(r.xMax, r.yMax), color, Vector2.zero);
+                vh.AddTriangle(0, 2, 1);
             }
         }
 
