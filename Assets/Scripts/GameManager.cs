@@ -714,12 +714,13 @@ namespace SpectreEX
 
             AddScore(Bonus);
 
-            // _SHOW_RECAP: the bars grow over 16 ticks, then 18 more or a key press. Quickness is as the
-            // original has it: seconds taken over seconds allowed, so it rises the longer a level takes.
+            // _SHOW_RECAP: the bars grow over 16 ticks, then 18 more or a key press. The original divides
+            // seconds taken by seconds allowed, which rewards being slow; here it's the other way up, so
+            // finishing inside the time allowed is Perfect and the rate falls after that.
             var shots = director.Shots;
             var rates = new[]
             {
-                Rate(LevelTicks / 18, TimeAllowed),
+                Mathf.Min(Rate(TimeAllowed, LevelTicks / 18), 0x80),
                 Rate(shots.MyHits, shots.MyShots),
                 Rate(shots.RobotShots - shots.RobotHits, shots.RobotShots),
             };

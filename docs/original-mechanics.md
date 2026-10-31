@@ -450,7 +450,7 @@ DOS `SVR.EXE` in `Tools/SpectreVR` is the one to run for side-by-side checks.
 
 - The bonus goes on the score, the view is blanked, the three lines animate over 16 ticks, then 18 ticks or a key press.
 - Rates out of 128, clamped: Quickness = seconds taken * 128 / TIME_ALLOWED; Accuracy = my hits * 128 / my shots; Avoidance = (robot shots - robot hits on the player) * 128 / robot shots. A zero divisor gives 128.
-- Quickness comes from the disassembly (DI = `_LEVEL_TIMER` / 18 at [BP+C], `_TIME_ALLOWED` at [BP+A]): it rises the longer a level takes. Seen on the running original: a demo level finished with Bonus 0 (over the allowed time) rated PERFECT, which fits this formula. Whether the designers meant it is unknown; no fast finish has been observed yet.
+- Quickness comes from the disassembly (DI = `_LEVEL_TIMER` / 18 at [BP+C], `_TIME_ALLOWED` at [BP+A]): it rises the longer a level takes. Seen on the running original: a demo level finished with Bonus 0 (over the allowed time) rated PERFECT, which fits this formula. The remake inverts it (see "Deliberate fixes to the original's intent").
 - `_LEVEL_TIMER` restarts with each life; the shot counts only with each level. Debris (weapon 0x7F) isn't counted; each of a triple shot's three is.
 - Words: 128 Perfect, 101-127 Radical, 65-100 Not Bad, 33-64 Marginal, 0-32 Get Help (colours 0x2F, 0x2F, 0xF, 0x1F, 0x1F; wedge 0xC).
 - Layout measured on the original (532-wide game window): labels at the left edge in white, wedge from about 0.31 to 0.69 of the width in light grey, words at about 0.77, lines 30 pixels apart from the middle of the screen, wedge 20 high. PERFECT and RADICAL green, MARGINAL and GET HELP red.
@@ -520,10 +520,14 @@ Checked line by line: `_DO_SHOOT`, `_MY_SHOOT`, `_MOVE_SHOTS`, `_KEY_WEAPON`, th
 Where the original looks like an oversight rather than a design, the remake does what it evidently meant (owner's rule, 2026-10-31):
 
 - A destroyed textured craft throws grey pieces, not its base colour.
+- Quickness: the original's seconds taken * 128 / allowed rates a slow finish Perfect and a fast one Get Help. The remake uses allowed * 128 / seconds taken, capped at 128, so finishing inside the time allowed is Perfect.
+- Stun flash: the original swaps the object colour of a Robot Tank or Super Tank, but the Robot Tank's body faces are a fixed red, so by the code that swap wouldn't show on it. The remake lets the body flash. A Super Tank with textures on keeps its steel: only its plain-colour faces with textures off flash.
 - A grenade or bomb blast stuns and scores only robots in range, not the whole map.
 - Top-heavy obstacles (the trees, shapes 10004 and 10007): the original's one box per shape blocks at the width of the top. The remake gives a narrow stem its own box. Each part of a multi-part shape has its own box in both.
 - Damage sounds use the player's real maximum rather than the fixed 0x1E in the splash code.
 
 Back-to-back panels are not a change: the billboards (10106, 10107) have one face per side, and the remake draws those one-sided so they don't fight.
+
+Checked and needing no change: `_TIME_ALLOWED` counts the player's slot in `_MAX_TANK` (`_LOAD_WAVE` adds it as an enemy of type 6) and `_MAX_SUPER_TANKS` is never set, so the remake's formula is right. Level 1 differs between runs because the robot count is random: Bonus 360 is two robots, 400 three. `_REPLACE_TANK` has no de-res: a robot just reappears, as in the remake.
 
 Left alone: one non-splash shot can hit two overlapping tanks in the same tick in the original (the remake stops at the first); a splash's sound uses a fixed `_DAMAGE < 0x1E` test.

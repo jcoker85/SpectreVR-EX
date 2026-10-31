@@ -138,19 +138,39 @@ namespace SpectreEX
             curRoll = RollDegrees();
         }
 
-        // _MOVE_TANKS: a stunned Robot / Super Tank swaps colour every tick
-        int stunRamp = 0x40;
+        // _MOVE_TANKS: a stunned Robot / Super Tank swaps its object colour every tick, between orange and
+        // red, ending on its own. Each part is an object with its own colour, so only the first part shows
+        // it, and a steel face while textures are on has no colour to swap. The Robot Tank's body is a fixed
+        // red rather than its object colour, which would hide the flash, so that red counts as the object's.
+        int stunRamp = -1;
+        ShapeGeometry flashShape;
 
-        // A stunned Super Tank's colour swaps between orange and red. Only faces in the object's own
-        // colour show it, which here means the flat ones, not the steel texture.
+        ShapeGeometry FlashShape(ShapeGeometry shape)
+        {
+            if (flashShape != null) return flashShape;
+            int own = BuiltinShapes.TypeColour(matrixType);
+            var colours = (int[])shape.colours.Clone();
+            for (int i = 0; i < colours.Length; i++) if (colours[i] == own) colours[i] = 0;
+            return flashShape = new ShapeGeometry(shape.verts, shape.faces, colours);
+        }
+
         void ShowStun()
         {
-            if (matrixType != 8 || GameSettings.DisplayTextures) return;
-            int ramp = (stun & 1) == 1 ? 0x10 : 0x40;
+            if (matrixType != 7 && matrixType != 8) return;
+            bool odd = (stun & 1) == 1;
+            int ramp = matrixType == 8 ? (odd ? 0x10 : 0x40) : (odd ? 0x40 : 0x10);
+            if (stunRamp < 0) stunRamp = ramp;
             if (ramp == stunRamp) return;
             stunRamp = ramp;
-            foreach (var r in GetComponentsInChildren<MeshRenderer>(true))
-                if (r.name == "Flat") SpectrePalette.Paint(r, SpectrePalette.Entry(ramp), GameManager.Instance.obstacleLook.shapes);
+            var parts = GameManager.Instance.Shapes?.ForType(matrixType);
+            var first = model != null ? model.Find("Shape") : null;
+            if (parts == null || parts.Count == 0 || first == null) return;
+            var shape = FlashShape(parts[0].shape);
+            foreach (var f in first.GetComponentsInChildren<MeshFilter>(true))
+            {
+                if (f.name == "Panels") f.sharedMesh = shape.Coloured(ramp);
+                else if (f.name == "Flat") f.sharedMesh = shape.FlatFaces(ramp);
+            }
         }
 
         public void Interpolate(float t)
