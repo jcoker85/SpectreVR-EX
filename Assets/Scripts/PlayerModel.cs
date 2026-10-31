@@ -17,19 +17,17 @@ namespace SpectreEX
 
         void Awake() => motor = GetComponent<PlayerMotor>();
 
-        public void Rebuild(ShapeSet shapes, float edgeThickness)
+        public void Rebuild(ShapeSet shapes, Material faces, float edgeThickness)
         {
             var parts = shapes?.ForType(6);
             var model = transform.Find("Model");
             if (parts == null || parts.Count == 0 || model == null) return;
 
-            // Keep the craft's own look (tuned materials, layer) and swap the geometry
-            Material panel = null, glow = null;
+            // Keep the craft's wireframe material and layer, and swap the geometry
+            Material glow = null;
             foreach (var r in model.GetComponentsInChildren<MeshRenderer>(true))
-            {
-                if (r.name == "Panels" && panel == null) panel = r.sharedMaterial;
                 if (r.name == "Edges" && glow == null) glow = r.sharedMaterial;
-            }
+            int colour = BuiltinShapes.TypeColour(6);
             int layer = model.gameObject.layer;
             for (int i = model.childCount - 1; i >= 0; i--) Destroy(model.GetChild(i).gameObject);
 
@@ -41,7 +39,7 @@ namespace SpectreEX
                 var t = new GameObject("Shape").transform;
                 t.SetParent(root, false);
                 t.localPosition = p.offset;
-                AddMesh("Panels", t, p.shape.Body, panel, layer);
+                AddMesh("Panels", t, p.shape.Coloured(colour), faces, layer);
                 AddMesh("Edges", t, p.shape.Edges(edgeThickness), glow, layer);
                 int tag = p.id & 0xFF;
                 if (tag == 0x5F) wings.Add((t, -1));

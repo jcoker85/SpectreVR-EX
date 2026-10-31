@@ -102,6 +102,8 @@ namespace SpectreEX
             director = GetComponent<RobotDirector>();
             if (director == null) director = gameObject.AddComponent<RobotDirector>();
             if (GetComponent<SimClock>() == null) gameObject.AddComponent<SimClock>();
+            // The level's palette goes on a copy, not the material asset
+            obstacleLook.shapes = robotLook.shapes = new Material(obstacleLook.shapes);
             demoPilot = player.GetComponent<DemoPilot>();
             if (demoPilot == null) demoPilot = player.gameObject.AddComponent<DemoPilot>();
             demoPilot.enabled = false;
@@ -205,10 +207,12 @@ namespace SpectreEX
                 light.useRayTracedShadows = on;
         }
 
-        // Options "Filled": the solid faces of craft and obstacles (named "Panels"); off leaves wireframes
+        // Options "Filled": the solid faces of craft and obstacles (named "Panels"); off draws their edges insteads
         public static void ApplyFilled(Renderer r)
         {
-            if (r != null && r.name == "Panels") r.enabled = GameSettings.DisplayFilled;
+            if (r == null) return;
+            if (r.name == "Panels") r.enabled = GameSettings.DisplayFilled;
+            else if (r.name == "Edges") r.enabled = !GameSettings.DisplayFilled;
         }
 
         static void ApplyFilled(GameObject go)
@@ -350,7 +354,8 @@ namespace SpectreEX
 
             ClearLevel();
             director.Shots.ResetCounts();
-            SetWallColor(LevelPlan.WallColor(levelNumber));
+            SpectrePalette.Apply(obstacleLook.shapes, levelNumber - 1);
+            SetWallColor(SpectrePalette.Sky(levelNumber - 1));
             PlacePlayerAtStart();
             UseShapes(m);
 
@@ -512,7 +517,7 @@ namespace SpectreEX
             shapes = new ShapeSet(m, central);
             shapes.NewLevel();
             var craft = player.GetComponent<PlayerModel>();
-            if (craft != null) craft.Rebuild(shapes, obstacleLook.edgeThickness);
+            if (craft != null) craft.Rebuild(shapes, obstacleLook.shapes, obstacleLook.edgeThickness);
         }
 
         // Types with no shape (as in the original) aren't placed at all

@@ -8,18 +8,9 @@ namespace SpectreEX
     [System.Serializable]
     public class RobotLook
     {
-        public Material panels, tank, superTank, turret, slicer, flyer, acid, wall, mud, orbiter, bolt;
-        public Material tankPanel, turretPanel, slicerPanel, orbiterPanel;   // craft-coloured panels (Options "Filled")
-        public Material flash;   // Robot / Super Tank edges flash between their own colour and this while stunned
-
-        public Material PanelFor(int type) => type switch
-        {
-            7 or 8 or 26 or 27 => tankPanel,
-            20 => turretPanel,
-            21 => slicerPanel,
-            22 or 35 or 45 => orbiterPanel,
-            _ => panels,
-        } ?? panels;
+        public Material shapes;   // solid faces, the level's palette
+        public Material tank, superTank, turret, slicer, flyer, acid, wall, mud, orbiter, bolt;   // wireframe and debris
+        public Material flash;   // Robot / Super Tanks flash between their own colours and this while stunned
 
         public Material GlowFor(int type) => type switch
         {
@@ -52,7 +43,7 @@ namespace SpectreEX
             }
 
             var glow = look.GlowFor(type);
-            var panel = look.PanelFor(type);
+            int colour = BuiltinShapes.TypeColour(type);
             var root = new GameObject($"Robot_{type}");
             var model = new GameObject("Model").transform;
             model.SetParent(root.transform, false);
@@ -63,7 +54,7 @@ namespace SpectreEX
                 var t = new GameObject("Shape").transform;
                 t.SetParent(model, false);
                 t.localPosition = part.offset;
-                Mesh("Panels", t, part.shape.Body, panel, ShadowCastingMode.On);
+                Mesh("Panels", t, part.shape.Coloured(colour), look.shapes, ShadowCastingMode.On);
                 Mesh("Edges", t, part.shape.Edges(edgeThickness), glow, ShadowCastingMode.Off);
                 var b = part.shape.Body.bounds;
                 b.center += part.offset;

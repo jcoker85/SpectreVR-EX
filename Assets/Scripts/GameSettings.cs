@@ -43,7 +43,7 @@ namespace SpectreEX
         public static bool[] Music = { true, false, false, false };
         public static Difficulty Difficulty = Difficulty.Easy;
         public static bool DisplayComplex = true;    // ray-traced lighting and reflections
-        public static bool DisplayFilled = true;     // solid black panels behind the glowing edges
+        public static bool DisplayFilled = true;     // solid faces; off is the wireframe view
         public static bool DisplayTextures = true;   // floor dots and wall glow
         public static VehicleSpec Custom = new VehicleSpec("CUSTOM", 5, 5, 5);
         public static int SelectedVehicle;           // 0 Balance, 1 Speedy, 2 Strong, 3 Custom

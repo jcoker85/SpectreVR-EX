@@ -268,16 +268,17 @@ namespace SpectreEX.Matrix
             }
             int faceCount = Word() + 1;
             var faces = new List<int[]>();
+            var colours = new List<int>();
             for (int f = 0; f < faceCount && Has(2); f++)
             {
                 int n = Word() + 1;
                 if (n < 0 || !Has(n * 2 + 2)) break;
                 var idx = new int[n];
                 for (int k = 0; k < n; k++) idx[k] = Word() - 1;
-                Word();   // colour
+                colours.Add(Word());
                 faces.Add(idx);
             }
-            return new ShapeGeometry(verts, faces.ToArray());
+            return new ShapeGeometry(verts, faces.ToArray(), colours.ToArray());
         }
 
         static List<string> ParseStrings(byte[] b)

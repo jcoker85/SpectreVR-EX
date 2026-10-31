@@ -150,7 +150,7 @@ namespace SpectreEX
             if (look == null || look.flash == null) return;
             if (edges == null)
             {
-                edges = System.Array.FindAll(GetComponentsInChildren<MeshRenderer>(true), r => r.name == "Edges");
+                edges = GetComponentsInChildren<MeshRenderer>(true);
                 edgeMats = System.Array.ConvertAll(edges, r => r.sharedMaterial);
             }
             flashing = on;
@@ -456,7 +456,7 @@ namespace SpectreEX
             var part = model != null ? model.Find("Shape") : null;
             if (part == null) return;
             foreach (var f in part.GetComponentsInChildren<MeshFilter>(true))
-                f.sharedMesh = f.name == "Panels" ? geometry.Body : geometry.Edges(gm.obstacleLook.edgeThickness);
+                f.sharedMesh = f.name == "Panels" ? geometry.Coloured(BuiltinShapes.TypeColour(matrixType)) : geometry.Edges(gm.obstacleLook.edgeThickness);
             edges = null;   // the stun flash re-reads its renderers
         }
 

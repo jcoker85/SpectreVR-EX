@@ -468,3 +468,10 @@ DOS `SVR.EXE` in `Tools/SpectreVR` is the one to run for side-by-side checks.
 - Catch-up is limited by Unity's maximumDeltaTime, so a stall longer than that loses time rather than speeding up afterwards.
 
 Measured with collisions off, Balance craft, at 10 / 30 / 59 / 117 / 128 fps: speed 11.64-11.67 m/s (calculated 11.65), jump 6.25 m in about 1.38 s (calculated 6.24), about 36 heading steps a second.
+
+## Colours (_MAKE_COLORS, _LOADUP_PALLET, _MOVE_OBJECT's face loop)
+
+- A face's colour word: 0 or 0xFF, or above 0xFF (a texture), takes the object's base colour plus a 0-15 shade; other values under 0x100 are fixed palette entries, shaded only if the low nibble is 0.
+- Base colour by object type is the word table at DS:0x8FC. Palette: 16-entry ramps at 0x00 grey, 0x10 red, 0x20 green, 0x30 blue, 0x40 orange, 0x50 level object colour, 0x60 cyan, 0x70-0x8F sky, 0x90 magenta, 0xA0 pink, 0xB0 white, 0xC0-0xFF grey.
+- `_OBJ_COLORS` and `_SKY_COLORS` hold 30 levels of RGB. Level 1 is yellow objects under a magenta sky.
+- The remake reads these from SVRWIN.EXE at import, uses a fixed point on each ramp (lighting does the shading), and treats textured faces as flat. The wireframe option draws the old edge strips.

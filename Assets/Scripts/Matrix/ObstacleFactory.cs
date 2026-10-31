@@ -8,7 +8,8 @@ namespace SpectreEX.Matrix
     [System.Serializable]
     public class ObstacleLook
     {
-        public Material panels, edges, acid, ice, teleport, pusher, transport;   // pusher also colours slow pads
+        public Material shapes;                                                  // solid faces, the level's palette
+        public Material edges, acid, ice, teleport, pusher, transport;           // wireframe; pusher also colours slow pads
         public float edgeThickness = 0.07f;
     }
 
@@ -49,7 +50,7 @@ namespace SpectreEX.Matrix
                 ObstacleBehaviour.Kind.UpTransport or ObstacleBehaviour.Kind.DownTransport => look.transport,
                 _ => look.edges,
             };
-            var panel = pad ? glow : look.panels;
+            int colour = BuiltinShapes.TypeColour(type);
 
             var root = new GameObject($"Obstacle_{type}");
             var model = new GameObject("Model").transform;
@@ -60,7 +61,7 @@ namespace SpectreEX.Matrix
             bool first = true;
             foreach (var part in parts)
             {
-                AddShape(model, part.shape, part.offset, panel, glow, look.edgeThickness);
+                AddShape(model, part.shape, part.offset, colour, look.shapes, glow, look.edgeThickness);
                 var b = part.shape.Body.bounds;
                 b.center += part.offset;
                 if (first) { bounds = b; first = false; }
@@ -78,7 +79,7 @@ namespace SpectreEX.Matrix
                 beh.spinSpeed = -spin * StepsToDegrees * PlayerMotor.TickRate;
             }
 
-            if (kind == ObstacleBehaviour.Kind.Windmill) AddFans(root.transform, beh, panel, glow, look.edgeThickness);
+            if (kind == ObstacleBehaviour.Kind.Windmill) AddFans(root.transform, beh, colour, look.shapes, glow, look.edgeThickness);
 
             var col = root.AddComponent<BoxCollider>();
             if (pad)
@@ -105,12 +106,12 @@ namespace SpectreEX.Matrix
             return root;
         }
 
-        static Transform AddShape(Transform parent, ShapeGeometry shape, Vector3 offset, Material panel, Material glow, float thickness)
+        static Transform AddShape(Transform parent, ShapeGeometry shape, Vector3 offset, int colour, Material panel, Material glow, float thickness)
         {
             var t = new GameObject("Shape").transform;
             t.SetParent(parent, false);
             t.localPosition = offset;
-            MeshObject("Panels", t, shape.Body, panel, ShadowCastingMode.On);
+            MeshObject("Panels", t, shape.Coloured(colour), panel, ShadowCastingMode.On);
             MeshObject("Edges", t, shape.Edges(thickness), glow, ShadowCastingMode.Off);
             return t;
         }
@@ -127,7 +128,7 @@ namespace SpectreEX.Matrix
 
         // The windmill's fans are a second object: 8 table steps (0x800 units) out along its heading,
         // 0x1D00 up, rolling 2 steps a tick from a random start
-        static void AddFans(Transform root, ObstacleBehaviour beh, Material panel, Material glow, float thickness)
+        static void AddFans(Transform root, ObstacleBehaviour beh, int colour, Material panel, Material glow, float thickness)
         {
             var fans = BuiltinShapes.Named("WINDMILL_FANS");
             if (fans == null) return;
@@ -135,7 +136,7 @@ namespace SpectreEX.Matrix
             pivot.SetParent(root, false);
             pivot.localPosition = new Vector3(0f, 0x1D00, 0x800) * PlayerMotor.UnitsToMetres;
             pivot.localRotation = Quaternion.Euler(0f, 0f, Random.Range(0, 256) * StepsToDegrees);
-            AddShape(pivot, fans, Vector3.zero, panel, glow, thickness);
+            AddShape(pivot, fans, Vector3.zero, colour, panel, glow, thickness);
             beh.spinner = pivot;
             beh.spinAxis = Vector3.forward;
             beh.spinSpeed = 2 * StepsToDegrees * PlayerMotor.TickRate;

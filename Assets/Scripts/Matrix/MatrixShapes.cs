@@ -5,19 +5,22 @@ using UnityEngine;
 namespace SpectreEX.Matrix
 {
     // One original 3D shape: points in the game's world units (x forward, y side, z up) and faces as
-    // 0-based point lists (two-point faces are lines).
+    // 0-based point lists (two-point faces are lines), each face with the original's colour value.
     public class ShapeGeometry
     {
         public readonly int[] verts;
         public readonly int[][] faces;
+        public readonly int[] colours;
 
-        public ShapeGeometry(int[] verts, int[][] faces)
+        public ShapeGeometry(int[] verts, int[][] faces, int[] colours)
         {
             this.verts = verts;
             this.faces = faces;
+            this.colours = colours;
         }
 
-        Mesh body, edges;
+        readonly Dictionary<int, Mesh> bodies = new Dictionary<int, Mesh>();
+        Mesh edges;
         float edgeThickness;
 
         // In Unity terms: x = world side, y = up, z = forward
@@ -29,7 +32,15 @@ namespace SpectreEX.Matrix
             return v;
         }
 
-        public Mesh Body => body != null ? body : body = ShapeMeshes.Body(UnityPoints(), faces, "Shape_Body");
+        public Mesh Body => Coloured(0);
+
+        // The faces, coloured for an object of this colour (UVs into SpectrePalette)
+        public Mesh Coloured(int objectColour)
+        {
+            if (!bodies.TryGetValue(objectColour, out var mesh))
+                bodies[objectColour] = mesh = ShapeMeshes.Body(UnityPoints(), faces, colours, objectColour, "Shape_Body");
+            return mesh;
+        }
 
         public Mesh Edges(float thickness)
         {
@@ -42,18 +53,22 @@ namespace SpectreEX.Matrix
         }
     }
 
-    // Spectre VR-EX's look for an original shape: solid panels plus glowing strips along every polygon edge.
+    // An original shape's meshes: its solid faces, and the strips along every polygon edge that Options
+    // "Filled" off shows instead, as the original's wireframe mode does.
     public static class ShapeMeshes
     {
         // Panels: every face fan-triangulated, emitted with both windings and flat normals,
         // so the original's mixed face orientation never leaves holes.
-        public static Mesh Body(Vector3[] v, IEnumerable<int[]> faces, string name)
+        public static Mesh Body(Vector3[] v, int[][] faces, int[] colours, int objectColour, string name)
         {
             var verts = new List<Vector3>();
+            var uvs = new List<Vector2>();
             var tris = new List<int>();
-            foreach (var f in faces)
+            for (int i = 0; i < faces.Length; i++)
             {
+                var f = faces[i];
                 if (f.Length < 3) continue;
+                var uv = SpectrePalette.Uv(SpectrePalette.Entry(colours != null && i < colours.Length ? colours[i] : 0, objectColour));
                 for (int k = 1; k + 1 < f.Length; k++)
                 {
                     int a = f[0], b = f[k], c = f[k + 1];
@@ -61,11 +76,13 @@ namespace SpectreEX.Matrix
                     int n = verts.Count;
                     verts.Add(v[a]); verts.Add(v[b]); verts.Add(v[c]);
                     verts.Add(v[a]); verts.Add(v[c]); verts.Add(v[b]);
+                    for (int u = 0; u < 6; u++) uvs.Add(uv);
                     tris.AddRange(new[] { n, n + 1, n + 2, n + 3, n + 4, n + 5 });
                 }
             }
             var mesh = new Mesh { name = name };
             mesh.SetVertices(verts);
+            mesh.SetUVs(0, uvs);
             mesh.SetTriangles(tris, 0);
             mesh.RecalculateNormals();
             mesh.RecalculateBounds();
@@ -134,13 +151,34 @@ namespace SpectreEX.Matrix
     // Tools/import_original.py into Resources/Shapes/BuiltinShapes.json.
     public static class BuiltinShapes
     {
-        [Serializable] class Face { public int[] idx; }
+        [Serializable] class Face { public int[] idx; public int col; }
         [Serializable] class Shape { public string name; public int[] verts; public Face[] faces; }
         [Serializable] class Entry { public int id, type, shap; public string shape; }
-        [Serializable] class File { public Entry[] table; public Shape[] shapes; }
+        [Serializable] class File { public Entry[] table; public Shape[] shapes; public int[] typeColors, objColors, skyColors; }
 
         static Dictionary<string, ShapeGeometry> byName;
         static Dictionary<int, Entry> byId;
+        static File data;
+
+        // The colour an object of this type is drawn in (the table _ADD_SHAPE reads)
+        public static int TypeColour(int type)
+        {
+            Load();
+            return data != null && type >= 0 && type < data.typeColors.Length ? data.typeColors[type] : 0;
+        }
+
+        public static Color32 ObjectColour(int level) => LevelColour(data => data.objColors, level);
+        public static Color32 SkyColour(int level) => LevelColour(data => data.skyColors, level);
+
+        // The tables hold 30 levels, then repeat
+        static Color32 LevelColour(Func<File, int[]> table, int level)
+        {
+            Load();
+            if (data == null) return new Color32(255, 255, 255, 255);
+            int[] t = table(data);
+            int at = (Mathf.Max(0, level) % 30) * 3;
+            return new Color32((byte)t[at], (byte)t[at + 1], (byte)t[at + 2], 255);
+        }
 
         static void Load()
         {
@@ -149,9 +187,9 @@ namespace SpectreEX.Matrix
             byId = new Dictionary<int, Entry>();
             var text = Resources.Load<TextAsset>("Shapes/BuiltinShapes");
             if (text == null) { Debug.LogWarning("Spectre VR-EX: Resources/Shapes/BuiltinShapes.json is missing"); return; }
-            var file = JsonUtility.FromJson<File>(text.text);
+            var file = data = JsonUtility.FromJson<File>(text.text);
             foreach (var s in file.shapes)
-                byName[s.name] = new ShapeGeometry(s.verts, Array.ConvertAll(s.faces, f => f.idx));
+                byName[s.name] = new ShapeGeometry(s.verts, Array.ConvertAll(s.faces, f => f.idx), Array.ConvertAll(s.faces, f => f.col));
             // As _ADD_SHAPE reads it: the first entry for an id naming a shap resource wins,
             // otherwise the last one's template
             foreach (var e in file.table)

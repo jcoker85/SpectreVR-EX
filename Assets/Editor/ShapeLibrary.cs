@@ -48,7 +48,7 @@ namespace SpectreEX.EditorTools
         public static Mesh BodyMesh(int id, float scale, Func<Vector3, Vector3> warp = null)
         {
             var s = Get(id);
-            return Matrix.ShapeMeshes.Body(Verts(s, scale, warp), Faces(s), $"Spectre_{id}_Body");
+            return Matrix.ShapeMeshes.Body(Verts(s, scale, warp), new System.Collections.Generic.List<int[]>(Faces(s)).ToArray(), null, 0, $"Spectre_{id}_Body");
         }
 
         public static Mesh EdgeMesh(int id, float scale, float thickness, Func<Vector3, Vector3> warp = null)

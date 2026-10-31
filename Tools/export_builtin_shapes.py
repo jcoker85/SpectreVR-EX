@@ -115,11 +115,16 @@ def make_layout(exe_path, c_path, sym_path):
     exe.w32 = lambda sel, o, v: (writes.append([sel, o, 4, v]), w32(sel, o, v))
     replay(exe, sym, lines, "_BUILD_OBJECTS")
     replay(exe, sym, lines, "_SET_FACES")
-    names = ["_" + n for n in TEMPLATES] + ["_OT_TO_SHAPE"]
+    names = ["_" + n for n in TEMPLATES] + ["_OT_TO_SHAPE", "_OBJ_COLORS", "_SKY_COLORS"]
     with open(LAYOUT, "w") as f:
         json.dump({"sha256": hashlib.sha256(open(exe_path, "rb").read()).hexdigest(),
                    "symbols": {n: sym[n] for n in names}, "writes": writes}, f, separators=(",", ":"))
     print(len(writes), "stores ->", LAYOUT)
+
+
+def colour_table(exe, at):
+    """30 levels of 16-bit RGB (three words each), as 8-bit values."""
+    return [exe.u16(at[0], at[1] + i * 2) >> 8 for i in range(90)]
 
 
 def main():
@@ -146,7 +151,7 @@ def main():
         for f in range(nfaces):
             b = fo + f * 0x35
             n, io, iseg = exe.u16(fs, b), exe.u16(fs, b + 2), exe.u16(fs, b + 4)
-            faces.append({"idx": [exe.u16(iseg, io + k * 2) for k in range(n)]})
+            faces.append({"idx": [exe.u16(iseg, io + k * 2) for k in range(n)], "col": exe.u16(fs, b + 0x2B)})
         shapes.append({"name": name, "verts": verts, "faces": faces})
 
     ds = sym["_OT_TO_SHAPE"][0]
@@ -158,7 +163,9 @@ def main():
         o += 10
 
     with open(out_path, "w") as f:
-        json.dump({"table": table, "shapes": shapes}, f, separators=(",", ":"))
+        json.dump({"table": table, "shapes": shapes, "typeColors": [exe.u16(ds, 0x8FC + i * 2) & 0xFF for i in range(64)],
+                   "objColors": colour_table(exe, sym["_OBJ_COLORS"]), "skyColors": colour_table(exe, sym["_SKY_COLORS"])},
+                  f, separators=(",", ":"))
     print(len(shapes), "built-in shapes,", len(table), "table entries ->", out_path)
 
 

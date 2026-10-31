@@ -47,7 +47,7 @@ namespace SpectreEX.EditorTools
         const float FlagBaseScale = 0.35f;   // keeps the base pyramid's footprint small next to the craft
         const float FlagBaseHeight = 0.4f;   // and its height low
 
-        static Material floorMat, bodyMat, wallMat, blockMat, dotMat, cyanMat, flagMat, poleMat, dumpMat;
+        static Material shapeMat, floorMat, bodyMat, wallMat, blockMat, dotMat, cyanMat, flagMat, poleMat, dumpMat;
         static Material roverMat, turretMat, orbiterMat, slicerMat, enemyBoltMat;
         static Material playerPanel, roverPanel, turretPanel, orbiterPanel, slicerPanel;
         static Material acidMat, teleportMat, pusherMat, transportMat;
@@ -58,8 +58,6 @@ namespace SpectreEX.EditorTools
         {
             foreach (var d in new[] { MaterialDir, MeshDir, TextureDir, PrefabDir, "Assets/Scenes" }) Directory.CreateDirectory(d);
             EnsureLayer(PlayerLayer);
-            ConfigurePixelArt("Assets/Resources/Menu");
-            ConfigurePixelArt("Assets/Resources/HUD");
             CreateMaterials();
 
             var prefabs = BuildPrefabs();
@@ -83,15 +81,14 @@ namespace SpectreEX.EditorTools
             // Robots too (RobotFactory), each edged in its own colour
             gm.robotLook = new RobotLook
             {
-                panels = blockMat, tank = roverMat, superTank = turretMat, turret = turretMat, slicer = slicerMat,
+                shapes = shapeMat, tank = roverMat, superTank = turretMat, turret = turretMat, slicer = slicerMat,
                 flyer = orbiterMat, acid = acidMat, wall = pusherMat, mud = transportMat, orbiter = orbiterMat, bolt = enemyBoltMat,
-                tankPanel = roverPanel, turretPanel = turretPanel, slicerPanel = slicerPanel, orbiterPanel = orbiterPanel,
                 flash = poleMat,
             };
             // Obstacles are built at runtime from each matrix's own shapes (Matrix.ObstacleFactory)
             gm.obstacleLook = new Matrix.ObstacleLook
             {
-                panels = blockMat, edges = cyanMat, acid = acidMat, ice = teleportMat, teleport = teleportMat,
+                shapes = shapeMat, edges = cyanMat, acid = acidMat, ice = teleportMat, teleport = teleportMat,
                 pusher = pusherMat, transport = transportMat, edgeThickness = EdgeThickness,
             };
             gmGo.AddComponent<MusicPlayer>();
@@ -162,6 +159,7 @@ namespace SpectreEX.EditorTools
             bodyMat = LitMaterial("TankBody", new Color(0.02f, 0.025f, 0.035f), smoothness: 0.85f, metallic: 0.8f);
             blockMat = LitMaterial("Block", new Color(0.015f, 0.018f, 0.025f), smoothness: 0.9f, metallic: 0.5f);
             wallMat = GlowMaterial("WallGradient", Magenta, 10.5f, WallGradientTexture());
+            shapeMat = ShapeMaterial();
             dotMat = GlowMaterial("FloorDots", Color.white, 11.5f);
             cyanMat = GlowMaterial("GlowCyan", Cyan, 12.5f);
             flagMat = GlowMaterial("FlagRed", Red, 12f);
@@ -221,6 +219,23 @@ namespace SpectreEX.EditorTools
             mat.SetColor("_BaseColor", baseColor);
             mat.SetFloat("_Smoothness", smoothness);
             mat.SetFloat("_Metallic", metallic);
+            HDMaterial.ValidateMaterial(mat);
+            EditorUtility.SetDirty(mat);
+            return mat;
+        }
+
+        // Every original shape's solid faces. GameManager puts the level's palette in both maps at runtime;
+        // the texture here only makes HDRP compile the emissive map in. The faces glow a little so they
+        // keep their colour in the dark arena, and the lights and reflections do the rest.
+        static Material ShapeMaterial()
+        {
+            var mat = LitMaterial("ShapePalette", Color.white, 0.6f, 0f);
+            var placeholder = AssetDatabase.LoadAssetAtPath<Texture2D>($"{TextureDir}/WallGradient.png");
+            mat.SetTexture("_BaseColorMap", placeholder);
+            mat.SetTexture("_EmissiveColorMap", placeholder);
+            HDMaterial.SetUseEmissiveIntensity(mat, true);
+            HDMaterial.SetEmissiveColor(mat, Color.white);
+            HDMaterial.SetEmissiveIntensity(mat, 12f, EmissiveIntensityUnit.EV100);
             HDMaterial.ValidateMaterial(mat);
             EditorUtility.SetDirty(mat);
             return mat;
