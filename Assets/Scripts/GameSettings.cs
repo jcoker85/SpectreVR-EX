@@ -38,7 +38,7 @@ namespace SpectreEX
         public static readonly string[] MusicStyles = { "Cyber/Techno", "New Age", "Rock/Rave", "VRBach" };
 
         public static bool Joystick = true;
-        public static bool SoundEffectsOn = true, MusicOn = true;
+        public static bool SoundEffectsOn = true;
         public static bool[] Music = { true, false, false, false };
         public static Difficulty Difficulty = Difficulty.Easy;
         public static bool DisplayComplex = true;    // the detailed shape set; off is the plain one, from the next level
@@ -52,6 +52,8 @@ namespace SpectreEX
         public static string SelectedMatrix = "CENTRAL.MAT";   // file name chosen in the MATRIX dialog
         public static bool UseCustomMatrices;        // also offer .MAT files from the Matrices folders
 
+
+        public static bool MusicOn => System.Array.Exists(Music, on => on);   // no style ticked, no music
 
         public static float DifficultyMultiplier => Difficulty switch
         {
@@ -84,7 +86,6 @@ namespace SpectreEX
             loaded = true;
             Joystick = PlayerPrefs.GetInt("opt.joystick", 1) == 1;
             SoundEffectsOn = PlayerPrefs.GetInt("opt.sounds", 1) != 0;
-            MusicOn = PlayerPrefs.GetInt("opt.music", 1) != 0;
             for (int i = 0; i < Music.Length; i++) Music[i] = PlayerPrefs.GetInt("opt.music" + i, 1) == 1;
             Difficulty = (Difficulty)PlayerPrefs.GetInt("opt.difficulty", (int)Difficulty.Easy);
             DisplayComplex = PlayerPrefs.GetInt("opt.complex", 1) == 1;
@@ -101,7 +102,6 @@ namespace SpectreEX
         {
             PlayerPrefs.SetInt("opt.joystick", Joystick ? 1 : 0);
             PlayerPrefs.SetInt("opt.sounds", SoundEffectsOn ? 1 : 0);
-            PlayerPrefs.SetInt("opt.music", MusicOn ? 1 : 0);
             for (int i = 0; i < Music.Length; i++) PlayerPrefs.SetInt("opt.music" + i, Music[i] ? 1 : 0);
             PlayerPrefs.SetInt("opt.difficulty", (int)Difficulty);
             PlayerPrefs.SetInt("opt.complex", DisplayComplex ? 1 : 0);

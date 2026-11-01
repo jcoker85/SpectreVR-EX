@@ -22,6 +22,7 @@ namespace SpectreEX
         const int HyperRecharge = 0xB, JumpCost = 0x640;
         const int Arena = 0x40000, FaceCentreBeyond = 0x38000;
         public const int GroundUnits = GroundZ;
+        const int BumpHopHeight = 0x600;
         const int GroundZ = 0x500, UnderZ = -0xF00, LifeDropZ = 0xC800, HyperDropZ = 0x5000;
         const int Gravity = 0x100, JumpVz = 0xC00, HardLanding = -0xF00;
         const int PushSpeed = 0x12;
@@ -292,7 +293,7 @@ namespace SpectreEX
                             if (health != null)
                             {
                                 health.TakeRawDamage(gm != null ? gm.AcidDamage : 10, false);
-                                if (!health.IsDead) Sfx.Play(health.Shields <= 20 ? Snd.HeavyDamage : Snd.Acid);
+                                if (!health.IsDead) Sfx.Restart(health.Shields <= 20 ? Snd.HeavyDamage : Snd.Acid);
                             }
                         }
                         break;
@@ -550,7 +551,16 @@ namespace SpectreEX
             robot = null; gate = null; solid = null;
             if (hull == null) return;
 
-            Vector3 pos = new Vector3(nx, z - GroundZ, ny) * UnitsToMetres;
+            // _PLAY_LEVEL: low in a bump's hop, obstacles are tested from the ground, so the hop can't
+            // carry you over a low wall. Robots are always tested from where you really are.
+            bool hopping = bounceI != 0 && z - GroundZ < minZ + BumpHopHeight;
+            Sweep(nx, ny, h, z, !hopping, ref robot, ref gate, ref solid);
+            if (hopping) Sweep(nx, ny, h, GroundZ, true, ref robot, ref gate, ref solid);
+        }
+
+        void Sweep(long nx, long ny, int h, long height, bool obstacles, ref EnemyBase robot, ref ObstacleBehaviour gate, ref Transform solid)
+        {
+            Vector3 pos = new Vector3(nx, height - GroundZ, ny) * UnitsToMetres;
             var rot = Quaternion.Euler(0f, YawFromHeading(h), 0f);
             Vector3 scale = transform.lossyScale;
             Vector3 centre = pos + rot * Vector3.Scale(hull.center, scale);
@@ -564,6 +574,7 @@ namespace SpectreEX
                 if (c.transform.IsChildOf(transform)) continue;
 
                 var ob = c.GetComponentInParent<ObstacleBehaviour>();
+                if (ob != null && !obstacles) continue;
                 if (ob != null && ob.IsGate)
                 {
                     // Under the floor only the transports are there to touch
@@ -580,7 +591,7 @@ namespace SpectreEX
                     continue;
                 }
                 var root = c.transform.root;
-                if (solid == null && gm != null && gm.Obstacles.Contains(root.gameObject)) solid = root;
+                if (obstacles && solid == null && gm != null && gm.Obstacles.Contains(root.gameObject)) solid = root;
             }
         }
 

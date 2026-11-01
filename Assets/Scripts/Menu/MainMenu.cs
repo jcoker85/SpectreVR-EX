@@ -429,19 +429,21 @@ namespace SpectreEX.Menu
                 refreshers.Add(() => dot.enabled = get());
             }
 
-            Check(19, 38, () => GameSettings.Joystick, () => GameSettings.Joystick = !GameSettings.Joystick, Key.J);
-            // In place of the original's three sound cards: on/off rows made from the dialog's own box and headings
-            var art = LoadTex("Options");
-            Rect Art(float x, float y, float w, float h) => new Rect(x / art.width, 1f - (y + h) / art.height, w / art.width, h / art.height);
-            AddRect(options, new Rect(12, 89, 126, 62), Color.white);
-            void SoundRow(int y, Rect label, System.Func<bool> get, System.Action toggle)
+            Radio(19, 38, () => GameSettings.Joystick, () =>
             {
-                AddRaw(options, art, new Rect(18, y - 1, 13, 13), Art(18, 37, 13, 13));
-                AddRaw(options, art, new Rect(36, y - 1, label.width, label.height), Art(label.x, label.y, label.width, label.height));
-                Check(19, y, get, toggle);
-            }
-            SoundRow(100, new Rect(19, 75, 50, 13), () => GameSettings.SoundEffectsOn, () => GameSettings.SoundEffectsOn = !GameSettings.SoundEffectsOn);
-            SoundRow(124, new Rect(19, 154, 42, 13), () => GameSettings.MusicOn, () => GameSettings.MusicOn = !GameSettings.MusicOn);
+                // Ticking it with nothing to use is refused
+                if (!GameSettings.Joystick && Gamepad.current == null) Sfx.Play(Snd.AccessDenied);
+                else GameSettings.Joystick = !GameSettings.Joystick;
+            }, Key.J);
+            // Music is off when all four styles below are
+            void Sound(int y, bool on, Key key) => Radio(19, y, () => GameSettings.SoundEffectsOn == on, () =>
+            {
+                GameSettings.SoundEffectsOn = on;
+                Sfx.Enabled = on && !GameSettings.SoundMuted;
+                if (Sfx.Enabled) Sfx.Play(Snd.Welcome);
+            }, key);
+            Sound(98, true, Key.O);
+            Sound(122, false, Key.F);
             int[] musicY = { 174, 202, 230, 258 };
             Key[] musicKeys = { Key.Y, Key.A, Key.K, Key.B };
             for (int i = 0; i < 4; i++)
@@ -454,9 +456,8 @@ namespace SpectreEX.Menu
             Radio(167, 86, () => GameSettings.Difficulty == Difficulty.Hard, () => GameSettings.Difficulty = Difficulty.Hard, Key.H);
             Check(167, 110, () => GameSettings.UseCustomMatrices, () => GameSettings.UseCustomMatrices = !GameSettings.UseCustomMatrices, Key.U);
             Check(169, 174, () => GameSettings.DisplayComplex, () => GameSettings.DisplayComplex = !GameSettings.DisplayComplex, Key.C);
-            Check(169, 202, () => GameSettings.DisplayFilled, () => GameSettings.DisplayFilled = !GameSettings.DisplayFilled, Key.F);
+            Check(169, 202, () => GameSettings.DisplayFilled, () => GameSettings.DisplayFilled = !GameSettings.DisplayFilled, Key.L);
             Check(169, 230, () => GameSettings.DisplayTextures, () => GameSettings.DisplayTextures = !GameSettings.DisplayTextures, Key.T);
-            AddRaw(options, MoviesLabel(), new Rect(187, 259, MoviesRows[0].Length, MoviesRows.Length), new Rect(0, 0, 1, 1));
             Check(169, 258, () => GameSettings.DisplayMovies, () => GameSettings.DisplayMovies = !GameSettings.DisplayMovies, Key.M);
 
             Button(options, new Rect(11, 287, 170, 41), () => ShowNotice("NETWORK PLAY\nIS NOT AVAILABLE\nIN THIS VERSION"), Key.R);
@@ -471,36 +472,6 @@ namespace SpectreEX.Menu
             Button(options, new Rect(199, 287, 170, 41), done, Key.D);
             options.onEscape = options.onEnter = done;
             options.refresh = () => { foreach (var r in refreshers) r(); };
-        }
-
-        // The original greys its Movies option out because it had no switch for them. Ours works, so the word
-        // is redrawn solid, stroke for stroke over the dithered one.
-        static readonly string[] MoviesRows =
-        {
-            "##......##...................##...............",
-            "###....###...................##...............",
-            "####..####....................................",
-            "##.####.##...####..##....##..##...####...####.",
-            "##..##..##..##..##.##....##..##..##..##.##..##",
-            "##..##..##..##..##..##..##...##..######.##....",
-            "##......##..##..##..##..##...##..##......####.",
-            "##......##..##..##...####....##..##.........##",
-            "##......##..##..##...####....##..##..##.##..##",
-            "##......##...####.....##.....##...####...####.",
-            "..............................................",
-            "#########.....................................",
-            "#########....................................."
-        };
-
-        static Texture2D MoviesLabel()
-        {
-            int w = MoviesRows[0].Length, h = MoviesRows.Length;
-            var tex = new Texture2D(w, h, TextureFormat.RGBA32, false) { filterMode = FilterMode.Point };
-            for (int y = 0; y < h; y++)
-            for (int x = 0; x < w; x++)
-                tex.SetPixel(x, h - 1 - y, MoviesRows[y][x] == '#' ? Color.black : Color.white);
-            tex.Apply();
-            return tex;
         }
 
         // _SELECT_MATRIX's dialog, at startup only: Previous / Next step through the matrices, each with

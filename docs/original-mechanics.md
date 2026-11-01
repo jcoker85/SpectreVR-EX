@@ -153,7 +153,8 @@ count, then three words per type (textured shape, plain shape, spare). With the 
 - `_LOAD_WRLD` spin per tick (+0x3A): type 2 -2, type 36 +3, type 37 -3. Windmill fans: a child
   object 0x800 forward, 0x1D00 up, roll +2/tick from a random start, never collides (type 0xF8).
 - Collision is `_CUBE_COLLIDE`: the exact point bounds (`_SIZE_OBJECT`, +0x24..+0x2E), in 3D,
-  for gates too. The up transport's zmin is lowered by 0x1400 so a craft under the floor meets it.
+  for gates too. While `_BOUNCE_I` is running and the craft is under `_MIN_Z` + 0x600, `_PLAY_LEVEL` tests
+  obstacles from height 0, so a bump's hop can't clear the flat type 40 walls. The up transport's zmin is lowered by 0x1400 so a craft under the floor meets it.
   Type 40 (VRchitect walls, a flat 10026 strip) isn't a gate, so it's solid.
 
 CENTRAL.MAT:
@@ -497,7 +498,7 @@ Measured with collisions off, Balance craft, at 10 / 30 / 59 / 117 / 128 fps: sp
 - Songs: ids 20001-20011, 21001-, 22001-, 23001- index 11-entry style tables, 24001-24004 are 5theme, award, higame, 5theme (table at DS:0x33B6, slot 0 unused). SPECTRE.MID and CANON.MID are never played. `_PICK_SONG` keeps the song number and moves to the next ticked style. All four styles are on by default.
 - `_START_LEVEL`: sound 0 stops the music, 0xF plays five ticks in, the banner lasts about 32 ticks, and the level's song (`DS:0x8F6`) starts as it ends.
 - Level end plays the AWARD sample over the level's song. There is no game-over sound. `_CHECK_HIGHSCORES` plays higame for a new best score, award for any other table entry.
-- `_SOUNDTABLE` entries are (priority, kind, sample). The original plays one sample at a time by priority; the remake lets them overlap.
+- `_SOUNDTABLE` entries are (priority, kind, sample). The original plays one sample at a time by priority (`_QSENDSOUND`, `_PLAYSAMPLE2`), a repeat cutting off the last, and with no positions. `_PLAY_SOUND_NOW` skips the per-frame queue. Sound 0 stops everything, used by the S key and at level start. By the owner's choice the remake layers sounds and places robots' in 3D; only sounds replayed every few ticks, acid and robot contact, restart on one channel.
 
 ## Robot audit against the decompile
 
@@ -514,6 +515,15 @@ Checked line by line: `_DO_SHOOT`, `_MY_SHOOT`, `_MOVE_SHOTS`, `_KEY_WEAPON`, th
 - Shots draw flat at their heading, never pitched. +0x3A turns the heading (grenade-type lobs and bombs 4), +0x3E rolls them (0x10 by default).
 - Debris cycles shapes 10102-10104 by life; a landed Pulse Burst becomes shape 10096.
 - A Spinner hit spins the player as well as robots: 0x10 a tick for 0xB4 ticks, with no steering or thrust.
+
+## Modern enhancements
+
+Things the remake does differently on purpose, by the owner's choice, rather than as fixes to the original:
+
+- **3D, layered sound:** robots' sounds, shots and explosions come from where they are in the arena, fading and panning with distance, and sounds overlap. The original plays one sample at a time at full volume with no position. Only sounds replayed every few ticks, acid and robot contact, restart on one channel as they do there.
+- **Graphics and display:** HDRP with ray tracing, DLSS and TAA, the star skybox, and the HUD at 16:9.
+- **Movement:** smooth movement between the original's ticks (see "Remake timing").
+- **Controls and settings:** the Shift + Options menu, with rebinding for keyboard, mouse and gamepad.
 
 ## Deliberate fixes to the original's intent
 

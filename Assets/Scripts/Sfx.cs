@@ -25,6 +25,8 @@ namespace SpectreEX
         public const string Collision = "COLLSN";
         public const string Logo = "SPCLOG";            // 0x3A: the game starting up
         public const string LevelStart = "ECYBSHT";     // 0xF: under the level banner
+        public const string AccessDenied = "ACCDEN";   // 0x39: no joystick to use
+        public const string Welcome = "WELCOME";        // 0x3B: sound turned on
         public const string Leave = "LTRDUDE";          // 0x10: leaving a game
         public const string SlicerBite = "SHKDAM";      // 0x19: touching a Slicer
         public const string Award = "AWARD";
@@ -60,7 +62,24 @@ namespace SpectreEX
 
     public static class Sfx
     {
-        public static bool Enabled = true;
+        static bool enabled = true;
+
+        public static bool Enabled
+        {
+            get => enabled;
+            set
+            {
+                enabled = value;
+                if (!value) Stop();
+            }
+        }
+
+        // Sound 0: what's playing stops
+        public static void Stop()
+        {
+            if (source2D != null) source2D.Stop();
+            if (sourceRestart != null) sourceRestart.Stop();
+        }
 
         static readonly Dictionary<string, AudioClip> cache = new Dictionary<string, AudioClip>();
         static AudioSource source2D;

@@ -387,7 +387,8 @@ namespace SpectreEX
             if (++repairTimer > RepairTicks)
             {
                 repairTimer = 0;
-                if (player.Health.Restore(10)) Sfx.Play(Snd.TimeTick);
+                player.Health.Restore(10);
+                Sfx.Play(Snd.TimeTick);   // full health or not
             }
         }
 

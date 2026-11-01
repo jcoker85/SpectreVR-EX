@@ -249,7 +249,12 @@ namespace SpectreEX
                     else Advance(s);
                     continue;
                 }
-                if (--s.life <= 0) { Fade(s, false); continue; }
+                if (--s.life <= 0)
+                {
+                    if (s.weapon == 2) Sfx.PlayAt(Snd.Explosion, s.Position);   // a mine going off by itself
+                    Fade(s, false);
+                    continue;
+                }
                 switch (s.weapon)
                 {
                     case 15:

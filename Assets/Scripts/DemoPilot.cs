@@ -138,13 +138,12 @@ namespace SpectreEX
             {
                 shots.PlayerShoot(0);
                 tank.Weapon.AddAmmo(-1);
-                Sfx.Play(Snd.PlayerShot);
+                Sfx.Play(Snd.EnemyShot);   // _TANK_SHOOT fires it as _DO_SHOOT does a robot's
             }
             else
             {
                 shots.PlayerShoot(10);
                 tank.Weapon.AddAmmo(-6);
-                Sfx.Play(Snd.Missile);
             }
             shotTimer = Mathf.Max(6, (distance >> 4) - ((gm.Level - 1) >> 1));
         }
