@@ -7,7 +7,7 @@ QualitySettings:
   m_CurrentQuality: 0
   m_QualitySettings:
   - serializedVersion: 5
-    name: High Fidelity
+    name: High
     pixelLightCount: 0
     shadows: 2
     shadowResolution: 0
@@ -60,7 +60,7 @@ QualitySettings:
     terrainMaxTrees: 50
     excludedTargetPlatforms: []
   - serializedVersion: 5
-    name: Balanced
+    name: Medium
     pixelLightCount: 0
     shadows: 2
     shadowResolution: 0
@@ -113,7 +113,7 @@ QualitySettings:
     terrainMaxTrees: 50
     excludedTargetPlatforms: []
   - serializedVersion: 5
-    name: Performant
+    name: Low
     pixelLightCount: 0
     shadows: 2
     shadowResolution: 0
