@@ -556,7 +556,7 @@ Left alone: a splash's sound uses a fixed `_DAMAGE < 0x1E` test.
 | Home, PgUp, End, PgDn, Ins | diagonal driving, fire | same |
 | J | re-calibrate joystick | not needed; J stays the remake's jump |
 
-Hidden map (`_DRAW_GOD_VIEW`, machine code at 1030:003A, since the decompile drops its arguments): the window is 760 x 530, or 530 x 420 on a desktop no wider than 760 (the table at DS:0x3E5), so the map sits in the top left below the HUD. `_ERASE_BOTTOM` blacks out from row 50 down and the rows above aren't redrawn. A frame in entry 15 runs from (0x5F, 0x37) to (0xE1, 0xB9). Each object is one pixel at (0xA0 + X >> 12, 0x78 - Y >> 12), flags in entry 14 and everything else in its colour + 12. The `_LEVEL_TIMER & 8` test sits in a branch flags can't reach, so they stay lit. The radar isn't drawn here or in the overhead view.
+Hidden map (`_DRAW_GOD_VIEW`, machine code at 1030:003A, since the decompile drops its arguments): the window is 760 x 530, or 530 x 420 on a desktop no wider than 760 (the table at DS:0x3E5), so the map sits in the top left below the HUD. `_ERASE_BOTTOM` blacks out from row 50 down and the rows above aren't redrawn. A frame in entry 15 runs from (0x5F, 0x37) to (0xE1, 0xB9). Each object is one pixel at (0xA0 + X >> 12, 0x78 - Y >> 12), flags in entry 14 and everything else in its colour + 12. The `_LEVEL_TIMER & 8` test sits in a branch flags can't reach, so they stay lit. The radar isn't drawn here or in the overhead view. The remake draws the map 65 rows lower, half its height, to clear its taller HUD.
 
 Floor (`_DRAW_LEVEL`): dotted lines 0x10000 apart both ways, dots every 0x2000 at level 1, halving each level, none at 0. The original only draws those near the camera; the remake draws them all.
 

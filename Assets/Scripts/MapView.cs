@@ -11,8 +11,11 @@ namespace SpectreEX
     [RequireComponent(typeof(ViewCamera))]
     public class MapView : MonoBehaviour
     {
-        const int Width = 760, Height = 530, EraseFrom = 50, CentreX = 0xA0, CentreY = 0x78;
-        const int FrameLeft = 0x5F, FrameRight = 0xE1, FrameTop = 0x37, FrameBottom = 0xB9;
+        // The remake's HUD reaches further down than the original's 50 rows, so the map sits half its own
+        // height lower to clear it
+        const int HudDrop = 65;
+        const int Width = 760, Height = 530, EraseFrom = 50, CentreX = 0xA0, CentreY = 0x78 + HudDrop;
+        const int FrameLeft = 0x5F, FrameRight = 0xE1, FrameTop = 0x37 + HudDrop, FrameBottom = 0xB9 + HudDrop;
         const int FrameEntry = 0x0F, FlagEntry = 0x0E, RampStep = 0x0C;
         const int PlayerType = 6;
         const float GridPerPixel = 8f * GameManager.GridScale;

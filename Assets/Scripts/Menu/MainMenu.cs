@@ -59,6 +59,7 @@ namespace SpectreEX.Menu
         Sprite dotSprite;
         int scale = 1;
         Vector2Int lastScreen;
+        FullScreenMode lastMode;
         readonly List<MenuScreen> stack = new List<MenuScreen>();
         MenuScreen main, vehicles, custom, options, matrix, about, help, scores, notice;
         PixelSegmentText noticeText;
@@ -1173,7 +1174,9 @@ namespace SpectreEX.Menu
         void Update()
         {
             if (!IsOpen || stack.Count == 0) return;
-            if (Screen.width != lastScreen.x || Screen.height != lastScreen.y) Relayout();
+            // Screen changes land a frame or more after they're asked for, so the settings list shows them then
+            if (Screen.width != lastScreen.x || Screen.height != lastScreen.y) { Relayout(); graphics.refresh(); }
+            if (Screen.fullScreenMode != lastMode) { lastMode = Screen.fullScreenMode; graphics.refresh(); }
             optionsHue.enabled = ShiftHeld;
 
             var top = stack[stack.Count - 1];
