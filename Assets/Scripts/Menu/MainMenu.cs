@@ -354,6 +354,9 @@ namespace SpectreEX.Menu
             };
         }
 
+        int customField = -1;
+        System.Action<int> customStep;
+
         void BuildCustom()
         {
             custom = ImageScreen("Custom", "Custom");
@@ -383,8 +386,18 @@ namespace SpectreEX.Menu
             Button(custom, new Rect(231, 152, 36, 16), () => Adjust(1, -1));
             Button(custom, new Rect(231, 182, 36, 16), () => Adjust(2, 1));
             Button(custom, new Rect(231, 198, 36, 16), () => Adjust(2, -1));
-            Button(custom, new Rect(113, 249, 113, 33), () => { GameSettings.Save(); Pop(); });
-            custom.onEscape = custom.onEnter = () => { GameSettings.Save(); Pop(); };
+            System.Action done = () => { customField = -1; GameSettings.Save(); Pop(); };
+            Button(custom, new Rect(113, 249, 113, 33), done, Key.D);
+            custom.onEscape = custom.onEnter = done;
+
+            // As in the Windows dialog: an underlined letter picks a setting, and the arrow keys step it
+            Key[] fieldKeys = { Key.S, Key.H, Key.A };
+            for (int i = 0; i < fieldKeys.Length; i++)
+            {
+                int field = i;
+                Button(custom, new Rect(0, 0, 0, 0), () => customField = field, fieldKeys[i]);
+            }
+            customStep = delta => { if (customField >= 0) Adjust(customField, delta); };
             custom.refresh = () =>
             {
                 var c = GameSettings.Custom;
@@ -400,21 +413,22 @@ namespace SpectreEX.Menu
             options = BlackScreen("Options", "Options");
             var refreshers = new List<System.Action>();
 
-            // (x, y) is the top-left of each control's 11x11 interior, measured from Options.png
-            void Check(int x, int y, System.Func<bool> get, System.Action toggle, bool enabled = true)
+            // (x, y) is the top-left of each control's 11x11 interior, measured from Options.png.
+            // Each key is the letter underlined beside it in the art.
+            void Check(int x, int y, System.Func<bool> get, System.Action toggle, Key key = Key.None, bool enabled = true)
             {
                 var mark = CheckMark(options, x, y);
-                Button(options, new Rect(x - 3, y - 3, 128, 17), enabled ? () => { toggle(); options.refresh(); } : (System.Action)null);
+                Button(options, new Rect(x - 3, y - 3, 128, 17), enabled ? () => { toggle(); options.refresh(); } : (System.Action)null, key);
                 refreshers.Add(() => mark.SetActive(get()));
             }
-            void Radio(int x, int y, System.Func<bool> get, System.Action select)
+            void Radio(int x, int y, System.Func<bool> get, System.Action select, Key key)
             {
                 var dot = AddImage(options, new Rect(x + 3, y + 3, 5, 5), Color.black, dotSprite);
-                Button(options, new Rect(x - 3, y - 3, 128, 17), () => { select(); options.refresh(); });
+                Button(options, new Rect(x - 3, y - 3, 128, 17), () => { select(); options.refresh(); }, key);
                 refreshers.Add(() => dot.enabled = get());
             }
 
-            Check(19, 38, () => GameSettings.Joystick, () => GameSettings.Joystick = !GameSettings.Joystick);
+            Check(19, 38, () => GameSettings.Joystick, () => GameSettings.Joystick = !GameSettings.Joystick, Key.J);
             // In place of the original's three sound cards: on/off rows made from the dialog's own box and headings
             var art = LoadTex("Options");
             Rect Art(float x, float y, float w, float h) => new Rect(x / art.width, 1f - (y + h) / art.height, w / art.width, h / art.height);
@@ -428,22 +442,23 @@ namespace SpectreEX.Menu
             SoundRow(100, new Rect(19, 75, 50, 13), () => GameSettings.SoundEffectsOn, () => GameSettings.SoundEffectsOn = !GameSettings.SoundEffectsOn);
             SoundRow(124, new Rect(19, 154, 42, 13), () => GameSettings.MusicOn, () => GameSettings.MusicOn = !GameSettings.MusicOn);
             int[] musicY = { 174, 202, 230, 258 };
+            Key[] musicKeys = { Key.Y, Key.A, Key.K, Key.B };
             for (int i = 0; i < 4; i++)
             {
                 int idx = i;
-                Check(21, musicY[i], () => GameSettings.Music[idx], () => GameSettings.Music[idx] = !GameSettings.Music[idx]);
+                Check(21, musicY[i], () => GameSettings.Music[idx], () => GameSettings.Music[idx] = !GameSettings.Music[idx], musicKeys[idx]);
             }
-            Radio(167, 38, () => GameSettings.Difficulty == Difficulty.Easy, () => GameSettings.Difficulty = Difficulty.Easy);
-            Radio(167, 62, () => GameSettings.Difficulty == Difficulty.Normal, () => GameSettings.Difficulty = Difficulty.Normal);
-            Radio(167, 86, () => GameSettings.Difficulty == Difficulty.Hard, () => GameSettings.Difficulty = Difficulty.Hard);
-            Check(167, 110, () => GameSettings.UseCustomMatrices, () => GameSettings.UseCustomMatrices = !GameSettings.UseCustomMatrices);
-            Check(169, 174, () => GameSettings.DisplayComplex, () => GameSettings.DisplayComplex = !GameSettings.DisplayComplex);
-            Check(169, 202, () => GameSettings.DisplayFilled, () => GameSettings.DisplayFilled = !GameSettings.DisplayFilled);
-            Check(169, 230, () => GameSettings.DisplayTextures, () => GameSettings.DisplayTextures = !GameSettings.DisplayTextures);
+            Radio(167, 38, () => GameSettings.Difficulty == Difficulty.Easy, () => GameSettings.Difficulty = Difficulty.Easy, Key.E);
+            Radio(167, 62, () => GameSettings.Difficulty == Difficulty.Normal, () => GameSettings.Difficulty = Difficulty.Normal, Key.N);
+            Radio(167, 86, () => GameSettings.Difficulty == Difficulty.Hard, () => GameSettings.Difficulty = Difficulty.Hard, Key.H);
+            Check(167, 110, () => GameSettings.UseCustomMatrices, () => GameSettings.UseCustomMatrices = !GameSettings.UseCustomMatrices, Key.U);
+            Check(169, 174, () => GameSettings.DisplayComplex, () => GameSettings.DisplayComplex = !GameSettings.DisplayComplex, Key.C);
+            Check(169, 202, () => GameSettings.DisplayFilled, () => GameSettings.DisplayFilled = !GameSettings.DisplayFilled, Key.F);
+            Check(169, 230, () => GameSettings.DisplayTextures, () => GameSettings.DisplayTextures = !GameSettings.DisplayTextures, Key.T);
             AddRaw(options, MoviesLabel(), new Rect(187, 259, MoviesRows[0].Length, MoviesRows.Length), new Rect(0, 0, 1, 1));
-            Check(169, 258, () => GameSettings.DisplayMovies, () => GameSettings.DisplayMovies = !GameSettings.DisplayMovies);
+            Check(169, 258, () => GameSettings.DisplayMovies, () => GameSettings.DisplayMovies = !GameSettings.DisplayMovies, Key.M);
 
-            Button(options, new Rect(11, 287, 170, 41), () => ShowNotice("NETWORK PLAY\nIS NOT AVAILABLE\nIN THIS VERSION"));
+            Button(options, new Rect(11, 287, 170, 41), () => ShowNotice("NETWORK PLAY\nIS NOT AVAILABLE\nIN THIS VERSION"), Key.R);
             System.Action done = () =>
             {
                 GameSettings.Save();
@@ -452,7 +467,7 @@ namespace SpectreEX.Menu
                 if (!GameSuspended && MusicPlayer.Instance != null) MusicPlayer.Instance.PlayMenuTheme();
                 Pop();
             };
-            Button(options, new Rect(199, 287, 170, 41), done);
+            Button(options, new Rect(199, 287, 170, 41), done, Key.D);
             options.onEscape = options.onEnter = done;
             options.refresh = () => { foreach (var r in refreshers) r(); };
         }
@@ -860,6 +875,14 @@ namespace SpectreEX.Menu
             return wheel > 0f ? -1 : wheel < 0f ? 1 : 0;
         }
 
+        void StepCustom()
+        {
+            var k = Keyboard.current;
+            if (k == null) return;
+            if (k.upArrowKey.wasPressedThisFrame) customStep(1);
+            if (k.downArrowKey.wasPressedThisFrame) customStep(-1);
+        }
+
         void ScrollLists(MenuScreen top)
         {
             int step = ListStep();
@@ -1156,6 +1179,7 @@ namespace SpectreEX.Menu
             var top = stack[stack.Count - 1];
             if (capturing != null) { CaptureKey(); return; }
             if (top == pick || top == graphics || top == controls) ScrollLists(top);
+            if (top == custom) StepCustom();
             if (top == scores && enteringName) scores.refresh();   // blink the cursor
             if (top == scores && scoresCloseAt > 0f && Time.unscaledTime >= scoresCloseAt) { CloseScores(); return; }
 

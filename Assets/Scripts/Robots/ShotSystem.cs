@@ -384,6 +384,13 @@ namespace SpectreEX
             return m != null && m.Weapons.TryGetValue(weapon, out var w) ? w.damage : 1;
         }
 
+        // Every shot in flight, with its colour, for the hidden map
+        public void ForEachShot(System.Action<Vector3, int> visit)
+        {
+            foreach (var s in shots)
+                if (s.fading == 0) visit(s.Position, s.colour);
+        }
+
         // _CUBE_COLLIDE against the player and every robot but the shooter, here and half a step back.
         // A shot strikes everything it touches this tick, not just the first.
         bool HitSomething(Shot s)

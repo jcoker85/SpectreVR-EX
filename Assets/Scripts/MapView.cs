@@ -96,6 +96,7 @@ namespace SpectreEX
             foreach (var r in gm.Robots)
                 if (r != null && !r.IsDead) Object(r.transform.position, Spot(BuiltinShapes.TypeColour(r.GetComponent<EnemyBase>().matrixType)));
             foreach (var f in gm.Flags) if (f != null) Object(f.transform.position, SpectrePalette.Colour(FlagEntry));
+            gm.GetComponent<RobotDirector>().Shots.ForEachShot((position, colour) => Object(position, Spot(colour)));
             Object(gm.player.transform.position, Spot(BuiltinShapes.TypeColour(PlayerType)));
         }
 
