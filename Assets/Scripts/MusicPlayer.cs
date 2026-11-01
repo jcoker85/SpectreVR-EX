@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 namespace SpectreEX
 {
@@ -91,15 +90,13 @@ namespace SpectreEX
 
         void Update()
         {
-            var k = Keyboard.current;
-            if (k == null) return;
-            if (k.mKey.wasPressedThisFrame)
+            if (GameKeys.Music.Pressed)
             {
                 muted = !muted;
                 if (muted) source.Pause(); else source.UnPause();
                 if (!muted && !source.isPlaying) source.Play();
             }
-            if (k.nKey.wasPressedThisFrame && playlist.Count > 0) PlayIndex(trackIndex + 1);
+            if (GameKeys.NextTrack.Pressed && playlist.Count > 0) PlayIndex(trackIndex + 1);
         }
     }
 }

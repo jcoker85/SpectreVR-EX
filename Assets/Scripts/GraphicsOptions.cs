@@ -13,12 +13,10 @@ namespace SpectreEX
         public const int MinWidth = 640, MinHeight = 480;
 
         // Keys
-        public const string RayTracing = "gfx.rt", Shadows = "gfx.rt.shadows",
-            Reflections = "gfx.ssr", ReflectionDistance = "gfx.ssr.distance", ReflectionSamples = "gfx.ssr.samples",
-            ReflectionBounces = "gfx.ssr.bounces", ReflectionDenoise = "gfx.ssr.denoise", ReflectionFull = "gfx.ssr.full",
-            Lighting = "gfx.gi", LightingDistance = "gfx.gi.distance", LightingSamples = "gfx.gi.samples",
-            LightingBounces = "gfx.gi.bounces", LightingDenoise = "gfx.gi.denoise",
-            Occlusion = "gfx.ao", OcclusionDistance = "gfx.ao.distance", OcclusionSamples = "gfx.ao.samples", OcclusionDenoise = "gfx.ao.denoise",
+        public const string RayTracing = "gfx.rt", Shadows = "gfx.rt.shadows", Skybox = "gfx.skybox",
+            Reflections = "gfx.ssr", ReflectionDistance = "gfx.ssr.distance", ReflectionSamples = "gfx.ssr.samples", ReflectionBounces = "gfx.ssr.bounces",
+            Lighting = "gfx.gi", LightingDistance = "gfx.gi.distance", LightingSamples = "gfx.gi.samples", LightingBounces = "gfx.gi.bounces",
+            Occlusion = "gfx.ao", OcclusionDistance = "gfx.ao.distance", OcclusionSamples = "gfx.ao.samples",
             AntiAliasing = "gfx.aa", TaaQuality = "gfx.taa.quality", DlssMode = "gfx.dlss.mode", DlssSharpness = "gfx.dlss.sharpness";
 
         public const int AaOff = 0, AaTaa = 1, AaDlss = 2;
@@ -35,8 +33,13 @@ namespace SpectreEX
         const string Ultra = "Ultra";
 
         static readonly Dictionary<string, int> values = new Dictionary<string, int>();
-        static int reflectionTier, lightingTier, occlusionTier;
+        static int reflectionTier, lightingTier, occlusionTier, plainSkyType;
         static float occlusionIntensity;
+        static HDAdditionalCameraData.ClearColorMode plainClear;
+
+        // The star map, bright enough that the stars pass the volume's bloom threshold and glow
+        const float SkyExposure = 10.5f;
+        static Cubemap SkyPicture => Resources.Load<Cubemap>("Skybox/Stars");
 
         public static int Get(string key) => values.TryGetValue(key, out int v) ? v : 0;
         public static bool On(string key) => Get(key) != 0;
@@ -121,7 +124,9 @@ namespace SpectreEX
         {
             Default(RayTracing, 1);
             Default(Shadows, 1);
+            Default(Skybox, 0);
             var profile = Profile();
+            if (profile != null && profile.TryGet<VisualEnvironment>(out var environment)) plainSkyType = environment.skyType.value;
             if (profile != null && profile.TryGet<ScreenSpaceReflection>(out var reflections))
             {
                 reflectionTier = reflections.quality.value;
@@ -129,8 +134,6 @@ namespace SpectreEX
                 Default(ReflectionDistance, Mathf.RoundToInt(reflections.rayLength));
                 Default(ReflectionSamples, reflections.sampleCount.value);
                 Default(ReflectionBounces, reflections.bounceCount.value);
-                Default(ReflectionDenoise, reflections.denoise ? 1 : 0);
-                Default(ReflectionFull, reflections.fullResolution ? 1 : 0);
             }
             if (profile != null && profile.TryGet<GlobalIllumination>(out var lighting))
             {
@@ -139,7 +142,6 @@ namespace SpectreEX
                 Default(LightingDistance, Mathf.RoundToInt(lighting.rayLength));
                 Default(LightingSamples, lighting.sampleCount.value);
                 Default(LightingBounces, lighting.bounceCount.value);
-                Default(LightingDenoise, lighting.denoise ? 1 : 0);
             }
             if (profile != null && profile.TryGet<ScreenSpaceAmbientOcclusion>(out var occlusion))
             {
@@ -148,9 +150,9 @@ namespace SpectreEX
                 Default(Occlusion, 1);
                 Default(OcclusionDistance, Mathf.RoundToInt(occlusion.rayLength));
                 Default(OcclusionSamples, occlusion.sampleCount);
-                Default(OcclusionDenoise, occlusion.denoise ? 1 : 0);
             }
             var camera = Camera();
+            if (camera != null) plainClear = camera.clearColorMode;
             int aa = camera != null && camera.allowDeepLearningSuperSampling ? AaDlss : camera != null && camera.antialiasing == HDAdditionalCameraData.AntialiasingMode.None ? AaOff : AaTaa;
             Default(AntiAliasing, aa);
             Default(TaaQuality, camera != null ? (int)camera.TAAQuality : 1);
@@ -182,6 +184,28 @@ namespace SpectreEX
         {
             ApplyRayTracing();
             ApplyAntiAliasing();
+            ApplySkybox();
+        }
+
+        // Off is the original's plain sky. The horizon band blends over the picture while it's on.
+        static void ApplySkybox()
+        {
+            var picture = SkyPicture;
+            bool on = On(Skybox) && picture != null;
+            var profile = Profile();
+            if (profile != null && profile.TryGet<VisualEnvironment>(out var environment))
+            {
+                if (on)
+                {
+                    if (!profile.TryGet<HDRISky>(out var sky)) sky = profile.Add<HDRISky>(true);
+                    sky.hdriSky.Override(picture);
+                    sky.exposure.Override(SkyExposure);
+                }
+                environment.skyType.Override(on ? (int)SkyType.HDRI : plainSkyType);
+            }
+            var camera = Camera();
+            if (camera != null) camera.clearColorMode = on ? HDAdditionalCameraData.ClearColorMode.Sky : plainClear;
+            if (GameManager.Instance != null) GameManager.Instance.UseSkyBand(on);
         }
 
         // Off falls back to the screen-space versions of the same effects. While ray tracing, each effect
@@ -199,8 +223,8 @@ namespace SpectreEX
                 reflections.rayLength = Get(ReflectionDistance);
                 reflections.sampleCount.Override(Get(ReflectionSamples));
                 reflections.bounceCount.Override(Get(ReflectionBounces));
-                reflections.denoise = On(ReflectionDenoise);
-                reflections.fullResolution = On(ReflectionFull);
+                reflections.denoise = true;
+                reflections.fullResolution = true;
             }
             if (profile != null && profile.TryGet<GlobalIllumination>(out var lighting))
             {
@@ -210,7 +234,7 @@ namespace SpectreEX
                 lighting.rayLength = Get(LightingDistance);
                 lighting.sampleCount.Override(Get(LightingSamples));
                 lighting.bounceCount.Override(Get(LightingBounces));
-                lighting.denoise = On(LightingDenoise);
+                lighting.denoise = true;
             }
             if (profile != null && profile.TryGet<ScreenSpaceAmbientOcclusion>(out var occlusion))
             {
@@ -219,7 +243,7 @@ namespace SpectreEX
                 occlusion.quality.Override(tracing ? CustomQuality : occlusionTier);
                 occlusion.rayLength = Get(OcclusionDistance);
                 occlusion.sampleCount = Get(OcclusionSamples);
-                occlusion.denoise = On(OcclusionDenoise);
+                occlusion.denoise = true;
             }
             foreach (var light in Object.FindObjectsByType<HDAdditionalLightData>(FindObjectsSortMode.None))
                 light.useRayTracedShadows = tracing && On(Shadows);

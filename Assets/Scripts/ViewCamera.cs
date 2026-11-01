@@ -1,5 +1,4 @@
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 namespace SpectreEX
 {
@@ -91,16 +90,12 @@ namespace SpectreEX
 
             CycleInDemo();
 
-            var k = Keyboard.current;
-            if (k != null)
-            {
-                if (k.tabKey.wasPressedThisFrame || k.numpadMultiplyKey.wasPressedThisFrame) NextMode();
-                float zoom = 0f;
-                if (k.equalsKey.isPressed || k.numpadPlusKey.isPressed) zoom -= 1f;
-                if (k.minusKey.isPressed || k.numpadMinusKey.isPressed) zoom += 1f;
-                if (mode == ViewMode.External) externalDistance = Mathf.Clamp(externalDistance + zoom * 15f * Time.deltaTime, 5f, 40f);
-                if (mode == ViewMode.Overhead) overheadHeight = Mathf.Clamp(overheadHeight + zoom * 80f * Time.deltaTime, 30f, 320f);
-            }
+            if (GameKeys.NextView.Pressed) NextMode();
+            float zoom = 0f;
+            if (GameKeys.ZoomIn.Held) zoom -= 1f;
+            if (GameKeys.ZoomOut.Held) zoom += 1f;
+            if (mode == ViewMode.External) externalDistance = Mathf.Clamp(externalDistance + zoom * 15f * Time.deltaTime, 5f, 40f);
+            if (mode == ViewMode.Overhead) overheadHeight = Mathf.Clamp(overheadHeight + zoom * 80f * Time.deltaTime, 30f, 320f);
 
             health = health != null ? health : target.GetComponent<Health>();
             bool dead = health != null && health.IsDead;
@@ -145,8 +140,7 @@ namespace SpectreEX
                 case ViewMode.Internal:
                 {
                     // Shift looks to the side, both Shifts behind
-                    var keys = Keyboard.current;
-                    bool left = keys != null && keys.leftShiftKey.isPressed, right = keys != null && keys.rightShiftKey.isPressed;
+                    bool left = GameKeys.LookLeft.Held, right = GameKeys.LookRight.Held;
                     float look = left ? (right ? 180f : -90f) : right ? 90f : 0f;
                     Quaternion eye = smoothRot * Quaternion.Euler(0f, look, 0f);
                     transform.SetPositionAndRotation(smoothPos + smoothRot * cockpitOffset, eye);

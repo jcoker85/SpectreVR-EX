@@ -407,6 +407,9 @@ namespace SpectreEX.Hud
             demoRoot.SetActive(gm.Demo && gm.Playing);
             message.enabled = Time.time < messageUntil;
             hint.enabled = Time.time < hintUntil;
+            if (hint.enabled)
+                hint.text = $"{GameKeys.First(GameKeys.Forward)} DRIVE  {GameKeys.First(GameKeys.Fire)} FIRE  {GameKeys.First(GameKeys.NextView)} VIEW  " +
+                    $"{GameKeys.First(GameKeys.Hyperspace)} HYPERSPACE  {GameKeys.First(GameKeys.Jump)} JUMP";
             if (crosshair != null) crosshair.SetActive(view == null || view.mode == ViewMode.Internal);
 
             UpdateRadar(p.transform);

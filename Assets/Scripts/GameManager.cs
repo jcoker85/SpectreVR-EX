@@ -91,6 +91,8 @@ namespace SpectreEX
         readonly int[] flagGuards = new int[64];   // _FLAG_TURRETS: robots placed by each flag
         public ShapeSet Shapes => shapes;
         float horizonNits = -1f;
+        Color horizonColor;
+        Material horizonSolid, horizonBand;
         float levelDifficulty = 1f;
         Coroutine session;
         DemoPilot demoPilot;
@@ -303,18 +305,18 @@ namespace SpectreEX
         void DisplayKeys(Keyboard k)
         {
             bool changed = false;
-            if (k.f2Key.wasPressedThisFrame) { GameSettings.SoundMuted = !GameSettings.SoundMuted; changed = true; }
+            if (GameKeys.Sound.Pressed) { GameSettings.SoundMuted = !GameSettings.SoundMuted; changed = true; }
             if (k.gKey.wasPressedThisFrame) godKeys = 1;
             if (k.oKey.wasPressedThisFrame) godKeys = godKeys == 1 ? 2 : 0;
-            if (k.f3Key.wasPressedThisFrame)
+            if (GameKeys.FloorDots.Pressed)
             {
                 if (godKeys == 2) FindFirstObjectByType<ViewCamera>().mode = ViewMode.Map;
                 else { GameSettings.DrawLevel = (GameSettings.DrawLevel + 1) % 4; changed = true; }
                 godKeys = 0;
             }
-            if (k.f5Key.wasPressedThisFrame) { GameSettings.DisplayTextures = !GameSettings.DisplayTextures; changed = true; }
-            if (k.f6Key.wasPressedThisFrame) { GameSettings.DisplayMovies = !GameSettings.DisplayMovies; changed = true; }
-            if (k.fKey.wasPressedThisFrame && !Demo) { GameSettings.DisplayFilled = !GameSettings.DisplayFilled; changed = true; }
+            if (GameKeys.Textures.Pressed) { GameSettings.DisplayTextures = !GameSettings.DisplayTextures; changed = true; }
+            if (GameKeys.Movies.Pressed) { GameSettings.DisplayMovies = !GameSettings.DisplayMovies; changed = true; }
+            if (GameKeys.Wire.Pressed && !Demo) { GameSettings.DisplayFilled = !GameSettings.DisplayFilled; changed = true; }
             if (changed) ApplySettings();
         }
 
@@ -333,7 +335,7 @@ namespace SpectreEX
             else if (k != null)
             {
                 if (k.escapeKey.wasPressedThisFrame && Time.frameCount != resumedFrame) { SuspendToMenu(); return; }
-                if (k.pKey.wasPressedThisFrame) TogglePause();
+                if (GameKeys.Pause.Pressed) TogglePause();
             }
 
         }
@@ -380,7 +382,7 @@ namespace SpectreEX
         {
             Paused = !Paused;
             Time.timeScale = Paused ? 0f : 1f;
-            if (Paused) ShowBanner?.Invoke("PAUSED", "PRESS P TO CONTINUE");
+            if (Paused) ShowBanner?.Invoke("PAUSED", $"PRESS {GameKeys.First(GameKeys.Pause)} TO CONTINUE");
             else HideOverlays?.Invoke();
         }
 
@@ -687,10 +689,27 @@ namespace SpectreEX
             return false;
         }
 
+        // With a skybox behind it the band has to blend over the picture, or its fade cuts a black curve
+        public void UseSkyBand(bool on)
+        {
+            if (horizon == null) return;
+            if (horizonSolid == null) horizonSolid = horizon.material;
+            if (on && horizonBand == null)
+            {
+                horizonBand = new Material(Resources.Load<Material>("HorizonBand"));
+                horizonBand.SetTexture("_UnlitColorMap", horizonSolid.GetTexture("_EmissiveColorMap"));
+                horizonBand.SetColor("_UnlitColor", horizonColor);
+            }
+            horizon.sharedMaterial = on ? horizonBand : horizonSolid;
+        }
+
         void SetHorizonColor(Color c)
         {
             if (horizon == null) return;
-            var m = horizon.material;
+            horizonColor = c;
+            if (horizonBand != null) horizonBand.SetColor("_UnlitColor", c);
+            if (horizonSolid == null) horizonSolid = horizon.material;
+            var m = horizonSolid;
             if (horizonNits < 0f)
             {
                 Color cur = m.GetColor("_EmissiveColor");
