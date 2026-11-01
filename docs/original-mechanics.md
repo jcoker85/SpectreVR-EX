@@ -334,7 +334,7 @@ robots within `_QFIND_DIST` 0x0E / 0x40 / 0x80 lose 5 / 2 / 2, the player takes 
    (`EnemyBase.matrixType` / `collideDamage` / `hasMatrixData`; robots default to 7 / 20 / 21+3 /
    35+6 without a matrix). Vehicle presets fixed. Hyperspace: success chance = charge, and a
    failed roll destroys the ship (the manual's rule, by the owner's choice).
-   Deviation: robot contact sounds play at most every 4 ticks and only when damage > 0.
+   Robot contact replays its sound every tick on one channel, each cutting off the last, as the original's does.
 3. **Done:** obstacle behaviours by the corrected types (`ObstacleBehaviour.Kind` Ice/Slow/
    Teleport/Pusher...), heading byte stored per obstacle, model yaw = -degrees (shapes face
    opposite their travel direction, as the tank's +0x80 shows). Windmill tower/sails are a
@@ -525,12 +525,15 @@ Where the original looks like an oversight rather than a design, the remake does
 - A grenade or bomb blast stuns and scores only robots in range, not the whole map.
 - Top-heavy obstacles (the trees, shapes 10004 and 10007): the original's one box per shape blocks at the width of the top. The remake gives a narrow stem its own box. Each part of a multi-part shape has its own box in both.
 - Damage sounds use the player's real maximum rather than the fixed 0x1E in the splash code.
+- Touching a robot with no collide damage that doesn't block is silent. `_DO_COLLIDE_DAMAGE` plays the hit sound and de-res for it anyway, which reads as being hit when nothing happened.
+- Collision boxes turn with the object. `_CUBE_COLLIDE` tests the axis-aligned box around each rotated object, so a turned obstacle blocks at empty corners, and the box around the craft changes size as it turns. That corner space would be an invisible wall against the remake's solid models.
+- The path probe tests a true overlap of two boxes. `_RECTANGLE_COLLIDE` measures from the object's corner with its full size rather than its centre and half size, which pushes the test off to one side of the object.
 
 Back-to-back panels are not a change: the billboards (10106, 10107) have one face per side, and the remake draws those one-sided so they don't fight.
 
 Checked and needing no change: `_TIME_ALLOWED` counts the player's slot in `_MAX_TANK` (`_LOAD_WAVE` adds it as an enemy of type 6) and `_MAX_SUPER_TANKS` is never set, so the remake's formula is right. Level 1 differs between runs because the robot count is random: Bonus 360 is two robots, 400 three. `_REPLACE_TANK` has no de-res: a robot just reappears, as in the remake.
 
-Left alone: one non-splash shot can hit two overlapping tanks in the same tick in the original (the remake stops at the first); a splash's sound uses a fixed `_DAMAGE < 0x1E` test.
+Left alone: a splash's sound uses a fixed `_DAMAGE < 0x1E` test.
 
 ## Validation pass (no eyes on the original)
 

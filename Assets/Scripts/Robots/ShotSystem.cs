@@ -29,6 +29,7 @@ namespace SpectreEX
         readonly RobotDirector director;
         readonly List<Shot> shots = new List<Shot>();
         readonly Collider[] hits = new Collider[16];
+        readonly List<Collider> struck = new List<Collider>();
         readonly Collider[] pathHits = new Collider[32];
         bool hitFades;   // set by HitSomething: the shot de-reses where it struck, rather than just going
 
@@ -383,15 +384,25 @@ namespace SpectreEX
             return m != null && m.Weapons.TryGetValue(weapon, out var w) ? w.damage : 1;
         }
 
-        // _CUBE_COLLIDE against the player and every robot but the shooter, here and half a step back
+        // _CUBE_COLLIDE against the player and every robot but the shooter, here and half a step back.
+        // A shot strikes everything it touches this tick, not just the first.
         bool HitSomething(Shot s)
         {
-            var target = Overlap(s.curPos, s) ?? Overlap(s.curPos - new Vector3(s.vx, s.vz, s.vy) * (0.5f * OriginalMath.UnitsToMetres), s);
-            if (target == null) return false;
+            struck.Clear();
+            Overlap(s.curPos, s);
+            Overlap(s.curPos - new Vector3(s.vx, s.vz, s.vy) * (0.5f * OriginalMath.UnitsToMetres), s);
+            if (struck.Count == 0) return false;
             hitFades = true;
-            if (target.GetComponent<OrbitShield>() != null) return true;   // a shield kills the shot and stays (weapon 7)
+            foreach (var target in struck)
+                if (target.GetComponent<OrbitShield>() != null) return true;   // a shield kills the shot and stays (weapon 7)
 
-            var health = target.GetComponentInParent<Health>();
+            bool hit = false;
+            foreach (var target in struck) hit |= Strike(s, target.GetComponentInParent<Health>());
+            return hit;
+        }
+
+        bool Strike(Shot s, Health health)
+        {
             var robot = health.GetComponent<Robot>();
             if (robot != null && robot.dying != 0) return false;
             if (s.fromPlayer) MyHits++;
@@ -411,22 +422,21 @@ namespace SpectreEX
             return true;
         }
 
-        Collider Overlap(Vector3 pos, Shot s)
+        void Overlap(Vector3 pos, Shot s)
         {
             var half = new Vector3(0x200, 0x200, 0x300) * OriginalMath.UnitsToMetres;
             int n = Physics.OverlapBoxNonAlloc(pos, half, hits, Quaternion.Euler(0f, OriginalMath.Yaw(s.heading), 0f), ~0, QueryTriggerInteraction.Collide);
             for (int i = 0; i < n; i++)
             {
                 var c = hits[i];
-                if (c.GetComponent<OrbitShield>() != null) { if (!s.fromPlayer) return c; continue; }
+                if (c.GetComponent<OrbitShield>() != null) { if (!s.fromPlayer) struck.Add(c); continue; }
                 if (c.isTrigger) continue;
                 var h = c.GetComponentInParent<Health>();
                 if (h == null || h.IsDead) continue;
                 if (s.fromPlayer && h.team == Team.Player) continue;
                 if (s.owner != null && h.gameObject == s.owner.gameObject) continue;
-                return c;
+                if (!struck.Exists(o => o.GetComponentInParent<Health>() == h)) struck.Add(c);
             }
-            return null;
         }
 
         // Obstacles stop shots, except the floor pads they fly over

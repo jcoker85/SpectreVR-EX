@@ -11,6 +11,7 @@ namespace SpectreEX
     public class DemoPilot : MonoBehaviour
     {
         const int CloseRobot = 500, BackOff = 0x50, Range = 0x244, MaxGoalTicks = 0x10E, OnGround = 0x500;
+        const int DumpLimit = 2000, FarLimit = 20000;
         const int FullSpeed = 10, SlowSpeed = 5, TurnLimit = 3, SlowUntil = 0x5B, StallAfter = 0x7E;
         const int PathLength = 0x6400, PathWidth = 0xA00, PathHeight = 0x1800, FlatTop = 0xFF;   // the player's probe
 
@@ -152,8 +153,7 @@ namespace SpectreEX
         {
             var weapon = tank.Weapon;
             var health = tank.Health;
-            bool hurt = health.Shields < health.maxShields;
-            Transform dump = Nearest(gm.Dumps, out int dumpDist);
+            Transform dump = Nearest(gm.Dumps, int.MaxValue, out _);
             goal = dump;
             if (health.Shields < 0x14 || weapon.Ammo < 10) return null;
 
@@ -169,9 +169,32 @@ namespace SpectreEX
             }
             if (closest != null) { goal = closest.transform; return closest; }
 
-            Transform flag = Nearest(gm.Flags, out int flagDist);
-            if (flag != null && (!(hurt || weapon.NeedsAmmo) || flagDist < dumpDist || dump == null)) goal = flag;
+            if ((health.Shields < health.maxShields || weapon.NeedsAmmo) && !FlagCloserThanDump(gm)) return null;
+            Transform target = tank.Motor.Under ? NearestWayUp(gm) : Nearest(gm.Flags, FarLimit, out _);
+            if (target != null) goal = target;
             return null;
+        }
+
+        // _FLAG_CLOSER_THAN_FUEL: only dumps inside 2000 count against a flag
+        bool FlagCloserThanDump(GameManager gm)
+        {
+            Nearest(gm.Dumps, DumpLimit, out int dumpDist);
+            return Nearest(gm.Flags, dumpDist, out _) != null;
+        }
+
+        // _CHASE_UP: from under the floor, the nearest up transport
+        Transform NearestWayUp(GameManager gm)
+        {
+            Transform best = null;
+            int distance = FarLimit;
+            foreach (var o in gm.Obstacles)
+            {
+                var gate = o != null ? o.GetComponent<ObstacleBehaviour>() : null;
+                if (gate == null || gate.kind != ObstacleBehaviour.Kind.UpTransport) continue;
+                int d = Dist(o.transform);
+                if (d < distance) { distance = d; best = o.transform; }
+            }
+            return best;
         }
 
         int Dist(Transform t)
@@ -180,10 +203,10 @@ namespace SpectreEX
             return OriginalMath.QDist(OriginalMath.ToUnits(d.x), OriginalMath.ToUnits(d.z));
         }
 
-        Transform Nearest<T>(System.Collections.Generic.List<T> items, out int distance) where T : Component
+        Transform Nearest<T>(System.Collections.Generic.List<T> items, int limit, out int distance) where T : Component
         {
             Transform best = null;
-            distance = 2000;
+            distance = limit;
             foreach (var i in items)
             {
                 if (i == null) continue;

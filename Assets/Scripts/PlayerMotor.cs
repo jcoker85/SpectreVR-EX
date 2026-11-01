@@ -72,7 +72,7 @@ namespace SpectreEX
         int minZ = GroundZ;
         bool steered;
         int steerTurn, steerSpeed;
-        int turningSteps, heightStep, bounceI, acidTimer, contactSoundTimer;
+        int turningSteps, heightStep, bounceI, acidTimer;
         long moveLeftX, moveLeftY;
         bool under, onIce;
         long iceDx, iceDy;
@@ -429,7 +429,6 @@ namespace SpectreEX
             }
 
             if (Hyper < HyperMax) Hyper = Mathf.Min(HyperMax, Hyper + HyperRecharge);
-            if (contactSoundTimer > 0) contactSoundTimer--;
         }
 
         // _WING_ANGLE: the wings' turn from the body, in heading steps (0x19 folded, -5 spread)
@@ -451,11 +450,14 @@ namespace SpectreEX
             bool blocks = type == 7 || type == 8 || type == 25 || type == 27;   // robot / super tanks, cyber mud, cloaked tank
             if (type == 24 && damage == 0) return true;                        // harmless smart wall
             if (blocks && damage == 0) return false;
-            if (damage > 0 && tickEnds)
+            if (tickEnds && health != null && damage > 0)   // _DO_COLLIDE_DAMAGE, every tick of contact
             {
-                bool slicer = type == 21 && contactSoundTimer == 0;
-                if (slicer) Sfx.Play(Snd.SlicerBite);
-                DamageSelf(damage, !slicer && !blocks);   // the blocking kinds only bounce you
+                health.TakeRawDamage(damage, false);
+                if (!health.IsDead)
+                {
+                    if (type == 21) Sfx.Restart(Snd.SlicerBite);
+                    else if (!blocks) Sfx.Restart(health.PlayerHitSound);   // the blocking kinds only bounce you
+                }
             }
             return !blocks;
         }
@@ -470,14 +472,6 @@ namespace SpectreEX
         }
 
         // Raw damage points (collisions and acid count in the original's units, unlike weapon hits)
-        void DamageSelf(int points, bool sound)
-        {
-            if (health == null || points <= 0) return;
-            bool play = sound && contactSoundTimer == 0;
-            if (play) contactSoundTimer = 4;   // the original re-plays each tick; one every few is plenty
-            health.TakeRawDamage(points, play);
-        }
-
         // ---------- gates ----------
 
         // Teleport gates send you to the next gate in the matrix's order, wrapping round

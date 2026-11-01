@@ -77,6 +77,8 @@ namespace SpectreEX
         }
 
         // Non-positional: player events, voices, UI.
+        static AudioSource sourceRestart;
+
         public static void Play(string name, float volume = 1f)
         {
             if (!Enabled) return;
@@ -90,6 +92,23 @@ namespace SpectreEX
                 source2D.spatialBlend = 0f;
             }
             source2D.PlayOneShot(clip, volume);
+        }
+
+        // One sound at a time, cutting off the last: the original's channel, for a sound replayed every tick
+        public static void Restart(string name)
+        {
+            if (!Enabled) return;
+            var clip = Get(name);
+            if (clip == null) return;
+            if (sourceRestart == null)
+            {
+                var go = new GameObject("SfxRestart");
+                Object.DontDestroyOnLoad(go);
+                sourceRestart = go.AddComponent<AudioSource>();
+                sourceRestart.spatialBlend = 0f;
+            }
+            sourceRestart.clip = clip;
+            sourceRestart.Play();
         }
 
         // Positional: enemy shots, distant explosions.

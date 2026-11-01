@@ -53,9 +53,11 @@ namespace SpectreEX
             if (Shields <= 0) { Die(); return; }
             if (team == Team.Player) DeRes.Play(gameObject, 5, 0.55f, true);   // _D_P_DE_RES: any damage at all
             if (!sound) return;
-            if (team == Team.Player) Sfx.Play(Shields <= DangerPoints && hitMultiplier > 1 ? Snd.HeavyDamage : hitSound);
+            if (team == Team.Player) Sfx.Play(PlayerHitSound);
             else Sfx.PlayAt(hitSound, transform.position);
         }
+
+        public string PlayerHitSound => Shields <= DangerPoints && hitMultiplier > 1 ? Snd.HeavyDamage : hitSound;
 
         // Every hit, the killing one included (robots score per hit and are stunned by it)
         public System.Action<int> Damaged;
