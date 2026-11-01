@@ -593,6 +593,12 @@ namespace SpectreEX.Menu
                 Drop("QUALITY", () => GraphicsOptions.QualityName, GraphicsOptions.QualityNames,
                     () => GraphicsOptions.QualityNames().IndexOf(GraphicsOptions.QualityName), i => GraphicsOptions.SetQuality(GraphicsOptions.QualityNames()[i])),
                 Toggle("SKYBOX", GraphicsOptions.Skybox),
+                When(() => GraphicsOptions.On(GraphicsOptions.Skybox), new SettingRow
+                {
+                    label = "SKY BRIGHTNESS",
+                    value = () => (GraphicsOptions.Get(GraphicsOptions.SkyBrightness) / 10f).ToString("0.0"),
+                    step = sign => GraphicsOptions.Set(GraphicsOptions.SkyBrightness, Mathf.Clamp(GraphicsOptions.Get(GraphicsOptions.SkyBrightness) + sign * 5, 60, 120)),
+                }),
 
                 Choice("ANTI-ALIASING", GraphicsOptions.AntiAliasing, GraphicsOptions.AaNames),
                 When(taa, Choice("TAA QUALITY", GraphicsOptions.TaaQuality, GraphicsOptions.TaaNames)),

@@ -13,7 +13,7 @@ namespace SpectreEX
         public const int MinWidth = 640, MinHeight = 480;
 
         // Keys
-        public const string RayTracing = "gfx.rt", Shadows = "gfx.rt.shadows", Skybox = "gfx.skybox",
+        public const string RayTracing = "gfx.rt", Shadows = "gfx.rt.shadows", Skybox = "gfx.skybox", SkyBrightness = "gfx.skybox.brightness",
             Reflections = "gfx.ssr", ReflectionDistance = "gfx.ssr.distance", ReflectionSamples = "gfx.ssr.samples", ReflectionBounces = "gfx.ssr.bounces",
             Lighting = "gfx.gi", LightingDistance = "gfx.gi.distance", LightingSamples = "gfx.gi.samples", LightingBounces = "gfx.gi.bounces",
             Occlusion = "gfx.ao", OcclusionDistance = "gfx.ao.distance", OcclusionSamples = "gfx.ao.samples",
@@ -37,8 +37,8 @@ namespace SpectreEX
         static float occlusionIntensity;
         static HDAdditionalCameraData.ClearColorMode plainClear;
 
-        // The star map, bright enough that the stars pass the volume's bloom threshold and glow
-        const float SkyExposure = 10.5f;
+        // The star map. SkyBrightness is its exposure in tenths; high enough and the stars pass the
+        // volume's bloom threshold and glow.
         static Cubemap SkyPicture => Resources.Load<Cubemap>("Skybox/Stars");
 
         public static int Get(string key) => values.TryGetValue(key, out int v) ? v : 0;
@@ -125,6 +125,7 @@ namespace SpectreEX
             Default(RayTracing, 1);
             Default(Shadows, 1);
             Default(Skybox, 0);
+            Default(SkyBrightness, 100);
             var profile = Profile();
             if (profile != null && profile.TryGet<VisualEnvironment>(out var environment)) plainSkyType = environment.skyType.value;
             if (profile != null && profile.TryGet<ScreenSpaceReflection>(out var reflections))
@@ -199,7 +200,7 @@ namespace SpectreEX
                 {
                     if (!profile.TryGet<HDRISky>(out var sky)) sky = profile.Add<HDRISky>(true);
                     sky.hdriSky.Override(picture);
-                    sky.exposure.Override(SkyExposure);
+                    sky.exposure.Override(Get(SkyBrightness) / 10f);
                 }
                 environment.skyType.Override(on ? (int)SkyType.HDRI : plainSkyType);
             }
