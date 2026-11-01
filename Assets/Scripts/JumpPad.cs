@@ -39,10 +39,12 @@ namespace SpectreEX
             var label = new GameObject("Label").AddComponent<TextMesh>();
             label.transform.SetParent(go.transform, false);
             label.transform.localPosition = Vector3.up * 1.6f;
-            label.text = $"LEVEL {toLevel}";
+            label.text = $"LEVEL!{toLevel}";   // '!' is the segment font's full-width blank
             label.anchor = TextAnchor.MiddleCenter;
-            label.characterSize = 0.12f;
+            label.characterSize = 0.15f;
             label.fontSize = 48;
+            label.font = Resources.Load<Font>("DSEG14Classic-Bold");
+            label.GetComponent<MeshRenderer>().sharedMaterial = label.font.material;
             label.color = glow != null && glow.HasProperty("_EmissiveColor") ? Color.white : Color.cyan;
 
             var col = go.AddComponent<BoxCollider>();

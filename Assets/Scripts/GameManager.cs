@@ -67,7 +67,7 @@ namespace SpectreEX
         public bool InGame { get; private set; }
         public bool Paused { get; private set; }
         public bool Suspended { get; private set; }   // paused behind the main menu (Esc)
-        int resumedFrame = -1;
+        int resumedFrame = -1, demoStartFrame = -1;
         public bool Demo { get; private set; }
         public LevelPlan Plan { get; private set; }
         public MatrixFile CurrentMatrix { get; private set; }
@@ -128,6 +128,7 @@ namespace SpectreEX
             Suspended = false;
             Demo = demo;
             demoPilot.enabled = demo;
+            demoStartFrame = Time.frameCount;
             CurrentMatrix = MatrixLibrary.Current();
             ApplyVehicle(vehicle);
             ApplySettings();
@@ -330,7 +331,7 @@ namespace SpectreEX
             if (Demo)
             {
                 bool anyKey = (k != null && k.anyKey.wasPressedThisFrame) || (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame);
-                if (anyKey) { QuitToMenu(); return; }
+                if (anyKey && Time.frameCount != demoStartFrame) { QuitToMenu(); return; }   // not the click that started it
             }
             else if (k != null)
             {
@@ -343,6 +344,7 @@ namespace SpectreEX
         // One original tick, from SimClock (_PLAY_LEVEL): the bonus count-down and the slow self-repair
         public void SimTick()
         {
+            if (Demo) demoPilot.SimTick();
             if (!Playing || Paused || player.Health.IsDead) return;
             if (++LevelTicks % 18 == 0) Bonus = Mathf.Max(0, Bonus - 4);
             if (++repairTimer > RepairTicks)

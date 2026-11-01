@@ -1,62 +1,131 @@
 using UnityEngine;
+using SpectreEX.Matrix;
 
 namespace SpectreEX
 {
     // Demo mode (_MOVE_ATTRACT_TANK): runs for a dump when hurt or short of ammo, else fights any robot
-    // close by, else takes the nearest flag, unless a dump is nearer and it needs one. It steers
-    // around obstacles and fires on what it's chasing.
+    // close by, else takes the nearest flag, unless a dump is nearer and it needs one. Each original tick
+    // _PLAYER_CHASE_THING steers for that goal: _FIND_CLEAR_PATH picks a heading, and it turns toward it
+    // at 3 steps a tick, going slower or stopping when it has been stuck on the goal for a while.
     [RequireComponent(typeof(PlayerTank))]
     public class DemoPilot : MonoBehaviour
     {
         const int CloseRobot = 500, BackOff = 0x50, Range = 0x244, MaxGoalTicks = 0x10E, OnGround = 0x500;
+        const int FullSpeed = 10, SlowSpeed = 5, TurnLimit = 3, SlowUntil = 0x5B, StallAfter = 0x7E;
+        const int PathLength = 0x6400, PathWidth = 0xA00, PathHeight = 0x1800, FlatTop = 0xFF;   // the player's probe
 
         PlayerTank tank;
-        float avoidUntil;
-        float avoidDir = 1f;
         Transform lastGoal;
-        float goalSeconds;
-        float nextShot;
+        int goalTicks, shotTimer, pathHeading, pathTimer, pathBlock = -1;
+        readonly Collider[] probe = new Collider[32];
 
         void Awake() => tank = GetComponent<PlayerTank>();
 
-        void Update()
+        void OnDisable()
+        {
+            if (tank != null && tank.Motor != null) tank.Motor.ReleaseSteering();
+        }
+
+        // One original tick, from GameManager
+        public void SimTick()
         {
             var gm = GameManager.Instance;
-            if (gm == null || !gm.Playing || tank.Health.IsDead) { tank.Motor.SetInput(0f, 0f); return; }
+            if (gm == null || !gm.Playing || tank.Health.IsDead) { tank.Motor.Steer(0, 0); return; }
 
             var robot = ChooseGoal(gm, out Transform goal);
-            if (goal == null) { tank.Motor.SetInput(0f, 0f); return; }
+            if (goal == null) { tank.Motor.Steer(0, 0); return; }
 
-            // _PLAYER_CHASE_THING: stuck on one thing too long, it just moves somewhere else
-            if (goal != lastGoal) { lastGoal = goal; goalSeconds = 0f; }
-            goalSeconds += Time.deltaTime;
-            if (goalSeconds > MaxGoalTicks / PlayerMotor.TickRate)
+            if (goal != lastGoal) { lastGoal = goal; goalTicks = 0; }
+            if (goalTicks++ > MaxGoalTicks)
             {
-                goalSeconds = 0f;
-                if (gm.TryFindSpawnPoint(out var p, 0f)) tank.Motor.Place(p, transform.eulerAngles.y, false);
+                goalTicks = 0;
+                MoveElsewhere(gm);
             }
+
+            int speed = FullSpeed, distance = Dist(goal);
+            bool reverse = robot != null && distance < BackOff;
+            if (reverse) speed = -FullSpeed;
 
             Vector3 to = goal.position - transform.position;
-            to.y = 0f;
-            float angle = Vector3.SignedAngle(transform.forward, to, Vector3.up);
-            float turn = Mathf.Clamp(angle / 25f, -1f, 1f);
-            float throttle = Mathf.Abs(angle) > 70f ? 0.2f : 1f;
-            int distance = Dist(goal);
-            if (robot != null && distance < BackOff) throttle = -1f;
+            int want = OriginalMath.Angle(OriginalMath.ToUnits(to.x), OriginalMath.ToUnits(to.z));
+            int path = FindClearPath(gm, want, reverse, distance);
 
-            Vector3 eye = transform.position + Vector3.up * 0.8f;
-            if (Time.time < avoidUntil) { turn = avoidDir; throttle = 0.4f; }
-            else if (Physics.Raycast(eye, transform.forward, out var block, 10f, ~0, QueryTriggerInteraction.Ignore)
-                     && block.collider.GetComponentInParent<Health>() == null)
+            int heading = tank.Motor.OriginalHeading;
+            int turned = OriginalMath.FixHeading(ref heading, pathHeading, TurnLimit);
+            if (path == -1)
             {
-                avoidDir = Vector3.SignedAngle(transform.forward, block.normal, Vector3.up) >= 0f ? 1f : -1f;
-                avoidUntil = Time.time + 0.6f;
-                turn = avoidDir;
-                throttle = 0.4f;
+                if (Mathf.Abs(turned) == TurnLimit && goalTicks > StallAfter) speed = 0;
+                reverse = false;
             }
-            tank.Motor.SetInput(throttle, turn);
+            else speed = goalTicks < SlowUntil ? SlowSpeed : 0;
+            tank.Motor.Steer(turned, speed);
 
-            if (robot != null && Mathf.Abs(angle) < 3f && distance < Range && Time.time >= nextShot) Shoot(gm, robot, distance);
+            if (robot == null || tank.Weapon.Ammo < 1) return;
+            shotTimer--;
+            if (pathHeading == heading && shotTimer < 0 && !reverse && distance < Range) Shoot(gm, robot, distance);
+        }
+
+        void MoveElsewhere(GameManager gm)
+        {
+            if (gm.TryFindSpawnPoint(out var p, 0f)) tank.Motor.Place(p, transform.eulerAngles.y, false);
+        }
+
+        // ---------- _FIND_CLEAR_PATH / _CHECK_TANK_PATH, for the player ----------
+
+        int FindClearPath(GameManager gm, int want, bool reverse, int chaseDist)
+        {
+            int current = tank.Motor.OriginalHeading;
+            if (current != pathHeading && --pathTimer > 0) return -2;
+            if (--pathTimer > 0) return pathBlock;
+
+            if (reverse)
+            {
+                want = (want + 0x80) & 0xFF;
+                current = want;
+            }
+            int flip = reverse ? 0x80 : 0;
+            if (PathClear(want, chaseDist)) return Chose(want + flip);
+            if (PathClear(current, chaseDist)) return Chose(current + flip);
+            for (int off = 0; ;)
+            {
+                off = off >= 0 ? -(off + 4) : -off;
+                if (System.Math.Abs(off) > 0x81) break;
+                if (PathClear((want + off) & 0xFF, chaseDist)) return Chose(want + off + flip);
+            }
+            // Boxed in: the original simply moves the craft somewhere else
+            MoveElsewhere(gm);
+            pathBlock = -1;
+            return -1;
+        }
+
+        int Chose(int h)
+        {
+            pathHeading = h & 0xFF;
+            pathTimer = 9;
+            pathBlock = -1;
+            return -1;
+        }
+
+        // A box ahead against the obstacles no further off than the goal. On the ground fans, acid, up
+        // transports and pushers don't count; in the air everything does but the flat ones. Robots never do.
+        bool PathClear(int h, int chaseDist)
+        {
+            Vector3 dir = OriginalMath.Direction(h);
+            Vector3 centre = transform.position + dir * (PathLength * 1.125f * OriginalMath.UnitsToMetres);
+            centre.y = 2f;
+            var half = new Vector3(PathWidth, PathHeight, PathLength) * OriginalMath.UnitsToMetres;
+            bool ground = tank.Motor.OnGround;
+            int n = Physics.OverlapBoxNonAlloc(centre, half, probe, Quaternion.LookRotation(dir), ~0, QueryTriggerInteraction.Collide);
+            for (int i = 0; i < n; i++)
+            {
+                var obstacle = probe[i].GetComponentInParent<ObstacleBehaviour>();
+                if (obstacle == null) continue;
+                if (ground ? obstacle.type == 16 || obstacle.type == 36 || obstacle.type == 39
+                           : OriginalMath.ToUnits(probe[i].bounds.max.y) <= FlatTop) continue;
+                if (Dist(obstacle.transform) > chaseDist) continue;
+                return false;
+            }
+            return true;
         }
 
         // The cannon for Robot Tanks from the ground or when short of ammo, otherwise a missile
@@ -66,7 +135,6 @@ namespace SpectreEX
             bool cannon = (tank.Motor.ZUnits <= OnGround && robot.matrixType == 7) || tank.Weapon.Ammo < 10;
             if (cannon)
             {
-                if (tank.Weapon.Ammo < 1) return;
                 shots.PlayerShoot(0);
                 tank.Weapon.AddAmmo(-1);
                 Sfx.Play(Snd.PlayerShot);
@@ -77,8 +145,7 @@ namespace SpectreEX
                 tank.Weapon.AddAmmo(-6);
                 Sfx.Play(Snd.Missile);
             }
-            int ticks = Mathf.Max(6, (distance >> 4) - ((gm.Level - 1) >> 1));
-            nextShot = Time.time + ticks / PlayerMotor.TickRate;
+            shotTimer = Mathf.Max(6, (distance >> 4) - ((gm.Level - 1) >> 1));
         }
 
         Robot ChooseGoal(GameManager gm, out Transform goal)

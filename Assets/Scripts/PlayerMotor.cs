@@ -70,6 +70,8 @@ namespace SpectreEX
             set => fineHeading = (value & 0xFF) * SubSteps;
         }
         int minZ = GroundZ;
+        bool steered;
+        int steerTurn, steerSpeed;
         int turningSteps, heightStep, bounceI, acidTimer, contactSoundTimer;
         long moveLeftX, moveLeftY;
         bool under, onIce;
@@ -103,6 +105,16 @@ namespace SpectreEX
             this.throttle = throttle;
             this.turn = turn;
         }
+
+        // The demo drives by the tick, the original's way: a turn in heading steps and a set speed
+        public void Steer(int turn, int speed)
+        {
+            steered = true;
+            steerTurn = turn;
+            steerSpeed = speed;
+        }
+
+        public void ReleaseSteering() => steered = false;
 
         public void RequestJump() => jumpRequested = true;
         public void RequestHyperspace() => hyperRequested = true;
@@ -176,6 +188,12 @@ namespace SpectreEX
                 turnStep = turn < 0f ? step : -step;    // left raises the heading
             }
             else turningSteps = 0;
+
+            if (steered)
+            {
+                speed = steerSpeed;
+                turnStep = steerTurn;
+            }
 
             if (spinRate != 0)
             {
