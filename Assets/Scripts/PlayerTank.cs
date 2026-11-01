@@ -1,10 +1,8 @@
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 namespace SpectreEX
 {
-    // Spectre VR controls, from GameKeys for the keyboard and mouse. Gamepad: left stick, RT or A cannon, X heavy weapon, LB / RB
-    // change, Y hyperspace, B jump. PlayerMotor does the moving and TankWeapon the firing, the original's way.
+    // Spectre VR controls, from GameKeys. PlayerMotor does the moving and TankWeapon the firing, the original's way.
     [RequireComponent(typeof(PlayerMotor), typeof(TankWeapon), typeof(Health))]
     public class PlayerTank : MonoBehaviour
     {
@@ -51,19 +49,6 @@ namespace SpectreEX
             if (GameKeys.NextWeapon.Pressed) Weapon.PressCycle();
             for (int i = 1; i <= GameKeys.Weapons.Length; i++)
                 if (GameKeys.Weapons[i - 1].Pressed) Weapon.PressWeaponKey(i);
-
-            var g = GameSettings.Joystick ? Gamepad.current : null;
-            if (g != null)
-            {
-                Vector2 stick = g.leftStick.ReadValue();
-                throttle += stick.y;
-                turn += stick.x;
-                fire |= g.rightTrigger.isPressed || g.buttonSouth.isPressed;
-                hyper |= g.buttonNorth.wasPressedThisFrame;
-                jump |= g.buttonEast.wasPressedThisFrame;
-                if (g.buttonWest.wasPressedThisFrame) Weapon.PressAlt();
-                if (g.leftShoulder.wasPressedThisFrame || g.rightShoulder.wasPressedThisFrame) Weapon.PressCycle();
-            }
 
             Motor.SetInput(throttle, turn);
             Weapon.FireHeld = fire;

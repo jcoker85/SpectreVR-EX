@@ -543,18 +543,20 @@ Left alone: a splash's sound uses a fixed `_DAMAGE < 0x1E` test.
 
 ## Keys and display options
 
-`_TEXTURES` bits: 1 Complex (Options C) picks the shape column, textured or plain, read as a level loads; 2 Filled (L, in play F); 4 Textures (T, in play F5); 8 Movies (M, in play F6, `_SHOW_A_MOVIE_FRAME`); 0x10 custom matrices (U). Textures doesn't touch the floor dots or the sky: the dots belong to `_DRAW_LEVEL` and the sky is always drawn. Ray tracing is the remake's own and stays on.
+`_TEXTURES` bits: 1 Complex (Options C) picks the shape column, textured or plain, read as a level loads (the remake also rebuilds everything at once if it changes mid-game); 2 Filled (L, in play F); 4 Textures (T, in play F5); 8 Movies (M, in play F6, `_SHOW_A_MOVIE_FRAME`); 0x10 custom matrices (U). Textures doesn't touch the floor dots or the sky: the dots belong to `_DRAW_LEVEL` and the sky is always drawn. Ray tracing is the remake's own and stays on.
 
 | Original key | Does | Remake |
 |---|---|---|
 | S | sound on or off | F2, S is driving |
 | D | `_DRAW_LEVEL` 0-3 | F3, D is driving |
-| G, O, then D | `_DRAW_GOD_VIEW`, a map of every object, flags blinking | G, O, F3 |
+| G, O, then D | `_DRAW_GOD_VIEW`, a map of every object; other keys between the letters don't clear `_GOD` | G, O, D, the same way. D alone only turns here |
 | F | filled or wireframe | F |
 | F5 / F6 | textures / movie faces | F5 / F6 (movies not built) |
 | Shift | cockpit look: left, right, both behind | same |
 | Home, PgUp, End, PgDn, Ins | diagonal driving, fire | same |
 | J | re-calibrate joystick | not needed; J stays the remake's jump |
+
+Hidden map (`_DRAW_GOD_VIEW`, machine code at 1030:003A, since the decompile drops its arguments): the window is 760 x 530, or 530 x 420 on a desktop no wider than 760 (the table at DS:0x3E5), so the map sits in the top left below the HUD. `_ERASE_BOTTOM` blacks out from row 50 down and the rows above aren't redrawn. A frame in entry 15 runs from (0x5F, 0x37) to (0xE1, 0xB9). Each object is one pixel at (0xA0 + X >> 12, 0x78 - Y >> 12), flags in entry 14 and everything else in its colour + 12. The `_LEVEL_TIMER & 8` test sits in a branch flags can't reach, so they stay lit. The radar isn't drawn here or in the overhead view.
 
 Floor (`_DRAW_LEVEL`): dotted lines 0x10000 apart both ways, dots every 0x2000 at level 1, halving each level, none at 0. The original only draws those near the camera; the remake draws them all.
 

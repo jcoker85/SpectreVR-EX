@@ -17,14 +17,11 @@ namespace SpectreEX
             Reflections = "gfx.ssr", ReflectionDistance = "gfx.ssr.distance", ReflectionSamples = "gfx.ssr.samples", ReflectionBounces = "gfx.ssr.bounces",
             Lighting = "gfx.gi", LightingDistance = "gfx.gi.distance", LightingSamples = "gfx.gi.samples", LightingBounces = "gfx.gi.bounces",
             Occlusion = "gfx.ao", OcclusionDistance = "gfx.ao.distance", OcclusionSamples = "gfx.ao.samples",
-            AntiAliasing = "gfx.aa", TaaQuality = "gfx.taa.quality", DlssMode = "gfx.dlss.mode", DlssSharpness = "gfx.dlss.sharpness";
+            AntiAliasing = "gfx.aa", TaaQuality = "gfx.taa.quality", DlssScale = "gfx.dlss.scale", DlssSharpness = "gfx.dlss.sharpness";
 
         public const int AaOff = 0, AaTaa = 1, AaDlss = 2;
-        public static readonly string[] AaNames = { "Off", "TAA", "DLSS" };
+        public static readonly string[] AaNames = { "None", "TAA", "DLSS" };
         public static readonly string[] TaaNames = { "Low", "Medium", "High" };
-        public static readonly string[] DlssNames = { "DLAA", "Quality", "Balanced", "Performance", "Ultra Performance" };
-        static readonly uint[] DlssLevels = { 4, 2, 1, 0, 3 };                     // NVIDIA.DLSSQuality
-        static readonly float[] DlssScale = { 100f, 66.7f, 58f, 50f, 33.3f };      // render scale, percent
         const int CustomQuality = 3;                                               // past the Low-Medium-High tiers
 
         public static readonly string[] ModeNames = { "Windowed", "Borderless", "Fullscreen" };
@@ -35,6 +32,7 @@ namespace SpectreEX
         static readonly Dictionary<string, int> values = new Dictionary<string, int>();
         static int reflectionTier, lightingTier, occlusionTier, plainSkyType;
         static float occlusionIntensity;
+        static bool skyHidden;
         static HDAdditionalCameraData.ClearColorMode plainClear;
 
         // The star map. SkyBrightness is its exposure in tenths; high enough and the stars pass the
@@ -44,6 +42,10 @@ namespace SpectreEX
         public static int Get(string key) => values.TryGetValue(key, out int v) ? v : 0;
         public static bool On(string key) => Get(key) != 0;
         public static bool DlssAvailable => HDDynamicResolutionPlatformCapabilities.DLSSDetected;
+
+        // The choice in force: a saved DLSS on a machine without it runs as TAA, and DLSS isn't offered
+        public static int Aa => Get(AntiAliasing) == AaDlss && !DlssAvailable ? AaTaa : Get(AntiAliasing);
+        public static List<string> AaChoices() => new List<string>(AaNames).GetRange(0, DlssAvailable ? AaNames.Length : AaDlss);
 
         public static void Set(string key, int value)
         {
@@ -97,6 +99,13 @@ namespace SpectreEX
 
         public static string QualityName => QualitySettings.names[QualitySettings.GetQualityLevel()];
 
+        // The hidden map has the plain sky behind it, whatever the setting
+        public static void HideSky(bool hidden)
+        {
+            skyHidden = hidden;
+            ApplySkybox();
+        }
+
         public static void SetQuality(string name)
         {
             int index = System.Array.IndexOf(QualitySettings.names, name);
@@ -118,7 +127,10 @@ namespace SpectreEX
         }
 
         static float RenderScale() =>
-            Get(AntiAliasing) == AaDlss && DlssAvailable ? DlssScale[Mathf.Clamp(Get(DlssMode), 0, DlssScale.Length - 1)] : 100f;
+            Aa == AaDlss ? Get(DlssScale) : 100f;
+
+        // NVIDIA's own level nearest the render scale, for its tuning
+        static uint DlssLevel(int percent) => percent >= 100 ? 4u : percent >= 66 ? 2u : percent >= 58 ? 1u : percent >= 50 ? 0u : 3u;
 
         static void ReadDefaults()
         {
@@ -157,7 +169,7 @@ namespace SpectreEX
             int aa = camera != null && camera.allowDeepLearningSuperSampling ? AaDlss : camera != null && camera.antialiasing == HDAdditionalCameraData.AntialiasingMode.None ? AaOff : AaTaa;
             Default(AntiAliasing, aa);
             Default(TaaQuality, camera != null ? (int)camera.TAAQuality : 1);
-            Default(DlssMode, 2);
+            Default(DlssScale, 60);
             Default(DlssSharpness, 0);
         }
 
@@ -192,7 +204,7 @@ namespace SpectreEX
         static void ApplySkybox()
         {
             var picture = SkyPicture;
-            bool on = On(Skybox) && picture != null;
+            bool on = On(Skybox) && picture != null && !skyHidden;
             var profile = Profile();
             if (profile != null && profile.TryGet<VisualEnvironment>(out var environment))
             {
@@ -255,11 +267,11 @@ namespace SpectreEX
         {
             var camera = Camera();
             if (camera == null) return;
-            int aa = Get(AntiAliasing);
-            bool dlss = aa == AaDlss && DlssAvailable;
+            int aa = Aa;
+            bool dlss = aa == AaDlss;
             camera.allowDeepLearningSuperSampling = dlss;
             camera.deepLearningSuperSamplingUseCustomQualitySettings = true;
-            camera.deepLearningSuperSamplingQuality = DlssLevels[Mathf.Clamp(Get(DlssMode), 0, DlssLevels.Length - 1)];
+            camera.deepLearningSuperSamplingQuality = DlssLevel(Get(DlssScale));
             camera.deepLearningSuperSamplingUseCustomAttributes = true;
             camera.deepLearningSuperSamplingUseOptimalSettings = false;
             camera.deepLearningSuperSamplingSharpening = Get(DlssSharpness) / 100f;

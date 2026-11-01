@@ -116,6 +116,12 @@ namespace SpectreEX
 
         public void ReleaseSteering() => steered = false;
 
+        // A gate was rebuilt: standing in it shouldn't count as arriving at a new one
+        public void GateReplaced(ObstacleBehaviour old, ObstacleBehaviour rebuilt)
+        {
+            if (lastGate == old) lastGate = rebuilt;
+        }
+
         public void RequestJump() => jumpRequested = true;
         public void RequestHyperspace() => hyperRequested = true;
         public void ResetHyper() => Hyper = HyperMax;

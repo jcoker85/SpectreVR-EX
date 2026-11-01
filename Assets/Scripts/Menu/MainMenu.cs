@@ -580,8 +580,8 @@ namespace SpectreEX.Menu
             System.Func<bool> reflecting = () => tracing() && GraphicsOptions.On(GraphicsOptions.Reflections);
             System.Func<bool> lighting = () => tracing() && GraphicsOptions.On(GraphicsOptions.Lighting);
             System.Func<bool> occluding = () => tracing() && GraphicsOptions.On(GraphicsOptions.Occlusion);
-            System.Func<bool> taa = () => GraphicsOptions.Get(GraphicsOptions.AntiAliasing) == GraphicsOptions.AaTaa;
-            System.Func<bool> dlss = () => GraphicsOptions.Get(GraphicsOptions.AntiAliasing) == GraphicsOptions.AaDlss;
+            System.Func<bool> taa = () => GraphicsOptions.Aa == GraphicsOptions.AaTaa;
+            System.Func<bool> dlss = () => GraphicsOptions.Aa == GraphicsOptions.AaDlss;
             return new List<SettingRow>
             {
                 Drop("RESOLUTION", () => $"{Screen.width} X {Screen.height}",
@@ -600,9 +600,10 @@ namespace SpectreEX.Menu
                     step = sign => GraphicsOptions.Set(GraphicsOptions.SkyBrightness, Mathf.Clamp(GraphicsOptions.Get(GraphicsOptions.SkyBrightness) + sign * 5, 60, 120)),
                 }),
 
-                Choice("ANTI-ALIASING", GraphicsOptions.AntiAliasing, GraphicsOptions.AaNames),
+                Drop("ANTI-ALIASING", () => GraphicsOptions.AaNames[GraphicsOptions.Aa], GraphicsOptions.AaChoices,
+                    () => GraphicsOptions.Aa, i => GraphicsOptions.Set(GraphicsOptions.AntiAliasing, i)),
                 When(taa, Choice("TAA QUALITY", GraphicsOptions.TaaQuality, GraphicsOptions.TaaNames)),
-                When(dlss, Choice("DLSS MODE", GraphicsOptions.DlssMode, GraphicsOptions.DlssNames)),
+                When(dlss, Number("DLSS SCALE", GraphicsOptions.DlssScale, 25, 100, 5, "%")),
                 When(dlss, Number("DLSS SHARPNESS", GraphicsOptions.DlssSharpness, 0, 100, 5, "%")),
 
                 Toggle("RAY TRACING", GraphicsOptions.RayTracing),
@@ -748,8 +749,9 @@ namespace SpectreEX.Menu
 
         // ---------- the Controls page: a row for every action, a box for each of its keys ----------
 
-        const float KeyBoxX = 156, KeyBoxW = 72, KeyBoxStep = 76;
+        const float KeyBoxX = 156, KeyBoxW = 98, KeyBoxStep = 101;
         int keysTop;
+        bool padSection;
         GameKey capturing;
         int capturingSlot, capturingFrame;
 
@@ -780,7 +782,7 @@ namespace SpectreEX.Menu
                     }, Key.None, glow);
                     box.rightClick = () =>
                     {
-                        GameKeys.Clear(GameKeys.All[keysTop + row], slot);
+                        GameKeys.Clear(GameKeys.All[keysTop + row], slot, padSection);
                         controls.refresh();
                     };
                 }
@@ -788,7 +790,20 @@ namespace SpectreEX.Menu
             }
             var more = AddText(controls, new Rect(8, 270, SettingsW - 16, 14), 8, DimGreen, TextAnchor.MiddleCenter);
             SettingsButton(controls, new Rect(190, 292, 100, 28), "DONE", Pop);
-            SettingsButton(controls, new Rect(358, 292, 100, 28), "DEFAULTS", () => { GameKeys.Reset(); controls.refresh(); });
+            SettingsButton(controls, new Rect(358, 292, 100, 28), "DEFAULTS", () => { GameKeys.Reset(padSection); controls.refresh(); });
+
+            // The two sets of bindings share the rows; these pick which one they show
+            var sections = new List<(PixelSegmentText title, Image[] edges, bool pad)>();
+            void Section(string title, float x, bool pad)
+            {
+                var r = new Rect(x, 292, 80, 28);
+                var t = AddText(controls, new Rect(r.x, r.y + 3, r.width, 22), 9, SegGreen, TextAnchor.MiddleCenter);
+                t.Text = Seg(title);
+                sections.Add((t, Frame(controls, r, SegGreen, 1f), pad));
+                Button(controls, r, () => { padSection = pad; controls.refresh(); }, Key.None, glow);
+            }
+            Section("KEYBOARD", 22, false);
+            Section("GAMEPAD", 104, true);
 
             controls.refresh = () =>
             {
@@ -797,9 +812,17 @@ namespace SpectreEX.Menu
                     var action = GameKeys.All[keysTop + i];
                     labels[i].Text = Seg(action.label);
                     for (int j = 0; j < GameKeys.Slots; j++)
-                        boxes[i][j].Text = Seg(action == capturing && j == capturingSlot ? "PRESS" : GameKeys.Name(action.slots[j]));
+                        boxes[i][j].Text = Seg(action == capturing && j == capturingSlot ? "PRESS"
+                            : padSection ? GameKeys.PadName(action.pads[j]) : GameKeys.Name(action.slots[j]));
                 }
-                more.Text = Seg(capturing != null ? "PRESS A KEY OR BUTTON  ESC CANCELS" : "CLICK CHANGES  RIGHT CLICK CLEARS  WHEEL FOR MORE");
+                foreach (var (title, edges, pad) in sections)
+                {
+                    title.color = pad == padSection ? SegGreen : DimGreen;
+                    foreach (var edge in edges) edge.enabled = pad == padSection;
+                }
+                more.Text = Seg(capturing != null ? (padSection ? "PRESS A GAMEPAD INPUT  ESC CANCELS" : "PRESS A KEY OR BUTTON  ESC CANCELS")
+                    : padSection && !GameSettings.Joystick ? "TICK JOYSTICK IN OPTIONS TO USE THE GAMEPAD"
+                    : "CLICK CHANGES  RIGHT CLICK CLEARS  WHEEL FOR MORE");
             };
             controls.onEscape = controls.onEnter = Pop;
         }
@@ -810,9 +833,9 @@ namespace SpectreEX.Menu
             if (Time.frameCount == capturingFrame) return;
             var k = Keyboard.current;
             bool cancel = k != null && k.escapeKey.wasPressedThisFrame;
-            int code = cancel ? 0 : GameKeys.JustPressed();
+            int code = cancel ? 0 : padSection ? GameKeys.JustPressedPad() : GameKeys.JustPressed();
             if (!cancel && code == 0) return;
-            if (code != 0) GameKeys.Bind(capturing, capturingSlot, code);
+            if (code != 0) GameKeys.Bind(capturing, capturingSlot, code, padSection);
             capturing = null;
             controls.refresh();
         }

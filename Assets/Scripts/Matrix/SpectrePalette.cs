@@ -64,6 +64,9 @@ namespace SpectreEX.Matrix
 
         public static Color Sky(int level) => BuiltinShapes.SkyColour(level);
 
+        // An entry of the current level's 256 colours
+        public static Color Colour(int entry) => colours[entry & 0xFF];
+
         static void Build(int level)
         {
             for (int i = 0; i < 16; i++)

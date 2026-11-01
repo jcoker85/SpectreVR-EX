@@ -33,6 +33,42 @@ namespace SpectreEX
 
         public static Robot Build(int type, ShapeSet shapes, RobotLook look, float edgeThickness)
         {
+            var parts = Parts(type, shapes);
+            if (parts == null) return null;
+
+            var root = new GameObject($"Robot_{type}");
+            var model = new GameObject("Model").transform;
+            model.SetParent(root.transform, false);
+            Fill(model, root.AddComponent<BoxCollider>(), type, parts, look, edgeThickness);
+
+            var health = root.AddComponent<Health>();
+            health.team = Team.Enemy;
+            health.hitSound = Snd.EnemyHit;
+            health.deathSound = Snd.Explosion;
+            health.hiddenFromRadar = type == 27;   // Cloaked Tank: visible, not on radar
+
+            var robot = root.AddComponent<Robot>();
+            if (type == 26)   // Invisible Tank: on radar only
+                foreach (var r in root.GetComponentsInChildren<Renderer>()) r.enabled = false;
+            return robot;
+        }
+
+        // A robot already in play takes on the current shapes, as when Complex changes mid-game
+        public static void Reshape(Robot robot, ShapeSet shapes, RobotLook look, float edgeThickness)
+        {
+            var parts = Parts(robot.matrixType, shapes);
+            var model = robot.transform.Find("Model");
+            if (parts == null || model == null) return;
+            var old = new System.Collections.Generic.List<GameObject>();
+            foreach (Transform child in model) old.Add(child.gameObject);
+            model.DetachChildren();
+            foreach (var o in old) Object.Destroy(o);
+            Fill(model, robot.GetComponent<BoxCollider>(), robot.matrixType, parts, look, edgeThickness);
+            robot.ShapesChanged();
+        }
+
+        static System.Collections.Generic.List<ShapeSet.Part> Parts(int type, ShapeSet shapes)
+        {
             var parts = shapes?.ForType(type);
             if (parts == null || parts.Count == 0)
             {
@@ -41,11 +77,13 @@ namespace SpectreEX
                 parts = new System.Collections.Generic.List<ShapeSet.Part> { new ShapeSet.Part { shape = g, id = FallbackShape } };
             }
 
+            return parts;
+        }
+
+        static void Fill(Transform model, BoxCollider col, int type, System.Collections.Generic.List<ShapeSet.Part> parts, RobotLook look, float edgeThickness)
+        {
             var glow = look.GlowFor(type);
             int colour = BuiltinShapes.TypeColour(type);
-            var root = new GameObject($"Robot_{type}");
-            var model = new GameObject("Model").transform;
-            model.SetParent(root.transform, false);
             Bounds bounds = default;
             for (int i = 0; i < parts.Count; i++)
             {
@@ -62,7 +100,6 @@ namespace SpectreEX
                 if (i == 0) bounds = b; else bounds.Encapsulate(b);
             }
 
-            var col = root.AddComponent<BoxCollider>();
             col.center = bounds.center;
             col.size = Vector3.Max(bounds.size, Vector3.one * 0.6f);
             // Slicers reach 0x1400 below their base, so they still catch a craft under the floor
@@ -72,17 +109,6 @@ namespace SpectreEX
                 col.center -= Vector3.up * extra * 0.5f;
                 col.size += Vector3.up * extra;
             }
-
-            var health = root.AddComponent<Health>();
-            health.team = Team.Enemy;
-            health.hitSound = Snd.EnemyHit;
-            health.deathSound = Snd.Explosion;
-            health.hiddenFromRadar = type == 27;   // Cloaked Tank: visible, not on radar
-
-            var robot = root.AddComponent<Robot>();
-            if (type == 26)   // Invisible Tank: on radar only
-                foreach (var r in root.GetComponentsInChildren<Renderer>()) r.enabled = false;
-            return robot;
         }
 
         static void Mesh(string name, Transform parent, Mesh mesh, Material mat, ShadowCastingMode shadows)

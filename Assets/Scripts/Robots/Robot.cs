@@ -464,6 +464,13 @@ namespace SpectreEX
         }
 
         // _CHANGE_SHAPE: swap the model for another shape of the matrix (single-part robots)
+        // The model was rebuilt: its hop or burrow frame and stun colour need setting again
+        public void ShapesChanged()
+        {
+            shapeId = 0;
+            stunRamp = -1;
+        }
+
         int shapeId;
         void ChangeShape(int id)
         {

@@ -410,6 +410,7 @@ namespace SpectreEX.Hud
             if (hint.enabled)
                 hint.text = $"{GameKeys.First(GameKeys.Forward)} DRIVE  {GameKeys.First(GameKeys.Fire)} FIRE  {GameKeys.First(GameKeys.NextView)} VIEW  " +
                     $"{GameKeys.First(GameKeys.Hyperspace)} HYPERSPACE  {GameKeys.First(GameKeys.Jump)} JUMP";
+            radarRoot.parent.gameObject.SetActive(view == null || view.mode == ViewMode.Internal || view.mode == ViewMode.External);   // _SHOW_RADAR
             if (crosshair != null) crosshair.SetActive(view == null || view.mode == ViewMode.Internal);
 
             UpdateRadar(p.transform);

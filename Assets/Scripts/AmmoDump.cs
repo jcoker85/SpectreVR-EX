@@ -21,6 +21,8 @@ namespace SpectreEX
         // _PICK_FUEL_TYPE's colours: green, white, orange and, for wings, cyan
         static readonly int[] KindRamps = { 0x20, 0xB0, 0x40, 0x60 };
 
+        public int Ramp => KindRamps[(int)kind];
+
         public void SetKind(Kind k)
         {
             kind = k;

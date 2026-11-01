@@ -376,8 +376,11 @@ namespace SpectreEX.Matrix
             this.central = central;
         }
 
-        // _LOAD_WRLD clears every random list's pick at the start of a level, and shapes load then, so
-        // the Complex option applies from the next level
+        // Complex changed mid-game: the other column, keeping the level's random picks
+        public bool ComplexChanged => plain == GameSettings.DisplayComplex;
+        public void FollowComplex() => plain = !GameSettings.DisplayComplex;
+
+        // _LOAD_WRLD clears every random list's pick at the start of a level
         public void NewLevel()
         {
             picks.Clear();

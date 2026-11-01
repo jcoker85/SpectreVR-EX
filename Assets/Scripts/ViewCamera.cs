@@ -28,6 +28,7 @@ namespace SpectreEX
 
         void Awake()
         {
+            if (GetComponent<MapView>() == null) gameObject.AddComponent<MapView>();
             cam = GetComponent<Camera>();
             int layer = LayerMask.NameToLayer(playerModelLayer);
             playerMask = layer >= 0 ? 1 << layer : 0;
@@ -35,34 +36,6 @@ namespace SpectreEX
 
         float demoClock, deadTimer;
         Health health;
-
-        // _DRAW_GOD_VIEW: a plain map of everything in the matrix, the flags blinking
-        void OnGUI()
-        {
-            if (mode != ViewMode.Map) return;
-            var gm = GameManager.Instance;
-            if (gm == null) return;
-            GUI.color = Color.black;
-            GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
-            float size = Screen.height * 0.6f, half = size * 0.5f;
-            var centre = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
-            float scale = half / gm.arenaHalfSize;
-            void Dot(Vector3 p, Color c)
-            {
-                GUI.color = c;
-                GUI.DrawTexture(new Rect(centre.x + p.x * scale - 1f, centre.y - p.z * scale - 1f, 3f, 3f), Texture2D.whiteTexture);
-            }
-            GUI.color = Color.white;
-            foreach (var r in new[] { new Rect(centre.x - half, centre.y - half, size, 1f), new Rect(centre.x - half, centre.y + half, size, 1f), new Rect(centre.x - half, centre.y - half, 1f, size), new Rect(centre.x + half, centre.y - half, 1f, size) })
-                GUI.DrawTexture(r, Texture2D.whiteTexture);
-            foreach (var o in gm.Obstacles) if (o != null) Dot(o.transform.position, Color.grey);
-            foreach (var d in gm.Dumps) if (d != null) Dot(d.transform.position, Color.green);
-            foreach (var r in gm.Robots) if (r != null && !r.IsDead) Dot(r.transform.position, Color.red);
-            if (((int)(Time.time * PlayerMotor.TickRate) & 8) != 0)
-                foreach (var f in gm.Flags) if (f != null) Dot(f.transform.position, Color.yellow);
-            Dot(target.position, Color.cyan);
-            GUI.color = Color.white;
-        }
 
         // In demo mode the view moves on every 126 ticks (_PLAY_LEVEL), and a real game starts inside
         void NextMode() => mode = (int)mode >= 2 ? ViewMode.Internal : mode + 1;
@@ -147,8 +120,7 @@ namespace SpectreEX
                     break;
                 }
                 case ViewMode.Map:
-                    transform.SetPositionAndRotation(smoothPos, smoothRot);
-                    break;
+                    break;   // MapView draws it; the rows it leaves keep this view where it was
                 case ViewMode.External:
                 {
                     Vector3 desired = target.position + yaw * new Vector3(0f, externalHeight, -externalDistance);

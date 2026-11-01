@@ -6,18 +6,27 @@ using UnityEngine.InputSystem.Controls;
 
 namespace SpectreEX
 {
-    // One thing the player can do, and the up to four keys or mouse buttons that do it
+    // One thing the player can do, and the up to three keys or mouse buttons and three gamepad inputs that do it
     public class GameKey
     {
         public readonly string label;
         public readonly int[] slots = new int[GameKeys.Slots];
+        public readonly int[] pads = new int[GameKeys.Slots];
         internal readonly int[] defaults;
+        internal int[] padDefaults = new int[0];
 
         internal GameKey(string label, params int[] keys)
         {
             this.label = label;
             defaults = keys;
             keys.CopyTo(slots, 0);
+        }
+
+        internal GameKey Pad(params int[] buttons)
+        {
+            padDefaults = buttons;
+            buttons.CopyTo(pads, 0);
+            return this;
         }
 
         public bool Held
@@ -28,6 +37,11 @@ namespace SpectreEX
                 {
                     var button = GameKeys.Button(code);
                     if (button != null && button.isPressed) return true;
+                }
+                foreach (int code in pads)
+                {
+                    var button = GameKeys.PadButton(code);
+                    if (button != null && button.ReadValue() > PadPress) return true;
                 }
                 return false;
             }
@@ -42,36 +56,53 @@ namespace SpectreEX
                     var button = GameKeys.Button(code);
                     if (button != null && button.wasPressedThisFrame) return true;
                 }
+                foreach (int code in pads)
+                {
+                    var button = GameKeys.PadButton(code);
+                    if (button != null && button.wasPressedThisFrame) return true;
+                }
                 return false;
             }
         }
+
+        const float PadPress = 0.3f;   // the same point PlayerMotor reads a drive input at
     }
 
-    // The keyboard and mouse controls, set on the Controls page behind Shift + Options. The defaults are
-    // the original's keys and the modern ones together. Esc, the menus' own keys and the gamepad stay fixed.
+    // The keyboard, mouse and gamepad controls, set on the Controls page behind Shift + Options. The
+    // defaults are the original's keys and the modern ones together. Esc and the menus' own keys stay fixed.
     public static class GameKeys
     {
-        public const int Slots = 4;
+        public const int Slots = 3;
         const int MouseBase = 1000;   // codes from here up are mouse buttons, below are the Key enum
         const int MouseLeft = MouseBase, MouseRight = MouseBase + 1;
         static readonly string[] MouseNames = { "MouseLeft", "MouseRight", "MouseMiddle", "MouseForward", "MouseBack" };
 
+        // Gamepad inputs, by their number in this list
+        static readonly string[] PadNames =
+        {
+            "", "A", "B", "X", "Y", "LB", "RB", "LT", "RT", "LS Up", "LS Down", "LS Left", "LS Right",
+            "RS Up", "RS Down", "RS Left", "RS Right", "LS Click", "RS Click", "DP Up", "DP Down", "DP Left", "DP Right",
+            "Start", "Select",
+        };
+        const int PadA = 1, PadB = 2, PadX = 3, PadY = 4, PadLB = 5, PadRB = 6, PadRT = 8,
+            PadLSUp = 9, PadLSDown = 10, PadLSLeft = 11, PadLSRight = 12;
+
         static GameKey New(string label, params Key[] keys) => new GameKey(label, Array.ConvertAll(keys, k => (int)k));
 
         public static readonly GameKey
-            Forward = New("FORWARD", Key.W, Key.UpArrow, Key.Numpad8),
-            Back = New("BACK", Key.S, Key.DownArrow, Key.Numpad2),
-            TurnLeft = New("TURN LEFT", Key.A, Key.LeftArrow, Key.Numpad4),
-            TurnRight = New("TURN RIGHT", Key.D, Key.RightArrow, Key.Numpad6),
+            Forward = New("FORWARD", Key.W, Key.UpArrow, Key.Numpad8).Pad(PadLSUp),
+            Back = New("BACK", Key.S, Key.DownArrow, Key.Numpad2).Pad(PadLSDown),
+            TurnLeft = New("TURN LEFT", Key.A, Key.LeftArrow, Key.Numpad4).Pad(PadLSLeft),
+            TurnRight = New("TURN RIGHT", Key.D, Key.RightArrow, Key.Numpad6).Pad(PadLSRight),
             ForwardLeft = New("FORWARD LEFT", Key.Numpad7, Key.Home),
             ForwardRight = New("FORWARD RIGHT", Key.Numpad9, Key.PageUp),
             BackLeft = New("BACK LEFT", Key.Numpad1, Key.End),
             BackRight = New("BACK RIGHT", Key.Numpad3, Key.PageDown),
-            Fire = new GameKey("FIRE", (int)Key.Space, (int)Key.Numpad0, (int)Key.Insert, MouseLeft),
-            HeavyWeapon = New("HEAVY WEAPON", Key.LeftAlt, Key.RightAlt),
-            NextWeapon = New("NEXT WEAPON", Key.LeftCtrl, Key.RightCtrl),
-            Hyperspace = New("HYPERSPACE", Key.Backspace, Key.Backquote),
-            Jump = new GameKey("JUMP", (int)Key.J, (int)Key.Numpad5, MouseRight),
+            Fire = new GameKey("FIRE", (int)Key.Space, (int)Key.Numpad0, MouseLeft).Pad(PadRT, PadA),
+            HeavyWeapon = New("HEAVY WEAPON", Key.LeftAlt, Key.RightAlt).Pad(PadX),
+            NextWeapon = New("NEXT WEAPON", Key.LeftCtrl, Key.RightCtrl).Pad(PadLB, PadRB),
+            Hyperspace = New("HYPERSPACE", Key.Backspace, Key.Backquote).Pad(PadY),
+            Jump = new GameKey("JUMP", (int)Key.J, (int)Key.Numpad5, MouseRight).Pad(PadB),
             LookLeft = New("LOOK LEFT", Key.LeftShift),
             LookRight = New("LOOK RIGHT", Key.RightShift),
             NextView = New("NEXT VIEW", Key.Tab, Key.NumpadMultiply),
@@ -121,6 +152,52 @@ namespace SpectreEX
             }
         }
 
+        // A bound input, while the Options dialog's Joystick box is ticked
+        public static ButtonControl PadButton(int code) => GameSettings.Joystick ? PadControl(Gamepad.current, code) : null;
+
+        static ButtonControl PadControl(Gamepad g, int code)
+        {
+            if (g == null) return null;
+            switch (code)
+            {
+                case 1: return g.buttonSouth;
+                case 2: return g.buttonEast;
+                case 3: return g.buttonWest;
+                case 4: return g.buttonNorth;
+                case 5: return g.leftShoulder;
+                case 6: return g.rightShoulder;
+                case 7: return g.leftTrigger;
+                case 8: return g.rightTrigger;
+                case 9: return g.leftStick.up;
+                case 10: return g.leftStick.down;
+                case 11: return g.leftStick.left;
+                case 12: return g.leftStick.right;
+                case 13: return g.rightStick.up;
+                case 14: return g.rightStick.down;
+                case 15: return g.rightStick.left;
+                case 16: return g.rightStick.right;
+                case 17: return g.leftStickButton;
+                case 18: return g.rightStickButton;
+                case 19: return g.dpad.up;
+                case 20: return g.dpad.down;
+                case 21: return g.dpad.left;
+                case 22: return g.dpad.right;
+                case 23: return g.startButton;
+                case 24: return g.selectButton;
+                default: return null;
+            }
+        }
+
+        public static string PadName(int code) => PadNames[code];
+
+        // Whatever gamepad input went down this frame, or 0
+        public static int JustPressedPad()
+        {
+            for (int code = 1; code < PadNames.Length; code++)
+                if (PadControl(Gamepad.current, code)?.wasPressedThisFrame == true) return code;
+            return 0;
+        }
+
         // Whatever key or mouse button went down this frame, or 0
         public static int JustPressed()
         {
@@ -134,27 +211,31 @@ namespace SpectreEX
         }
 
         // A key does one thing: taking it for this action frees it from any other
-        public static void Bind(GameKey action, int slot, int code)
+        public static void Bind(GameKey action, int slot, int code, bool pad)
         {
             foreach (var other in All)
+            {
+                var slots = pad ? other.pads : other.slots;
                 for (int i = 0; i < Slots; i++)
-                    if (other.slots[i] == code) other.slots[i] = 0;
-            action.slots[slot] = code;
+                    if (slots[i] == code) slots[i] = 0;
+            }
+            (pad ? action.pads : action.slots)[slot] = code;
             Save();
         }
 
-        public static void Clear(GameKey action, int slot)
+        public static void Clear(GameKey action, int slot, bool pad)
         {
-            action.slots[slot] = 0;
+            (pad ? action.pads : action.slots)[slot] = 0;
             Save();
         }
 
-        public static void Reset()
+        public static void Reset(bool pad)
         {
             foreach (var action in All)
             {
-                Array.Clear(action.slots, 0, Slots);
-                action.defaults.CopyTo(action.slots, 0);
+                var slots = pad ? action.pads : action.slots;
+                Array.Clear(slots, 0, Slots);
+                (pad ? action.padDefaults : action.defaults).CopyTo(slots, 0);
             }
             Save();
         }
@@ -171,9 +252,15 @@ namespace SpectreEX
 
         static string Pref(GameKey action) => "key." + action.label;
 
+        static string PadPref(GameKey action) => "pad." + action.label;
+
         static void Save()
         {
-            foreach (var action in All) PlayerPrefs.SetString(Pref(action), string.Join(",", Array.ConvertAll(action.slots, Serial)));
+            foreach (var action in All)
+            {
+                PlayerPrefs.SetString(Pref(action), string.Join(",", Array.ConvertAll(action.slots, Serial)));
+                PlayerPrefs.SetString(PadPref(action), string.Join(",", Array.ConvertAll(action.pads, PadName)));
+            }
             PlayerPrefs.Save();
         }
 
@@ -181,9 +268,16 @@ namespace SpectreEX
         {
             foreach (var action in All)
             {
-                if (!PlayerPrefs.HasKey(Pref(action))) continue;
-                var names = PlayerPrefs.GetString(Pref(action)).Split(',');
-                for (int i = 0; i < Slots; i++) action.slots[i] = i < names.Length ? Parse(names[i]) : 0;
+                if (PlayerPrefs.HasKey(Pref(action)))
+                {
+                    var names = PlayerPrefs.GetString(Pref(action)).Split(',');
+                    for (int i = 0; i < Slots; i++) action.slots[i] = i < names.Length ? Parse(names[i]) : 0;
+                }
+                if (PlayerPrefs.HasKey(PadPref(action)))
+                {
+                    var names = PlayerPrefs.GetString(PadPref(action)).Split(',');
+                    for (int i = 0; i < Slots; i++) action.pads[i] = i < names.Length ? Mathf.Max(0, Array.IndexOf(PadNames, names[i])) : 0;
+                }
             }
         }
 
@@ -218,7 +312,7 @@ namespace SpectreEX
                 case Key.NumpadEnter: return "NUMENT";
             }
             string name = key.ToString().Replace("Arrow", "").Replace("Numpad", "NUM").Replace("Digit", "").ToUpperInvariant();
-            return name.Length > 7 ? name.Substring(0, 7) : name;
+            return name.Length > 10 ? name.Substring(0, 10) : name;
         }
 
         // The first key set for an action, for on-screen prompts

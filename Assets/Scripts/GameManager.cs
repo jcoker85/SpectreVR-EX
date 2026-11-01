@@ -190,7 +190,37 @@ namespace SpectreEX
         {
             Sfx.Enabled = GameSettings.SoundEffectsOn && !GameSettings.SoundMuted;
             ShowFloorDots();
+            ApplyComplex();
             foreach (var r in FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None)) ApplyFilled(r);
+            foreach (var r in director.Robots)
+                if (r != null && (r.matrixType == 26 || !r.visible))
+                    foreach (var part in r.GetComponentsInChildren<Renderer>()) part.enabled = false;
+        }
+
+        // Complex changed during a level: everything built from a shape takes the other column where it stands
+        void ApplyComplex()
+        {
+            if (!InGame || shapes == null || !shapes.ComplexChanged) return;
+            shapes.FollowComplex();
+            var craft = player.GetComponent<PlayerModel>();
+            if (craft != null) craft.Rebuild(shapes, obstacleLook.shapes, obstacleLook.edgeThickness);
+            foreach (var r in director.Robots)
+                if (r != null) RobotFactory.Reshape(r, shapes, robotLook, obstacleLook.edgeThickness);
+            for (int i = 0; i < Obstacles.Count; i++)
+            {
+                var old = Obstacles[i];
+                var was = old != null ? old.GetComponent<ObstacleBehaviour>() : null;
+                if (was == null) continue;
+                var go = ObstacleFactory.Build(was.type, shapes.ForType(was.type), obstacleLook);
+                if (go == null) continue;
+                go.transform.SetPositionAndRotation(old.transform.position, old.transform.rotation);
+                var now = go.GetComponent<ObstacleBehaviour>();
+                now.heading = was.heading;
+                player.Motor.GateReplaced(was, now);
+                Obstacles[i] = go;
+                Destroy(old);
+            }
+            Physics.SyncTransforms();
         }
 
 
@@ -299,22 +329,29 @@ namespace SpectreEX
             return mesh;
         }
 
-        int godKeys;   // G then O, then the draw-level key, opens the map view
+        int godKeys;   // how much of G, O, D has been typed
 
         // The original's other keys while playing. Its S, D are taken by the modern driving keys, so those
         // two live on F2 and F3; the rest are where it had them.
+        // _PLAY_LEVEL's _GOD: G arms it, O takes it a step on or clears it, and D opens the map view if
+        // both came first. Other keys between them don't matter.
+        void TypeGod(Keyboard k)
+        {
+            if (k.gKey.wasPressedThisFrame) godKeys = 1;
+            if (k.oKey.wasPressedThisFrame) godKeys = godKeys == 1 ? 2 : 0;
+            if (k.dKey.wasPressedThisFrame)
+            {
+                if (godKeys == 2) FindFirstObjectByType<ViewCamera>().mode = ViewMode.Map;
+                godKeys = 0;
+            }
+        }
+
         void DisplayKeys(Keyboard k)
         {
             bool changed = false;
             if (GameKeys.Sound.Pressed) { GameSettings.SoundMuted = !GameSettings.SoundMuted; changed = true; }
-            if (k.gKey.wasPressedThisFrame) godKeys = 1;
-            if (k.oKey.wasPressedThisFrame) godKeys = godKeys == 1 ? 2 : 0;
-            if (GameKeys.FloorDots.Pressed)
-            {
-                if (godKeys == 2) FindFirstObjectByType<ViewCamera>().mode = ViewMode.Map;
-                else { GameSettings.DrawLevel = (GameSettings.DrawLevel + 1) % 4; changed = true; }
-                godKeys = 0;
-            }
+            TypeGod(k);
+            if (GameKeys.FloorDots.Pressed) { GameSettings.DrawLevel = (GameSettings.DrawLevel + 1) % 4; changed = true; }
             if (GameKeys.Textures.Pressed) { GameSettings.DisplayTextures = !GameSettings.DisplayTextures; changed = true; }
             if (GameKeys.Movies.Pressed) { GameSettings.DisplayMovies = !GameSettings.DisplayMovies; changed = true; }
             if (GameKeys.Wire.Pressed && !Demo) { GameSettings.DisplayFilled = !GameSettings.DisplayFilled; changed = true; }
