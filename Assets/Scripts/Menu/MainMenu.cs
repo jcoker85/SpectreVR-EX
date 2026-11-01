@@ -565,8 +565,8 @@ namespace SpectreEX.Menu
                     i => GraphicsOptions.SetResolution(sizes[i])),
                 Drop("DISPLAY MODE", () => GraphicsOptions.ModeNames[GraphicsOptions.ModeIndex],
                     () => new List<string>(GraphicsOptions.ModeNames), () => GraphicsOptions.ModeIndex, GraphicsOptions.SetMode),
-                Drop("QUALITY", () => QualitySettings.names[QualitySettings.GetQualityLevel()],
-                    () => new List<string>(QualitySettings.names), QualitySettings.GetQualityLevel, GraphicsOptions.SetQuality),
+                Drop("QUALITY", () => GraphicsOptions.QualityName, GraphicsOptions.QualityNames,
+                    () => GraphicsOptions.QualityNames().IndexOf(GraphicsOptions.QualityName), i => GraphicsOptions.SetQuality(GraphicsOptions.QualityNames()[i])),
 
                 Choice("ANTI-ALIASING", GraphicsOptions.AntiAliasing, GraphicsOptions.AaNames),
                 When(taa, Choice("TAA QUALITY", GraphicsOptions.TaaQuality, GraphicsOptions.TaaNames)),

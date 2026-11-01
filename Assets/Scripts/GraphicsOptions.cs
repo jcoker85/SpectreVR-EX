@@ -32,6 +32,17 @@ namespace SpectreEX
         public static readonly string[] ModeNames = { "Windowed", "Borderless", "Fullscreen" };
         static readonly FullScreenMode[] Modes = { FullScreenMode.Windowed, FullScreenMode.FullScreenWindow, FullScreenMode.ExclusiveFullScreen };
 
+        // Picking Ultra takes every setting to the top of its range in the menu; they can still be changed after
+        const string Ultra = "Ultra";
+        static readonly Dictionary<string, int> UltraValues = new Dictionary<string, int>
+        {
+            { AntiAliasing, AaDlss }, { DlssMode, 0 },
+            { RayTracing, 1 }, { Shadows, 1 },
+            { Reflections, 1 }, { ReflectionDistance, 500 }, { ReflectionSamples, 8 }, { ReflectionBounces, 4 }, { ReflectionDenoise, 1 }, { ReflectionFull, 1 },
+            { Lighting, 1 }, { LightingDistance, 200 }, { LightingSamples, 8 }, { LightingBounces, 4 }, { LightingDenoise, 1 },
+            { Occlusion, 1 }, { OcclusionDistance, 100 }, { OcclusionSamples, 16 }, { OcclusionDenoise, 1 },
+        };
+
         static readonly Dictionary<string, int> values = new Dictionary<string, int>();
         static int reflectionTier, lightingTier, occlusionTier;
         static float occlusionIntensity;
@@ -80,11 +91,30 @@ namespace SpectreEX
             Screen.fullScreenMode = Modes[index];
         }
 
-        public static void SetQuality(int index)
+        // Ultra is the last level in the project, so existing saved levels keep their numbers, but it
+        // leads the list: best first
+        public static List<string> QualityNames()
         {
+            var names = new List<string>(QualitySettings.names);
+            names.Remove(Ultra);
+            names.Insert(0, Ultra);
+            return names;
+        }
+
+        public static string QualityName => QualitySettings.names[QualitySettings.GetQualityLevel()];
+
+        public static void SetQuality(string name)
+        {
+            int index = System.Array.IndexOf(QualitySettings.names, name);
             PlayerPrefs.SetInt("gfx.quality", index);
-            PlayerPrefs.Save();
             ApplyQuality(index);
+            if (name == Ultra)
+                foreach (var top in UltraValues)
+                {
+                    values[top.Key] = top.Value;
+                    PlayerPrefs.SetInt(top.Key, top.Value);
+                }
+            PlayerPrefs.Save();
             Apply();
         }
 
