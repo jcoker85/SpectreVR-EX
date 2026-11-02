@@ -104,7 +104,7 @@ Order each tick: move -> `_CHECK_TANK_COLLIDE` (robots) -> `_CHECK_OBJ_COLLIDE` 
 
 - Player `_DAMAGE` counts up to `_MAX_DAMAGE` (60 for Balance); 0x14 below max switches the hit
   sound to the danger one (9).
-- **Shots hitting the player add weapon damage × 10** (cannon = 1 -> 10, so Balance dies to 6).
+- **Shots hitting the player add weapon damage × 10** (cannon = 1 -> 10). The craft goes only past its limit (`_MAX_DAMAGE < _DAMAGE`, `JG` at 1050:4CE9), so Balance survives six hits and dies on the seventh.
   Collision and acid damage are added raw.
 - Robots: `strength` from bval vs raw weapon damage (cannon 1).
 - Matrix `wval` (CENTRAL): id 0 cannon dmg 1 ammo 1; 1: 2/10; 2: 15/3; 7: 8/0; 10: 3/6;
@@ -226,7 +226,7 @@ Each robot (`_TANKS` + i×0x22; tank 0 is the player) has: +0 object, +8 mode, +
   mode 3 the first one processed (not a Flyer) is switched to 3.
 - Stunned (+0x1E > 0): counts down, doesn't move (Super Tanks and Robot Tanks flash).
 - Dispatch: 35/45 `_CIRCLE_SPOT`; a Robot Tank among the first five robots with a live flag of its
-  own index `_PATROL`s that flag; Flyers (22) `_PATROL` the player; everyone else `_CHASE_PLAYER`.
+  own index `_PATROL`s that flag (robot 1 has `_FLAG_OBJ[1]`, as `_MOVE_TANKS` starts at 0x562A, so flag 0 has no guard); Flyers (22) `_PATROL` the player; everyone else `_CHASE_PLAYER`.
 - After moving: clamp to ±0x40000.
 - Dying (+0x5F counting to 10): then `_REPLACE_TANK` - if regenerations are left, one is used and
   the robot comes back at once at a new hidden spot (flag spot for 20/35/45) with full strength.
@@ -248,8 +248,8 @@ Each robot (`_TANKS` + i×0x22; tank 0 is the player) has: +0 object, +8 mode, +
 - Speed = enemy speed; moves speed × cos/sin table (±256) units a tick, so speed 5 ≈ 0.4 m/tick.
 - Target heading: straight at the player, except Super Tanks lead their aim (`_GUESS_AT`: the
   player's position minus d/0x2000 × cos/sin of the player's model heading × its speed, i.e. ahead
-  of it given the model's +0x80) and Cyber Mud aims at a point 0x5A00 along the player's model
-  heading (`_BLOCK_AT` adds, so behind the craft), facing the player once within d 0x19.
+  of it given the model's +0x80) and Cyber Mud aims at a point 0x5A00 along the player's object
+  heading (`_BLOCK_AT` adds, and that heading is the way the craft is going, so it heads you off), facing the player once within d 0x19.
 - Back off: robots with no collide damage reverse (and steer by heading + 0x80) when d < 0x40;
   they stop once d < 0x60 and aligned within 8.
 - Smart Acid (23) / Smart Wall (24): never back off; a timer (+0x6F) reloads to 0x36-0x47 with
@@ -483,8 +483,8 @@ Measured with collisions off, Balance craft, at 10 / 30 / 59 / 117 / 128 fps: sp
 ## Compared with the running original (Easy, textures off)
 
 - Matches: yellow boxes and pyramids, red robots with white wings, five red debris pieces, green craft with white wings, cyan wings dump filling the F gauge.
-- Flags are the built-in FLAG template in the object colour, about the craft's height. Dumps are one still flat square 0xC00 units across; the manual's "undulating" isn't in the code or on screen.
-- De-res: object +0xD21 (+0x5F, the dying count) or `_PLAYER_DE_RES` is `_DRAW_POLY`'s second argument. Each scanline slides by a sine of the row times (amount + width / 8), with jitter. DeRes.cs does this with lines across the view. The player reaches 0x5A on death; `_D_P_DE_RES` -1 takes it to -5 and back after a teleport or hyperspace.
+- Flags are the built-in FLAG template in the object colour, about the craft's height. Dumps are one flat square 0xC00 units across at rest. `_MOVE_THINGS` raises their +0x65 by 0x10 a tick, 0x100 to 0x200 and round again, and `_ROTATE_OBJECT_POINTS` scales by it, so they pulse to twice the size: the manual's "undulating". Read from the code, not yet measured. Jump pads hold 0x200, double size; a fading shot's +0x65 grows 0x20 a tick. None of this changes the collision box.
+- De-res: object +0xD21 (+0x5F, the dying count) or `_PLAYER_DE_RES` is `_DRAW_POLY`'s second argument. Each scanline slides by a sine of the row times (amount + width / 8), with jitter. DeRes.cs does this with lines across the view. The player reaches 0x5A on death; `_D_P_DE_RES` -1 takes it to -6 and back over 12 ticks after damage. Only the damage paths set it: the four writes of -1 in the EXE are acid, `_DO_COLLIDE_DAMAGE` and `_MOVE_SHOTS`'s two, so a teleport or hyperspace doesn't ripple.
 - Pickups are box overlaps: `_CUBE_COLLIDE` for flags, `_FLAT_CUBE_COLLIDE` (no height) for dumps and jump pads, at their true sizes.
 - Demo: "Demo Mode / Press A Key" stays on screen and the view moves on every 126 ticks.
 - With bit 4 of `_TEXTURES` on, the demo stayed on a black screen for 40+ seconds under DOSBox-X. Not investigated; the harness needs textures off.
@@ -549,7 +549,7 @@ Checked line by line: `_PLAY_LEVEL`, `_DO_PLAYER_MOVE`, `_HIT_A_GATE`, `_DO_COLL
   - The wreck: while `_DEAD_TIMER` runs, `_DO_PLAYER_MOVE` and everything after it go on with `_SPEED` 0. It turns, jumps, fires, hyperspaces, rides pads, collects flags and dumps and takes shots, its shields stay up until the next life, and the bonus keeps falling. If the last flag or a jump pad ends the level before the timer does, no life is lost and the level moves on. If the timer gets there first, the life goes and the level ends just after it restarts. Shields also go at every new level, as `_ZAP_OBJECTS` clears them.
   - The view centre is `_TY` = height - (height - 50) / 2, 290 of 530 rows down at the reference window. The remake shifts its lens and crosshair down by the same 4.7% of the screen's height. Banners stay mid-screen.
 - `_EYE_H` for overhead starts at 500 (40 m), but the demo sets it to 750 (60 m) and nothing sets it back, so that's what the original shows after any demo and all the captured frames. The remake starts at 750.
-- Hit ripple: `_DRAW_OBJS` hands `_PLAYER_DE_RES` to every filled face in view 0, and only to the craft in the others, so from the cockpit a hit, teleport or hyperspace ripples the obstacles, flags, dumps, jump pads, robots, shots and shields, including shots fired during it. The floor dots and sky aren't polygons, so they stay still. Textured faces ripple in plain grey.
+- Hit ripple: `_DRAW_OBJS` hands `_PLAYER_DE_RES` to every filled face in view 0, and only to the craft in the others, so from the cockpit a hit ripples the obstacles, flags, dumps, jump pads, robots, shots and shields, including shots fired during it. The floor dots and sky aren't polygons, so they stay still. Textured faces ripple in plain grey.
 - Own craft from the cockpit: `_P_TO_EYE` drops an object if any point has depth below 1, and the craft surrounds the eye. There's no separate hide. The remake switches the model off in that view, so ray tracing can't show it either.
 
 Not ported, or left: mouse and joystick use the remake's modern bindings by choice, not the original's centre zones (held past a zone edge is full turn or thrust);
@@ -562,6 +562,8 @@ Things the remake does differently on purpose, by the owner's choice, rather tha
 - **Graphics and display:** HDRP with ray tracing, DLSS and TAA, the star skybox, and the HUD at 16:9.
 - **Movement:** smooth movement between the original's ticks (see "Remake timing").
 - **Controls and settings:** the Shift + Options menu, with rebinding for keyboard, mouse and gamepad.
+- **HUD layout:** placement, fonts and styling are the remake's own, so the radar sits bottom right and the weapon message at the bottom. What the HUD shows and how it behaves follows `_SHOW_SCORE` and `_SHOW_RADAR`.
+- **Esc:** suspends to the menu and resumes. The original's Esc ends the game with Game Over and, after a finished level, the score table.
 
 ## Deliberate fixes to the original's intent
 
@@ -574,6 +576,12 @@ Where the original looks like an oversight rather than a design, the remake does
 - A grenade or bomb blast stuns and scores only robots in range, not the whole map.
 - Top-heavy obstacles (the trees, shapes 10004 and 10007): the original's one box per shape blocks at the width of the top. The remake gives a narrow stem its own box. Each part of a multi-part shape has its own box in both.
 - Damage sounds use the player's real maximum rather than the fixed 0x1E in the splash code.
+- Extra lives: `_END_LEVEL` awards a life for its bonus but leaves `_OLD_BONUS_SCORE` alone, so `_PLAY_LEVEL`'s next frame awards it again. The remake gives one.
+- A robot that blocks you shoves you away from the robot. The original indexes the world objects by the tank number, so the shove comes from an unrelated object.
+- Turrets: `(wait * interval) / 0x78` is 16-bit (`IMUL`, `CWD`, `IDIV`), so at the edge of a Turret's range, about 70 m, it overflows and they fire every tick. The remake doesn't overflow.
+- A robot's blast only sounds and ripples for the player in range. The original does both at any distance.
+- Player shots always start at the craft's drawn height. In the original a second tick in the same frame fires from floor level, so the height depends on the frame rate.
+- A level whose grid has fewer entries than its flags can't be finished in the original (`_FLAGS_LEFT` is set before `_LOAD_WRLD` trims `_MAX_FLAGS`). No bundled grid is that short. The remake's fallback for a grid with none places generated flags.
 - Touching a robot with no collide damage that doesn't block is silent. `_DO_COLLIDE_DAMAGE` plays the hit sound and de-res for it anyway, which reads as being hit when nothing happened.
 - Collision boxes turn with the object. `_CUBE_COLLIDE` tests the axis-aligned box around each rotated object, so a turned obstacle blocks at empty corners, and the box around the craft changes size as it turns. That corner space would be an invisible wall against the remake's solid models.
 - The path probe tests a true overlap of two boxes. `_RECTANGLE_COLLIDE` measures from the object's corner with its full size rather than its centre and half size, which pushes the test off to one side of the object.
@@ -582,7 +590,24 @@ Back-to-back panels are not a change: the billboards (10106, 10107) have one fac
 
 Checked and needing no change: `_TIME_ALLOWED` counts the player's slot in `_MAX_TANK` (`_LOAD_WAVE` adds it as an enemy of type 6) and `_MAX_SUPER_TANKS` is never set, so the remake's formula is right. Level 1 differs between runs because the robot count is random: Bonus 360 is two robots, 400 three. `_REPLACE_TANK` has no de-res: a robot just reappears, as in the remake.
 
-Left alone: a splash's sound uses a fixed `_DAMAGE < 0x1E` test.
+## Full audit, 2026-11-02
+
+Everything was compared with the decompile again, and the radar and HUD for the first time. Differences fixed:
+
+- Craft hit box: the first part's bounds with a quarter off the front (`_ADD_ENEMY`), replacing the old 4.5 x 1.5 x 4.5 m box.
+- Robots read the object's height, 0x500 less than `local_1a`, so rising shots start 0x600 above `_MIN_Z`, "on the ground" reaches 0x500 up, and Flyers dive to 0x300 over the floor-level height.
+- Robots aren't filtered under the floor, so Slicers bite there. A Slicer's box is also lower for homing shots.
+- Floor pads have no height: only a craft at floor level touches them, and path probes reach down to them. Shots low enough meet them too.
+- Collected flags keep their slots: Robot Tanks keep their own flag, and `_PLACE_NEAR_FLAG` still cycles through taken ones.
+- `_REPLACE_TANK` and `_PLACE_TANKS` change only x and y.
+- Shots collide at the size of their current shape (`_COPY_SIZE`). Orbit shields count in Accuracy.
+- `_CENTER_X` and `_CENTER_Y` shake the view, radar and crosshair during a bounce.
+- P isn't a freeze: `local_34` stops the level clock, hyperspace charge, robots and shots, but the craft falls and floats, pickups work and the death and level-end timers run.
+- No tip on later laps. Game Over spins in (`_SPIN_UP`). The score table needs a finished level. The menu runs the demo after 0x21C idle ticks, 0x10E once it has run.
+
+Radar (`_SHOW_RADAR`): about +-0x7C000 units in a square. Dumps and jump pads are points; robots are points except Turret G, Slicer S, Flyer H, Smart Acid A, Smart Wall M; gates T, up transports U, down transports D (letter pairing from the code's order, not seen on screen, except Slicer); flags off when `_LEVEL_TIMER & 0xC` is 0. Colours are the object's ramp + 0xC. Cloaked Tanks don't show, dying robots do.
+
+Not ported: the green dumps' full repair for the names Moses Ma, MattHarm and Lucky 13 needs the network name, which comes with multiplayer.
 
 ## Validation pass (no eyes on the original)
 

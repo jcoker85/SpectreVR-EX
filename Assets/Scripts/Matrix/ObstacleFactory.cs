@@ -86,8 +86,9 @@ namespace SpectreEX.Matrix
             if (pad)
             {
                 col.isTrigger = true;
-                col.center = new Vector3(bounds.center.x, 1.5f, bounds.center.z);
-                col.size = new Vector3(Mathf.Max(1.5f, bounds.size.x), 3f, Mathf.Max(1.5f, bounds.size.z));
+                // These shapes have no height: only a craft on the floor touches them, not one jumping over
+                col.center = new Vector3(bounds.center.x, 0f, bounds.center.z);
+                col.size = new Vector3(Mathf.Max(1.5f, bounds.size.x), 0.02f, Mathf.Max(1.5f, bounds.size.z));
             }
             else
             {

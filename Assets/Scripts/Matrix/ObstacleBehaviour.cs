@@ -29,11 +29,11 @@ namespace SpectreEX.Matrix
 
         void Update()
         {
-            if (spinner != null) spinner.Rotate(spinAxis, spinSpeed * Time.deltaTime, Space.Self);
+            if (spinner != null) spinner.Rotate(spinAxis, spinSpeed * GameManager.GameDelta, Space.Self);
             if (Time.time < hitSpinUntil)
             {
                 var model = transform.Find("Model");
-                if (model != null) model.Rotate(0f, -16f * 360f / 256f * PlayerMotor.TickRate * Time.deltaTime, 0f, Space.Self);
+                if (model != null) model.Rotate(0f, -16f * 360f / 256f * PlayerMotor.TickRate * GameManager.GameDelta, 0f, Space.Self);
             }
         }
     }

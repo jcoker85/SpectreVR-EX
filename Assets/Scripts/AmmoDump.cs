@@ -23,6 +23,24 @@ namespace SpectreEX
 
         public int Ramp => KindRamps[(int)kind];
 
+        // _MOVE_THINGS: +0x65 rises 0x10 a tick from 0x100 to 0x200 and starts again, the square growing
+        // to twice its size and back. Its collision box stays the true size.
+        float pulse = 0x100;
+        Vector3 tileScale;
+
+        void Awake()
+        {
+            if (tiles != null && tiles.Length > 0) tileScale = tiles[0].localScale;
+        }
+
+        void Update()
+        {
+            pulse += 0x10 * OriginalMath.TickRate * GameManager.GameDelta;
+            if (pulse > 0x200) pulse = 0x100;
+            float size = pulse / 0x100;
+            foreach (var t in tiles) t.localScale = new Vector3(tileScale.x * size, tileScale.y, tileScale.z * size);
+        }
+
         public void SetKind(Kind k)
         {
             kind = k;

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using SpectreEX.Matrix;
 
 namespace SpectreEX.Hud
 {
@@ -24,7 +25,8 @@ namespace SpectreEX.Hud
         const float Margin = 12f;
         const int LabelSize = 9;
         const int ValueSize = 17;
-        const float RadarRange = 140f;
+        const float MaxAmmoBar = 27f;     // 50 rounds, the most a craft can carry
+        const float RadarRange = 159f;   // _RADAR_W / _RADAR_DW: about 0x7C000 units either way, in a square
         const float RadarRadius = 56f;
 
         RectTransform screenRoot;
@@ -36,11 +38,15 @@ namespace SpectreEX.Hud
         RectTransform radarRoot;
         readonly List<Image> radarDots = new List<Image>();
         GameObject crosshair, bannerRoot, statsRoot, demoRoot;
-        Text bannerTitle, bannerTip, message, hint;
+        Text bannerTitle, bannerTip, message, gameOver;
         readonly List<Text> recapWords = new List<Text>();
         readonly List<RecapWedge> recapWedges = new List<RecapWedge>();
         readonly Dictionary<RectTransform, Vector2> fullSizes = new Dictionary<RectTransform, Vector2>();
-        float messageUntil, hintUntil;
+        float messageUntil;
+        RectTransform damageGroup, gameOverRoot, radarCornerRoot;
+        Image hFillImg;
+        Vector2 crosshairAt, radarAt;
+        readonly List<Text> radarLetters = new List<Text>();
 
         GameManager gm;
         ViewCamera view;
@@ -56,8 +62,8 @@ namespace SpectreEX.Hud
                 gm.ShowBanner += OnBanner;
                 gm.ShowRecap += OnRecap;
                 gm.HideOverlays += HideOverlays;
+                gm.GameOverSpin += OnGameOverSpin;
             }
-            hintUntil = Time.time + 12f;
         }
 
         // ---------- construction ----------
@@ -83,10 +89,13 @@ namespace SpectreEX.Hud
             Label(left, "DAMAGE", 0, r2);
             Label(left, "AMMO", 0, r3);
             livesValue = Value(left, 66, r1);
-            Frame(left, 66, r2 - 6, 50, 12, FrameWhite);
-            damageFill = Fill(left, 67.5f, r2 - 4.5f, 47, 9, AlertRed, out _, horizontal: true);
-            ammoFill = Fill(left, 66, r3 - 5, 22, 10, DigitGreen, out ammoFillImg, horizontal: true);
-            ammoValue = Value(left, 93, r3);
+            // The bars are as long as the craft's capacity (_SETUP_SCN, _SHOW_SCORE)
+            damageGroup = NewRect("Damage", left);
+            damageGroup.anchoredPosition = new Vector2(66f, 0f);
+            Frame(damageGroup, 0, r2 - 6, 50, 12, FrameWhite);
+            damageFill = Fill(damageGroup, 1.5f, r2 - 4.5f, 47, 9, AlertRed, out _, horizontal: true);
+            ammoFill = Fill(left, 66, r3 - 5, MaxAmmoBar, 10, DigitGreen, out ammoFillImg, horizontal: true);
+            ammoValue = Value(left, 96, r3);
 
             // Beside it: SCORE / LEVEL / BONUS
             var mid = Group("Score", new Vector2(0f, 1f), new Vector2(Margin + 178f, -Margin));
@@ -99,6 +108,8 @@ namespace SpectreEX.Hud
 
             // Bottom-right corner: radar (tick marks around an invisible ring, dots for everything nearby)
             var radarCorner = Group("RadarCorner", new Vector2(1f, 0f), new Vector2(-Margin, Margin));
+            radarCornerRoot = radarCorner;
+            radarAt = radarCorner.anchoredPosition;
             float rd = 2 * RadarRadius;
             radarRoot = NewRect("Radar", radarCorner);
             Place(radarRoot, -rd, -rd, rd, rd);
@@ -123,7 +134,7 @@ namespace SpectreEX.Hud
 
             float fx = wx - 24, hx = wx - 44;
             Frame(right, hx, 2, 12, 46, FrameWhite);
-            hFill = Fill(right, hx + 1.5f, 3.5f, 9, 43, DigitGreen, out _, horizontal: false);
+            hFill = Fill(right, hx + 1.5f, 3.5f, 9, 43, DigitGreen, out hFillImg, horizontal: false);
             Frame(right, fx, 2, 12, 46, FrameWhite);
             fFill = Fill(right, fx + 1.5f, 3.5f, 9, 43, FlagBlue, out _, horizontal: false);
             MakeText(right, "H", hx + 6, r3 + 4, LabelSize, FrameWhite, TextAnchor.MiddleCenter);
@@ -134,10 +145,12 @@ namespace SpectreEX.Hud
             centre.SetAsFirstSibling();   // under the readouts, which stay up over the recap's blank view
             var ch = NewRect("Crosshair", centre);
             crosshair = ch.gameObject;
-            ch.anchoredPosition = new Vector2(0f, -ViewCamera.CentreDrop * 480f);   // _SHOW_RADAR draws it at _TY
-            CrossLine(ch, new Vector2(0, 38), new Vector2(0, 52));
-            CrossLine(ch, new Vector2(-58, 0), new Vector2(-42, 0));
-            CrossLine(ch, new Vector2(42, 0), new Vector2(58, 0));
+            crosshairAt = new Vector2(0f, -ViewCamera.CentreDrop * 480f);   // _SHOW_RADAR draws it at _TY
+            ch.anchoredPosition = crosshairAt;
+            // 29-36 rows above the centre and 30-40 columns out, two rows up, on the 530-row window
+            CrossLine(ch, new Vector2(0, 26), new Vector2(0, 33));
+            CrossLine(ch, new Vector2(-36, 2), new Vector2(-27, 2));
+            CrossLine(ch, new Vector2(27, 2), new Vector2(36, 2));
 
             var demo = NewRect("Demo", centre);
             demoRoot = demo.gameObject;
@@ -150,6 +163,10 @@ namespace SpectreEX.Hud
             bannerTitle = MakeText(banner, "", 0, 50, 54, DigitGreen, TextAnchor.MiddleCenter);
             bannerTip = MakeText(banner, "", 0, 142, 16, AlertRed, TextAnchor.MiddleCenter);
             bannerRoot.SetActive(false);
+
+            gameOverRoot = NewRect("GameOver", centre);
+            gameOver = MakeText(gameOverRoot, "GAME OVER", 0, 0, 54, DigitGreen, TextAnchor.MiddleCenter);
+            gameOverRoot.gameObject.SetActive(false);
 
             var stats = NewRect("Stats", centre);
             statsRoot = stats.gameObject;
@@ -179,10 +196,9 @@ namespace SpectreEX.Hud
             }
             statsRoot.SetActive(false);
 
-            // Bottom: transient messages and the opening controls hint
+            // Bottom: the weapon message
             var bottom = Group("Bottom", new Vector2(0.5f, 0f), Vector2.zero);
             message = MakeText(bottom, "", 0, -60, 13, AlertRed, TextAnchor.MiddleCenter);
-            hint = MakeText(bottom, "ARROWS DRIVE  SPACE FIRE  TAB VIEW  BKSP HYPERSPACE  J JUMP", 0, -Margin - 6, 8, LabelGreen, TextAnchor.MiddleCenter);
         }
 
         RectTransform NewRect(string name, Transform parent)
@@ -321,6 +337,24 @@ namespace SpectreEX.Hud
             bannerTip.text = Seg(tip ?? "");
         }
 
+        // _SPIN_UP: turning and growing to full size, its height swinging with a cosine, then at rest
+        void OnGameOverSpin(int step)
+        {
+            bannerRoot.SetActive(false);
+            statsRoot.SetActive(false);
+            gameOverRoot.gameObject.SetActive(true);
+            if (step < 0)
+            {
+                gameOverRoot.localRotation = Quaternion.identity;
+                gameOverRoot.localScale = Vector3.one;
+                return;
+            }
+            int turn = step & 0x1F;
+            float size = step / 32f;
+            gameOverRoot.localRotation = Quaternion.Euler(0f, 0f, turn * 8 * OriginalMath.StepsToDegrees);
+            gameOverRoot.localScale = new Vector3(size, size * OriginalMath.Cos[(turn << 5) & 0xFF] / 256f, 1f);
+        }
+
         // _SHOW_RECAP / _SHOW_TRIANGLE, measured off the running original: x in SCALE_X units on a 320-wide
         // screen (wedge from 100, value * step / 16 long, rating at 246), lines and wedge height in its
         // 532-wide window's pixels (30 apart from the middle of the screen, 20 high)
@@ -361,6 +395,7 @@ namespace SpectreEX.Hud
         {
             bannerRoot.SetActive(false);
             statsRoot.SetActive(false);
+            gameOverRoot.gameObject.SetActive(false);
         }
 
         public void Flash(string text, float seconds = 1.5f)
@@ -381,19 +416,23 @@ namespace SpectreEX.Hud
             levelValue.text = gm.Level.ToString("00");
             timeValue.text = gm.Bonus.ToString("0000");   // the original shows the bonus counting down
 
+            damageGroup.localScale = new Vector3(p.Health.maxShields / 60f, 1f, 1f);
             SetFill(damageFill, p.Health.Damage01, true);
             int ammo = p.Weapon.Ammo;
-            float ammoT = p.Weapon.maxAmmo > 0 ? (float)ammo / p.Weapon.maxAmmo : 0f;
-            bool lowAmmo = ammo <= p.Weapon.lowAmmoWarning;
-            SetFill(ammoFill, ammoT, true);
-            ammoFillImg.color = lowAmmo ? AlertRed : DigitGreen;
+            SetFill(ammoFill, ammo / 50f, true);
+            ammoFillImg.color = ammo < 10 ? AlertRed : DigitGreen;   // the digits stay as they are
             ammoValue.text = ammo.ToString("00");
-            ammoValue.color = lowAmmo ? AlertRed : DigitGreen;
 
-            SetFill(hFill, p.HyperspaceEnergy, false);
-            SetFill(fFill, p.Motor.Floating01, false);   // F: wings time left, as the original draws it
+            // _SHOW_SCORE: both in 25 steps and empty at the bottom; H is red until it's full
+            int hyper = p.Motor.Hyper >> 8, floating = p.Motor.Floating / 0x36;
+            SetFill(hFill, hyper > 1 ? hyper / 25f : 0f, false);
+            hFillImg.color = hyper == 0x19 ? DigitGreen : AlertRed;
+            SetFill(fFill, floating > 2 ? floating / 25f : 0f, false);
 
-            if (ammo == 0 && gm.Playing && !p.Health.IsDead) Flash("OUT OF AMMO - FIND AN AMMO DUMP", 0.2f);
+            // The bounce shake reaches the radar and crosshair, always the one way (_SHOW_RADAR)
+            var shake = new Vector2(-Mathf.Abs(p.Motor.CenterX), -Mathf.Abs(p.Motor.CenterY)) * 2.4f;
+            radarCornerRoot.anchoredPosition = radarAt + shake;
+            ((RectTransform)crosshair.transform).anchoredPosition = crosshairAt + shake;
 
             // The heavy weapon's icon, and "<name> Online" for three seconds after a change, as the original shows
             if (weaponIcon != null && shownWeapon != p.Weapon.AltWeapon)
@@ -407,10 +446,6 @@ namespace SpectreEX.Hud
 
             demoRoot.SetActive(gm.Demo && gm.Playing);
             message.enabled = Time.time < messageUntil;
-            hint.enabled = Time.time < hintUntil;
-            if (hint.enabled)
-                hint.text = $"{GameKeys.First(GameKeys.Forward)} DRIVE  {GameKeys.First(GameKeys.Fire)} FIRE  {GameKeys.First(GameKeys.NextView)} VIEW  " +
-                    $"{GameKeys.First(GameKeys.Hyperspace)} HYPERSPACE  {GameKeys.First(GameKeys.Jump)} JUMP";
             radarRoot.parent.gameObject.SetActive(view == null || view.mode == ViewMode.Internal || view.mode == ViewMode.External);   // _SHOW_RADAR
             if (crosshair != null) crosshair.SetActive(view == null || view.mode == ViewMode.Internal);
 
@@ -419,26 +454,77 @@ namespace SpectreEX.Hud
 
         void UpdateRadar(Transform me)
         {
-            int used = 0;
+            int used = 0, letters = 0;
             Quaternion inv = Quaternion.Inverse(Quaternion.Euler(0f, me.eulerAngles.y, 0f));
-            bool blink = (Time.time * 4f) % 1f < 0.55f;
+            Color Ramp(int colour) => SpectrePalette.Colour(colour + 0x0C);
 
-            foreach (var h in gm.Robots)
-                if (h != null && !h.IsDead && !h.hiddenFromRadar) Dot(ref used, me, inv, h.transform.position, AlertRed, 3f);
-            foreach (var f in gm.Flags)
-                if (f != null && blink) Dot(ref used, me, inv, f.transform.position, new Color(1f, 0.9f, 0.3f), 3f);
+            // _SHOW_RADAR's order: dumps, the first level's pads, robots, gates and transports, flags
             foreach (var d in gm.Dumps)
-                if (d != null) Dot(ref used, me, inv, d.transform.position, DigitGreen, 3f);
-            Dot(ref used, me, inv, me.position, FrameWhite, 2f);
+                if (d != null) Dot(ref used, me, inv, d.transform.position, Ramp(d.Ramp), 3f);
+            foreach (var p in gm.JumpPads)
+                if (p != null) Dot(ref used, me, inv, p.transform.position, Ramp(0x30), 3f);
+
+            // Five robot types show as letters. Cloaked Tanks don't show; a dying robot still does.
+            foreach (var r in gm.GetComponent<RobotDirector>().Robots)
+            {
+                if (r == null || !r.visible || r.Health.hiddenFromRadar) continue;
+                Color c = Ramp(BuiltinShapes.TypeColour(r.matrixType));
+                char letter = r.matrixType switch { 20 => 'G', 21 => 'S', 22 => 'H', 23 => 'A', 24 => 'M', _ => ' ' };
+                if (letter == ' ') Dot(ref used, me, inv, r.transform.position, c, 3f);
+                else Letter(ref letters, me, inv, r.transform.position, c, letter);
+            }
+            foreach (var o in gm.Obstacles)
+            {
+                var gate = o != null ? o.GetComponent<ObstacleBehaviour>() : null;
+                if (gate == null) continue;
+                char letter = gate.kind switch
+                {
+                    ObstacleBehaviour.Kind.Teleport => 'T',
+                    ObstacleBehaviour.Kind.UpTransport => 'U',
+                    ObstacleBehaviour.Kind.DownTransport => 'D',
+                    _ => ' ',
+                };
+                if (letter != ' ') Letter(ref letters, me, inv, o.transform.position, Ramp(0x30), letter);
+            }
+            // Flags go dark for 4 ticks in 16 (_LEVEL_TIMER & 0xC)
+            if ((gm.LevelTicks & 0xC) != 0)
+                foreach (var f in gm.Flags)
+                    if (f != null) Dot(ref used, me, inv, f.transform.position, Ramp(0x50), 3f);
+            Dot(ref used, me, inv, me.position, SpectrePalette.Colour(0x2F), 3f);
 
             for (int i = used; i < radarDots.Count; i++) radarDots[i].enabled = false;
+            for (int i = letters; i < radarLetters.Count; i++) radarLetters[i].enabled = false;
+        }
+
+        // Inside the radar's square, or not shown at all
+        static bool OnRadar(Transform me, Quaternion inv, Vector3 world, out Vector2 pos)
+        {
+            Vector3 rel = inv * (world - me.position);
+            pos = new Vector2(rel.x, rel.z) / RadarRange * RadarRadius;
+            return Mathf.Abs(pos.x) < RadarRadius && Mathf.Abs(pos.y) < RadarRadius;
+        }
+
+        void Letter(ref int used, Transform me, Quaternion inv, Vector3 world, Color c, char letter)
+        {
+            if (!OnRadar(me, inv, world, out var pos)) return;
+            if (used >= radarLetters.Count)
+            {
+                var t = MakeText(radarRoot, "", 0f, 0f, 7, c, TextAnchor.MiddleCenter);
+                var rt = t.rectTransform;
+                rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
+                rt.sizeDelta = new Vector2(12f, 12f);
+                radarLetters.Add(t);
+            }
+            var text = radarLetters[used++];
+            text.enabled = true;
+            text.color = c;
+            text.text = letter.ToString();
+            text.rectTransform.anchoredPosition = pos;
         }
 
         void Dot(ref int used, Transform me, Quaternion inv, Vector3 world, Color c, float size)
         {
-            Vector3 rel = inv * (world - me.position);
-            Vector2 pos = new Vector2(rel.x, rel.z) / RadarRange * RadarRadius;
-            if (pos.magnitude > RadarRadius) return;
+            if (!OnRadar(me, inv, world, out var pos)) return;
 
             if (used >= radarDots.Count)
             {

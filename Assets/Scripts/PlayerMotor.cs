@@ -40,9 +40,15 @@ namespace SpectreEX
         public int Floating { get; private set; }
         public float Floating01 => Floating / (float)FloatMax;
         public bool OnGround => z <= minZ;
-        public bool Airborne => z > minZ + 0x100;   // robots switch to rising shots (_CHASE_PLAYER)
+        // Robots read the object's height, which is 0x500 less than this motor's: rising shots above
+        // _MIN_Z + 0x100 (_CHASE_PLAYER), and "on the ground" up to _MIN_Z (_PATROL)
+        public bool Airborne => z - GroundZ > minZ + 0x100;
+        public bool LowForRobots => z - GroundZ <= minZ;
         public bool Under => under;
         public long ZUnits => z;                     // height in original units, the floor at GroundZ
+        public int CommandSpeed { get; private set; }   // _SPEED, forward positive: what the craft is told to do, blocked or not
+        public int CenterX { get; private set; }         // _CENTER_X / _CENTER_Y: the view's shake in a bounce, in 320x200 pixels
+        public int CenterY { get; private set; }
         public Vector3 SimPosition => curPos;        // the latest step's position (the transform is interpolated)
         public Vector3 TickDelta => tickEndPos - lastTickEndPos;
         // The heading in the robots' frame (0 = +X, 0x40 = +Z): this motor's heading points along
@@ -192,7 +198,7 @@ namespace SpectreEX
         void Step(bool tickEnds)
         {
             int speed = throttle > 0.3f ? ThisSpeed : throttle < -0.3f ? -ThisSpeed : 0;
-            if (Floating > 0) speed += speed >> 2;
+            if (Floating > 0) speed -= -speed >> 2;   // forward is negative in the original, so this rounds its way
             int turnStep = 0;
             if (Mathf.Abs(turn) > 0.3f)
             {
@@ -217,6 +223,7 @@ namespace SpectreEX
                 if (tickEnds && --spinTimer < 0) spinRate = spinTimer = 0;
             }
 
+            CommandSpeed = speed;
             int startHeading = fineHeading;
             fineHeading = (fineHeading + turnStep + FineHeadings) % FineHeadings;
 
@@ -431,6 +438,10 @@ namespace SpectreEX
                 }
             }
 
+            // _PLAY_LEVEL shakes the view by this much while a bounce runs
+            CenterX = (bounceI - Random.Range(0, bounceI * 2)) >> 6;
+            CenterY = (bounceI - Random.Range(0, bounceI * 2)) >> 6;
+
             // Wings: lift toward hover height (a little lower while moving), with a wobble and drag
             if (Floating > 0)
             {
@@ -454,7 +465,9 @@ namespace SpectreEX
                 Sfx.Play(Snd.TimeTick);
             }
 
-            if (Hyper < HyperMax) Hyper = Mathf.Min(HyperMax, Hyper + HyperRecharge);
+            // Paused, the craft still falls and floats but this stops (_PLAY_LEVEL's local_34)
+            bool paused = GameManager.Instance != null && GameManager.Instance.Paused;
+            if (Hyper < HyperMax && !paused) Hyper = Mathf.Min(HyperMax, Hyper + HyperRecharge);
         }
 
         // _WING_ANGLE: the wings' turn from the body, in heading steps (0x19 folded, -5 spread)
@@ -540,7 +553,6 @@ namespace SpectreEX
                 var target = o.GetComponent<ObstacleBehaviour>();
                 if (target == null || target.kind != ObstacleBehaviour.Kind.Teleport) continue;
 
-                DeRes.Play(gameObject, 5, 0.5f, true);
                 x = ToUnits(o.transform.position.x);
                 y = ToUnits(o.transform.position.z);
                 heading = target.heading + 0x40;
@@ -567,7 +579,6 @@ namespace SpectreEX
             lastGate = null;
             Sfx.Play(Snd.Warp);
             Snap();
-            DeRes.Play(gameObject, 5, 0.5f, true);
             gm.ResetRobotChase();
         }
 
@@ -584,7 +595,7 @@ namespace SpectreEX
         {
             Hyper = 0;
             Sfx.Play(Snd.Warp);
-            if (health != null) health.TakeRawDamage(health.Shields, true);
+            if (health != null) health.TakeRawDamage(health.Shields + 1, true);
         }
 
         // ---------- collision query ----------
@@ -625,14 +636,16 @@ namespace SpectreEX
                     if (gate == null) gate = ob;
                     continue;
                 }
-                if (c.isTrigger || under) continue;
+                if (c.isTrigger) continue;
 
+                // Robots aren't filtered under the floor: that's how a Slicer reaches you there
                 var e = c.GetComponentInParent<EnemyBase>();
                 if (e != null)
                 {
                     if (robot == null && e.Health != null && !e.Health.IsDead) robot = e;
                     continue;
                 }
+                if (under) continue;
                 var root = c.transform.root;
                 if (obstacles && solid == null && gm != null && gm.Obstacles.Contains(root.gameObject)) solid = root;
             }

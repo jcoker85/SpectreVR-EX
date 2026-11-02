@@ -34,7 +34,7 @@ namespace SpectreEX
 
         void Update()
         {
-            if (visual != null) visual.Rotate(0f, 2f * OriginalMath.StepsToDegrees * OriginalMath.TickRate * Time.deltaTime, 0f, Space.World);
+            if (visual != null) visual.Rotate(0f, 2f * OriginalMath.StepsToDegrees * OriginalMath.TickRate * GameManager.GameDelta, 0f, Space.World);
         }
 
         void OnTriggerEnter(Collider other)

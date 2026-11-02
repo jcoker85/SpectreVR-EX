@@ -47,7 +47,7 @@ namespace SpectreEX
         public static bool DisplayMovies = true;     // movie faces; the original has these off until you ask
         public static int DrawLevel = 1;             // floor dots: 0 none, 1-3 ever finer (_DRAW_LEVEL)
         public static bool SoundMuted;               // the in-game sound key
-        public static VehicleSpec Custom = new VehicleSpec("CUSTOM", 5, 5, 5);
+        public static VehicleSpec Custom = new VehicleSpec("CUSTOM", 8, 4, 3);   // _LOAD_CONFIG's first values
         public static int SelectedVehicle;           // 0 Balance, 1 Speedy, 2 Strong, 3 Custom
         public static string SelectedMatrix = "CENTRAL.MAT";   // file name chosen in the MATRIX dialog
         public static bool UseCustomMatrices;        // also offer .MAT files from the Matrices folders
@@ -85,7 +85,7 @@ namespace SpectreEX
             DisplayFilled = PlayerPrefs.GetInt("opt.filled", 1) == 1;
             DisplayTextures = PlayerPrefs.GetInt("opt.textures", 1) == 1;
             DisplayMovies = PlayerPrefs.GetInt("opt.movies", 1) == 1;
-            Custom = new VehicleSpec("CUSTOM", PlayerPrefs.GetInt("custom.speed", 5), PlayerPrefs.GetInt("custom.shields", 5), PlayerPrefs.GetInt("custom.ammo", 5));
+            Custom = new VehicleSpec("CUSTOM", PlayerPrefs.GetInt("custom.speed", 8), PlayerPrefs.GetInt("custom.shields", 4), PlayerPrefs.GetInt("custom.ammo", 3));
             SelectedVehicle = PlayerPrefs.GetInt("vehicle", 0);
             SelectedMatrix = PlayerPrefs.GetString("matrix", "CENTRAL.MAT");
             UseCustomMatrices = PlayerPrefs.GetInt("opt.custommatrix", 0) == 1;

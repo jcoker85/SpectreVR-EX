@@ -30,6 +30,7 @@ namespace SpectreEX
                 var face = new GameObject("Panels");
                 face.transform.SetParent(pad.spinner, false);
                 face.transform.localPosition = Vector3.up * 0.05f;
+                face.transform.localScale = new Vector3(2f, 1f, 2f);   // _BUILD_WORLD: +0x65 0x200, though it still collides at its true size
                 face.AddComponent<MeshFilter>().sharedMesh = shape.Body;
                 var r = face.AddComponent<MeshRenderer>();
                 r.shadowCastingMode = ShadowCastingMode.Off;
@@ -56,7 +57,7 @@ namespace SpectreEX
 
         void Update()
         {
-            if (spinner != null) spinner.Rotate(0f, -8f * OriginalMath.StepsToDegrees * OriginalMath.TickRate * Time.deltaTime, 0f);
+            if (spinner != null) spinner.Rotate(0f, -8f * OriginalMath.StepsToDegrees * OriginalMath.TickRate * GameManager.GameDelta, 0f);
             var cam = Camera.main;
             var label = transform.Find("Label");
             if (cam != null && label != null) label.rotation = Quaternion.LookRotation(label.position - cam.transform.position);

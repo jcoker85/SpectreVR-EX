@@ -50,8 +50,9 @@ namespace SpectreEX
             if (IsDead || points <= 0) return;
             Shields -= points;
             Damaged?.Invoke(points);
-            if (Shields <= 0) { Die(); return; }
-            if (team == Team.Player) DeRes.Play(gameObject, 5, 0.55f, true);   // _D_P_DE_RES: any damage at all
+            // The craft goes only past its limit (_MAX_DAMAGE < _DAMAGE), so exactly at it you're still flying
+            if (Shields < (team == Team.Player ? 0 : 1)) { Die(); return; }
+            if (team == Team.Player) DeRes.Play(gameObject, RipplePeak, RippleTicks / PlayerMotor.TickRate, true);   // _D_P_DE_RES: any damage at all
             if (!sound) return;
             if (team == Team.Player) Sfx.Play(PlayerHitSound);
             else Sfx.PlayAt(hitSound, transform.position);
@@ -62,6 +63,9 @@ namespace SpectreEX
         // Every hit, the killing one included (robots score per hit and are stunned by it)
         public System.Action<int> Damaged;
 
+        // _D_P_DE_RES -1 runs _PLAYER_DE_RES down past -5 and back up
+        public const int RipplePeak = 6, RippleTicks = 12;
+
         // The original swaps the hit sound (3) for the heavy-damage one (9) within 20 points of destruction
         const int DangerPoints = 20;
 
@@ -69,7 +73,9 @@ namespace SpectreEX
         {
             IsDead = true;
             Shields = 0;
-            if (team == Team.Player) Sfx.Play(deathSound); else Sfx.PlayAt(deathSound, transform.position);
+            // The craft's own sound comes from GameManager (0xD), and the last robot plays ALLBOTS instead (0x2C)
+            bool last = GameManager.Instance != null && GameManager.Instance.LastRobot;
+            if (team != Team.Player && !last) Sfx.PlayAt(deathSound, transform.position);
             SetAlive(false);
             if (GameManager.Instance != null) GameManager.Instance.OnDestroyed(this);
         }

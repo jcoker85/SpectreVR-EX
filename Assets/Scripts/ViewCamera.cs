@@ -40,6 +40,7 @@ namespace SpectreEX
 
         float demoClock, deadTimer;
         Health health;
+        PlayerMotor motor;
 
         // In demo mode the view moves on every 126 ticks (_PLAY_LEVEL), and a real game starts inside
         void NextMode() => mode = (int)mode >= 2 ? ViewMode.Internal : mode + 1;
@@ -78,6 +79,10 @@ namespace SpectreEX
             if (target == null) return;
 
             CycleInDemo();
+
+            // _CENTER_X / _CENTER_Y: a bounce shakes the whole picture, floor dots and sky included
+            motor = motor != null ? motor : target.GetComponent<PlayerMotor>();
+            if (motor != null) cam.lensShift = new Vector2(motor.CenterX / 320f, CentreDrop + motor.CenterY / 200f);
 
             if (GameKeys.NextView.Pressed) NextMode();
             float zoom = 0f;

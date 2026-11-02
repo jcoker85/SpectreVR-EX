@@ -52,6 +52,7 @@ namespace SpectreEX
 
         const int MaxLives = 9;
         const int DeadTicks = 50;          // _DEAD_TIMER: 0x9C3 at 0x32 a tick
+        const int DeadWaitTicks = DeadTicks - 1;   // its first 0x32 comes on the tick the craft goes
         const int LevelEndTicks = 18;      // _END_LEVEL_TIMER
         const int RepairTicks = 0x21C;     // _DAMAGE_TIMER: 10 points of damage mended every ~30 s
 
@@ -73,7 +74,10 @@ namespace SpectreEX
         public LevelPlan Plan { get; private set; }
         public MatrixFile CurrentMatrix { get; private set; }
 
+        // One slot per flag, null once collected: robots belong to a slot, and the spots stay in use
+        // after a flag has gone (_FLAG_OBJ, _PLACE_NEAR_FLAG)
         public readonly List<Flag> Flags = new List<Flag>();
+        readonly List<Vector3> flagSpots = new List<Vector3>();
         public readonly List<AmmoDump> Dumps = new List<AmmoDump>();
         public readonly List<Health> Robots = new List<Health>();
         public readonly List<GameObject> Obstacles = new List<GameObject>();
@@ -82,6 +86,7 @@ namespace SpectreEX
         public System.Action<string, string> ShowBanner;           // big title, red tip
         public System.Action<int[], int> ShowRecap;                 // Quickness, Accuracy, Avoidance out of 128; animation step
         public System.Action HideOverlays;
+        public System.Action<int> GameOverSpin;                     // a step of _SPIN_UP, or -1 for the words at rest
         public System.Action<int, int> ReturnedToMenu;              // final score and level (0 if abandoned)
         public System.Action Suspend;                               // Esc in game: show the menu over the paused game
 
@@ -97,6 +102,12 @@ namespace SpectreEX
         Coroutine session, down;
         float downAt;
         DemoPilot demoPilot;
+
+        // What animations go by: P stops the things _MOVE_THINGS moves, though the craft carries on
+        public static float GameDelta => Instance != null && Instance.Paused ? 0f : Time.deltaTime;
+        public bool LastRobot => robotsLeft == 1;
+        public static bool DemoHasRun { get; private set; }   // _ATTRACT_MODE stays set: the next idle demo comes sooner
+        bool levelFinished;   // _SPECTRE_MAIN's bVar2: the score table wants a finished level
 
         void Awake()
         {
@@ -130,6 +141,8 @@ namespace SpectreEX
             Paused = false;
             Suspended = false;
             Demo = demo;
+            if (demo) DemoHasRun = true;
+            levelFinished = false;
             demoPilot.enabled = demo;
             demoStartFrame = Time.frameCount;
             if (demo) startLevel = NextDemoLevel();
@@ -296,6 +309,7 @@ namespace SpectreEX
         // in, and the level's song starts from the top as the banner goes
         IEnumerator LevelBanner()
         {
+            Paused = false;   // P belongs to one run of _PLAY_LEVEL
             Sfx.Stop();
             if (MusicPlayer.Instance != null) MusicPlayer.Instance.Stop();
             ShowBanner?.Invoke($"LEVEL {Level}", levelTip);
@@ -310,6 +324,7 @@ namespace SpectreEX
                 else MusicPlayer.Instance.PlayForLevel(Level);
             }
             Playing = true;
+            player.Weapon.Announce();   // _ALT_WEAPON_TIMER, every life
         }
 
         bool bannerSkipped, saving;
@@ -469,8 +484,9 @@ namespace SpectreEX
 
         void TogglePause()
         {
+            // Not a freeze: _PLAY_LEVEL stops the bonus, the robots and the shots, while the craft keeps
+            // falling and floating, pickups still work and the death and level-end timers run on
             Paused = !Paused;
-            Time.timeScale = Paused ? 0f : 1f;
             if (Paused) ShowBanner?.Invoke("PAUSED", $"PRESS {GameKeys.First(GameKeys.Pause)} TO CONTINUE");
             else HideOverlays?.Invoke();
         }
@@ -485,7 +501,7 @@ namespace SpectreEX
             foreach (var o in Obstacles) if (o != null) Destroy(o);
             foreach (var j in jumpPads) if (j != null) Destroy(j.gameObject);
             jumpPads.Clear();
-            Flags.Clear(); Dumps.Clear(); Robots.Clear(); Obstacles.Clear();
+            Flags.Clear(); flagSpots.Clear(); Dumps.Clear(); Robots.Clear(); Obstacles.Clear();
             if (director != null) director.Clear();
             System.Array.Clear(flagGuards, 0, flagGuards.Length);
             robotsLeft = bankedBonus = 0;
@@ -537,6 +553,7 @@ namespace SpectreEX
 
             FlagsTotal = Flags.Count;
             FlagsCollected = 0;
+            foreach (var f in Flags) flagSpots.Add(f.transform.position);
             Plan = new LevelPlan { level = levelNumber, robotShields = 1, wallColor = LevelPlan.WallColor(levelNumber) };
 
             // The enemy set (_ADD_ENEMY): a count between its two numbers when the first is the smaller,
@@ -573,7 +590,7 @@ namespace SpectreEX
 
             levelSongId = lv.song;
             levelSong = MatrixMusic.TrackFor(lv.song);
-            return m.Tip(lv.tip);
+            return lap == 0 ? m.Tip(lv.tip) : "";   // _LOAD_WAVE: no tip once the list repeats
         }
 
         void BuildGeneratedLevel(LevelPlan plan)
@@ -598,6 +615,7 @@ namespace SpectreEX
 
             FlagsTotal = Flags.Count;
             FlagsCollected = 0;
+            foreach (var f in Flags) flagSpots.Add(f.transform.position);
 
             // Without a matrix: Robot Tanks, Turrets, Orbiters and Slicers with Central Systems' enemy data
             void Add(int type, int n) { for (int i = 0; i < n; i++) SpawnRobot(type, DefaultRobotData(type, 0), 99); }
@@ -716,15 +734,16 @@ namespace SpectreEX
             return robot.IsFlagGuard ? PlaceNearFlag() : HiddenSpot();
         }
 
-        // _PLACE_NEAR_FLAG: the flag with the fewest robots so far, 0x3C00 in from it toward the middle
+        // _PLACE_NEAR_FLAG: the flag with the fewest robots so far, collected or not, 0x3C00 in from it
+        // toward the middle
         Vector3 PlaceNearFlag()
         {
-            int n = Mathf.Min(Flags.Count, flagGuards.Length);
+            int n = Mathf.Min(flagSpots.Count, flagGuards.Length);
             if (n == 0) return Vector3.zero;
             int best = 0;
             for (int i = 1; i < n; i++) if (flagGuards[i] < flagGuards[best]) best = i;
             flagGuards[best]++;
-            Vector3 f = Flags[best] != null ? Flags[best].transform.position : Vector3.zero;
+            Vector3 f = flagSpots[best];
             float step = 0x3C00 * PlayerMotor.UnitsToMetres;
             return new Vector3(f.x < 0.0001f ? f.x + step : f.x - step, 0f, f.z < 0.0001f ? f.z + step : f.z - step);
         }
@@ -902,7 +921,9 @@ namespace SpectreEX
 
         public void OnFlagCollected(Flag flag)
         {
-            Flags.Remove(flag);
+            int slot = Flags.IndexOf(flag);
+            if (slot < 0) return;
+            Flags[slot] = null;
             FlagsCollected++;
             AddScore(flagPoints);
             int left = FlagsTotal - FlagsCollected;
@@ -917,7 +938,7 @@ namespace SpectreEX
             player.Motor.Warp();
             if (down != null)
             {
-                if (Time.time - downAt > (DeadTicks - LevelEndTicks) / PlayerMotor.TickRate) return;
+                if (Time.time - downAt > (DeadWaitTicks - LevelEndTicks) / PlayerMotor.TickRate) return;
                 StopCoroutine(down);
                 down = null;
             }
@@ -954,6 +975,7 @@ namespace SpectreEX
         {
             yield return new WaitForSeconds(LevelEndTicks / PlayerMotor.TickRate);
             Playing = false;
+            levelFinished = true;
             Sfx.Play(Snd.Award);
 
             AddScore(Bonus);
@@ -1026,7 +1048,7 @@ namespace SpectreEX
         IEnumerator PlayerDown()
         {
             Sfx.Play(Snd.PlayerDestroyed);
-            yield return new WaitForSeconds(DeadTicks / PlayerMotor.TickRate);
+            yield return new WaitForSeconds(DeadWaitTicks / PlayerMotor.TickRate);
             down = null;
             Lives--;
 
@@ -1039,9 +1061,8 @@ namespace SpectreEX
                     EndSession(0, Level);
                     yield break;
                 }
-                ShowBanner?.Invoke("GAME OVER", $"FINAL SCORE {Score}");
-                yield return new WaitForSeconds(5f);
-                EndSession(Score, Level);
+                yield return SpinGameOver();
+                EndSession(levelFinished ? Score : 0, Level);   // _SPECTRE_MAIN: no finished level, no score table
                 yield break;
             }
 
@@ -1051,6 +1072,20 @@ namespace SpectreEX
             StartBonus();
             yield return LevelBanner();
             if (FlagsTotal > 0 && FlagsCollected >= FlagsTotal) FinishLevel();
+        }
+
+        // _GAME_OVER / _SPIN_UP: the words spin in over 33 ticks, then hold for 15
+        IEnumerator SpinGameOver()
+        {
+            var tick = new WaitForSeconds(1f / PlayerMotor.TickRate);
+            for (int step = 0; step < 0x21; step++)
+            {
+                GameOverSpin?.Invoke(step);
+                yield return tick;
+            }
+            GameOverSpin?.Invoke(-1);
+            yield return new WaitForSeconds(15f / PlayerMotor.TickRate);
+            HideOverlays?.Invoke();
         }
 
         // _PLACE_TANKS, at the start of every life: each robot still in play goes somewhere new

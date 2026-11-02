@@ -153,6 +153,7 @@ namespace SpectreEX.Menu
         // keepMusic: opened over a paused game (Esc), so leave the level's song paused rather than switching
         public void Open(bool keepMusic = false)
         {
+            idleSince = Time.unscaledTime;
             canvas.enabled = true;
             stack.Clear();
             foreach (var s in AllScreens()) s.root.gameObject.SetActive(false);
@@ -391,8 +392,6 @@ namespace SpectreEX.Menu
             };
         }
 
-        int customField = -1;
-        System.Action<int> customStep;
 
         void BuildCustom()
         {
@@ -402,16 +401,23 @@ namespace SpectreEX.Menu
             var shields = AddText(custom, new Rect(170, 144, 40, 18), 14, Color.black, TextAnchor.MiddleLeft);
             var ammo = AddText(custom, new Rect(170, 191, 40, 18), 14, Color.black, TextAnchor.MiddleLeft);
 
+            // _EDIT_CUSTOM_TANK: up wraps past the top, and going over the 15 points also falls back to the
+            // lowest; down stops at the lowest
+            static int Step(int value, int delta, int top, bool over)
+            {
+                if (delta < 0) return Mathf.Max(1, value + delta);
+                return value + delta > top || over ? 1 : value + delta;
+            }
+
             void Adjust(int field, int delta)
             {
                 var c = GameSettings.Custom;
-                int left = VehicleSpec.TotalPoints - (c.speed + c.shields + c.ammo);
-                if (delta > 0 && left <= 0) return;
+                bool over = c.speed + c.shields + c.ammo + delta > VehicleSpec.TotalPoints;
                 switch (field)
                 {
-                    case 0: c.speed = Mathf.Clamp(c.speed + delta, 1, 10); break;
-                    case 1: c.shields = Mathf.Clamp(c.shields + delta, 1, 10); break;
-                    case 2: c.ammo = Mathf.Clamp(c.ammo + delta, 1, 5); break;
+                    case 0: c.speed = Step(c.speed, delta, 9, over); break;
+                    case 1: c.shields = Step(c.shields, delta, 10, over); break;
+                    case 2: c.ammo = Step(c.ammo, delta, 5, over); break;
                 }
                 GameSettings.Custom = c;
                 custom.refresh();
@@ -423,18 +429,17 @@ namespace SpectreEX.Menu
             Button(custom, new Rect(231, 152, 36, 16), () => Adjust(1, -1));
             Button(custom, new Rect(231, 182, 36, 16), () => Adjust(2, 1));
             Button(custom, new Rect(231, 198, 36, 16), () => Adjust(2, -1));
-            System.Action done = () => { customField = -1; GameSettings.Save(); Pop(); };
+            System.Action done = () => { GameSettings.Save(); Pop(); };
             Button(custom, new Rect(113, 249, 113, 33), done, Key.D);
             custom.onEscape = custom.onEnter = done;
 
-            // As in the Windows dialog: an underlined letter picks a setting, and the arrow keys step it
+            // The underlined letters step their setting up
             Key[] fieldKeys = { Key.S, Key.H, Key.A };
             for (int i = 0; i < fieldKeys.Length; i++)
             {
                 int field = i;
-                Button(custom, new Rect(0, 0, 0, 0), () => customField = field, fieldKeys[i]);
+                Button(custom, new Rect(0, 0, 0, 0), () => Adjust(field, 1), fieldKeys[i]);
             }
-            customStep = delta => { if (customField >= 0) Adjust(customField, delta); };
             custom.refresh = () =>
             {
                 var c = GameSettings.Custom;
@@ -883,14 +888,6 @@ namespace SpectreEX.Menu
             return wheel > 0f ? -1 : wheel < 0f ? 1 : 0;
         }
 
-        void StepCustom()
-        {
-            var k = Keyboard.current;
-            if (k == null) return;
-            if (k.upArrowKey.wasPressedThisFrame) customStep(1);
-            if (k.downArrowKey.wasPressedThisFrame) customStep(-1);
-        }
-
         void ScrollLists(MenuScreen top)
         {
             int step = ListStep();
@@ -1323,6 +1320,20 @@ namespace SpectreEX.Menu
         }
 
         int ignoreClickFrame;
+        float idleSince;
+
+        // _MOUSE_KEY: left alone, the main menu runs the demo, sooner once it has run. Never over a paused game.
+        bool IdleDemo(MenuScreen top)
+        {
+            bool pressed = (Keyboard.current != null && Keyboard.current.anyKey.wasPressedThisFrame) ||
+                           (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame);
+            if (top != main || GameSuspended || pressed) { idleSince = Time.unscaledTime; return false; }
+            int ticks = GameManager.DemoHasRun ? 0x10E : 0x21C;
+            if (Time.unscaledTime - idleSince < ticks / PlayerMotor.TickRate) return false;
+            idleSince = Time.unscaledTime;
+            StartGame(true);
+            return true;
+        }
 
         void Update()
         {
@@ -1334,8 +1345,8 @@ namespace SpectreEX.Menu
 
             var top = stack[stack.Count - 1];
             if (capturing != null) { CaptureKey(); return; }
+            if (IdleDemo(top)) return;
             if (top == pick || top == graphics || top == controls) ScrollLists(top);
-            if (top == custom) StepCustom();
             if (top == scores && enteringName) scores.refresh();   // blink the cursor
             if (top == levelPrompt || top == slots) top.refresh();
             if (top == scores && scoresCloseAt > 0f && Time.unscaledTime >= scoresCloseAt) { CloseScores(); return; }

@@ -35,6 +35,7 @@ namespace SpectreEX
             {
                 if (slots[i] != null) continue;
                 slots[i] = OrbitShield.Create(this);
+                GameManager.Instance.GetComponent<RobotDirector>().Shots.MyShots++;   // _MY_SHOOT counts it
                 Place(i);
                 return;
             }
@@ -58,7 +59,7 @@ namespace SpectreEX
                 spinning = false;
                 spinSteps = 0f;
             }
-            if (spinning) spinSteps = Mathf.Repeat(spinSteps + SpinStepsPerTick * PlayerMotor.TickRate * Time.deltaTime, 256f);
+            if (spinning) spinSteps = Mathf.Repeat(spinSteps + SpinStepsPerTick * PlayerMotor.TickRate * GameManager.GameDelta, 256f);
             for (int i = 0; i < Slots; i++) Place(i);
         }
 
@@ -131,7 +132,7 @@ namespace SpectreEX
         void Update()
         {
             if (owner == null) { Destroy(gameObject); return; }
-            roll = Mathf.Repeat(roll + RollRate * PlayerMotor.TickRate * Time.deltaTime, 256f);
+            roll = Mathf.Repeat(roll + RollRate * PlayerMotor.TickRate * GameManager.GameDelta, 256f);
             visual.localRotation = Quaternion.Euler(0f, 0f, roll * OriginalMath.StepsToDegrees);
             foreach (var c in Physics.OverlapBox(transform.TransformPoint(box.center), box.size * 0.5f, transform.rotation, ~0, QueryTriggerInteraction.Collide))
             {
@@ -148,6 +149,7 @@ namespace SpectreEX
                 if (c.isTrigger) continue;
                 var robot = c.GetComponentInParent<EnemyBase>();
                 if (robot == null || robot.Health == null || robot.Health.IsDead) continue;
+                GameManager.Instance.GetComponent<RobotDirector>().Shots.MyHits++;
                 robot.Health.TakeDamage(PlayerShields.Damage);
                 Absorb();
                 return;

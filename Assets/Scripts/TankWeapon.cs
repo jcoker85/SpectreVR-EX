@@ -11,7 +11,6 @@ namespace SpectreEX
     {
         public Material projectileMaterial;
         public int maxAmmo = 40;
-        public int lowAmmoWarning = 5;   // the HUD turns red (the original's low-ammo sound starts below 6)
 
         public const int Weapons = 9;
         public static readonly string[] Names = { "Cannon", "Grenades", "Scatter Shots", "Seekers", "Missiles", "Spinners", "Mines", "Bombs", "Pulse Bursts" };
@@ -43,6 +42,9 @@ namespace SpectreEX
         public void PressAlt() => altPressed = true;
         public void PressCycle() => cyclePressed = true;
         public void PressWeaponKey(int n) => keyWeapon = n;
+
+        // _PLAY_LEVEL shows what's selected at the start of every life
+        public void Announce() => BannerUntil = Time.time + BannerSeconds;
 
         // A new game: the cannon only
         public void ResetHeavyWeapons()

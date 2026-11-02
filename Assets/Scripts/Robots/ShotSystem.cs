@@ -23,6 +23,8 @@ namespace SpectreEX
             public Transform visual;
             public int colour;
             public Vector3 prevPos, curPos;
+            public Vector3 boxCentre, boxHalf;   // the size of its shape (_COPY_SIZE), side / up / along
+            public float scale = 1f;             // +0x65
             public Vector3 Position => new Vector3(x, z, y) * OriginalMath.UnitsToMetres;
         }
 
@@ -164,6 +166,7 @@ namespace SpectreEX
             s.y += s.vy >> 1;
             s.colour = ShotColour(weapon);
             s.visual = MakeVisual(shape, s.colour);
+            SetBox(s, shape);
             DeRes.JoinRipple(s.visual.gameObject);
             s.curPos = s.prevPos = s.Position;
             Place(s, s.curPos);
@@ -171,16 +174,39 @@ namespace SpectreEX
             if (sound != null && owner != null) Sfx.PlayAt(sound, owner.transform.position);
         }
 
-        // A shot's own shape, or the built-in shot for the plain ones, in solid colour
-        Transform MakeVisual(int shape, int colour)
+        static ShapeGeometry Geometry(int shape)
         {
-            var gm = GameManager.Instance;
             ShapeGeometry geometry = BuiltinShapes.Named("SHOT");
             if (shape != 0)
             {
                 var central = MatrixLibrary.Central();
                 if (central != null) central.Shapes.TryGetValue(shape, out geometry);
             }
+            return geometry;
+        }
+
+        // _CHANGE_OBJECT's _COPY_SIZE: a shot collides at the size of the shape it has now
+        static void SetBox(Shot s, int shape)
+        {
+            var g = Geometry(shape);
+            if (g == null) return;
+            var low = Vector3.positiveInfinity;
+            var high = Vector3.negativeInfinity;
+            for (int i = 0; i + 2 < g.verts.Length; i += 3)
+            {
+                var p = new Vector3(g.verts[i + 1], g.verts[i + 2], g.verts[i]);
+                low = Vector3.Min(low, p);
+                high = Vector3.Max(high, p);
+            }
+            s.boxCentre = (low + high) * 0.5f * OriginalMath.UnitsToMetres;
+            s.boxHalf = Vector3.Max((high - low) * 0.5f, Vector3.one * 0x10) * OriginalMath.UnitsToMetres;
+        }
+
+        // A shot's own shape, or the built-in shot for the plain ones, in solid colour
+        Transform MakeVisual(int shape, int colour)
+        {
+            var gm = GameManager.Instance;
+            var geometry = Geometry(shape);
             var root = new GameObject("Shot").transform;
             if (geometry == null) return root;
             var go = new GameObject("Panels");
@@ -225,6 +251,7 @@ namespace SpectreEX
             if (s.visual == null || central == null || !central.Shapes.TryGetValue(shape, out var geometry)) return;
             var filter = s.visual.GetComponentInChildren<MeshFilter>();
             if (filter != null) filter.sharedMesh = geometry.Coloured(s.colour);
+            if (s.weapon != Debris) SetBox(s, shape);
         }
 
         static void Advance(Shot s)
@@ -237,6 +264,12 @@ namespace SpectreEX
             s.curPos = s.Position;
         }
 
+        // Paused: nothing moves, so nothing should drift between ticks
+        public void Hold()
+        {
+            foreach (var s in shots) s.prevPos = s.curPos;
+        }
+
         // _MOVE_SHOTS
         public void Tick()
         {
@@ -246,6 +279,9 @@ namespace SpectreEX
                 s.prevPos = s.curPos;
                 if (s.fading > 0)
                 {
+                    // +0x65 grows 0x20 a tick as it goes
+                    s.scale += 0x20 / 256f;
+                    if (s.visual != null) s.visual.localScale = Vector3.one * s.scale;
                     if (--s.fading == 0) Kill(s);
                     else Advance(s);
                     continue;
@@ -322,7 +358,7 @@ namespace SpectreEX
             {
                 haveTarget = true;
                 target = director.PlayerPos;
-                targetZ = MidHeight(6) + director.PlayerZ - PlayerMotor.GroundUnits;
+                targetZ = MidHeight(6) + director.PlayerZ;
             }
             if (haveTarget)
             {
@@ -367,6 +403,7 @@ namespace SpectreEX
                 low = Mathf.Min(low, v[i]);
                 high = Mathf.Max(high, v[i]);
             }
+            if (type == 21) low = -0x1400;   // _ADD_ENEMY lowers a Slicer's box
             return (low + high) / 2;
         }
 
@@ -436,14 +473,14 @@ namespace SpectreEX
             int damage = Damage(s.weapon);
             if (damage <= 0 && robot != null) robot.HitWithoutDamage();   // Spinners: still scores and stuns
             else health.TakeDamage(damage);
-            if (health.team == Team.Player && !health.IsDead) DeRes.Play(health.gameObject, 5, 0.55f, true);   // _D_P_DE_RES
+            if (health.team == Team.Player && !health.IsDead) DeRes.Play(health.gameObject, Health.RipplePeak, Health.RippleTicks / OriginalMath.TickRate, true);   // _D_P_DE_RES
             return true;
         }
 
         void Overlap(Vector3 pos, Shot s)
         {
-            var half = new Vector3(0x200, 0x200, 0x300) * OriginalMath.UnitsToMetres;
-            int n = Physics.OverlapBoxNonAlloc(pos, half, hits, Quaternion.Euler(0f, OriginalMath.Yaw(s.heading), 0f), ~0, QueryTriggerInteraction.Collide);
+            var turn = Quaternion.Euler(0f, OriginalMath.Yaw(s.heading), 0f);
+            int n = Physics.OverlapBoxNonAlloc(pos + turn * s.boxCentre, s.boxHalf, hits, turn, ~0, QueryTriggerInteraction.Collide);
             for (int i = 0; i < n; i++)
             {
                 var c = hits[i];
@@ -458,16 +495,15 @@ namespace SpectreEX
             }
         }
 
-        // Obstacles stop shots, except the floor pads they fly over
+        // Obstacles stop shots. The floor pads have no height, so only a shot that low meets them.
         bool HitObstacle(Shot s)
         {
-            int n = Physics.OverlapBoxNonAlloc(s.curPos, Vector3.one * (0x200 * OriginalMath.UnitsToMetres), hits, Quaternion.identity, ~0, QueryTriggerInteraction.Collide);
+            var turn = Quaternion.Euler(0f, OriginalMath.Yaw(s.heading), 0f);
+            int n = Physics.OverlapBoxNonAlloc(s.curPos + turn * s.boxCentre, s.boxHalf, hits, turn, ~0, QueryTriggerInteraction.Collide);
             for (int i = 0; i < n; i++)
             {
                 var o = hits[i].GetComponentInParent<ObstacleBehaviour>();
                 if (o == null) continue;
-                if (o.kind == ObstacleBehaviour.Kind.Acid || o.kind == ObstacleBehaviour.Kind.Ice ||
-                    o.kind == ObstacleBehaviour.Kind.Slow || o.kind == ObstacleBehaviour.Kind.Pusher) continue;
                 if (s.weapon == 11) o.SpinFromHit();
                 return true;
             }

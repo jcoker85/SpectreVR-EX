@@ -107,7 +107,6 @@ namespace SpectreEX
         {
             x = OriginalMath.ToUnits(position.x);
             y = OriginalMath.ToUnits(position.z);
-            z = 0;
             Snap();
         }
 
@@ -201,7 +200,7 @@ namespace SpectreEX
                 if (spinRate == 0)
                 {
                     if (matrixType == 35 || matrixType == 45) CircleSpot();
-                    else if (matrixType == 7 && index < 6 && director.FlagFor(index - 1, out var flag)) Patrol(director, flag, false);
+                    else if (matrixType == 7 && index < 6 && director.FlagFor(index, out var flag)) Patrol(director, flag, false);
                     else if (matrixType == 22) Patrol(director, director.PlayerPos, true);
                     else ChasePlayer(director);
                 }
@@ -240,10 +239,9 @@ namespace SpectreEX
         {
             visible = true;
             dying = 0;
-            timer = 0;
+            stun = 0;
             mode = matrixType == 7 ? ModePatrol : ModeChase;
-            Place(position);
-            if (matrixType == 21) ChangeShape(10002);
+            Place(position);   // only x and y: it comes back at the height it died, timers and shape as they were
             health.Revive(transform.position, transform.rotation);
             if (matrixType == 26)   // Invisible Tank: back on radar only
                 foreach (var r in GetComponentsInChildren<Renderer>()) r.enabled = false;
@@ -526,8 +524,9 @@ namespace SpectreEX
         bool PathClear(RobotDirector director, int h, bool targetIsPlayer)
         {
             Vector3 dir = OriginalMath.Direction(h);
-            Vector3 centre = Position + dir * (PathLength * 1.125f * OriginalMath.UnitsToMetres) + Vector3.up * 2f;
-            var half = new Vector3(PathWidth, 0x1800, PathLength) * OriginalMath.UnitsToMetres;
+            Vector3 centre = Position + dir * (PathLength * 1.125f * OriginalMath.UnitsToMetres);
+            centre.y = 2f;   // _PATH_COLLIDE has no height, so this reaches from the flat pads up
+            var half = new Vector3(PathWidth * OriginalMath.UnitsToMetres, 2.1f, PathLength * OriginalMath.UnitsToMetres);
             int n = Physics.OverlapBoxNonAlloc(centre, half, probe, Quaternion.LookRotation(dir), ~0, QueryTriggerInteraction.Collide);
             for (int i = 0; i < n; i++)
             {

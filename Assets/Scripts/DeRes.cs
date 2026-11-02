@@ -6,8 +6,7 @@ namespace SpectreEX
 {
     // The original's de-res (_DRAW_POLY's second argument): a shape drawn as horizontal lines, each slid
     // sideways along a sine wave by its amount plus an eighth of the line's width, with some jitter.
-    // Dying objects go up to their peak; a craft that has just teleported or hyperspaced goes there and
-    // back and then reappears.
+    // Dying objects go up to their peak; a craft that has just been hurt goes there and back.
     public class DeRes : MonoBehaviour
     {
         const float LineSpacing = 0.05f;

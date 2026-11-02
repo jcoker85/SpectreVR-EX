@@ -32,6 +32,7 @@ namespace SpectreEX
             while (accumulator >= StepSeconds)
             {
                 accumulator -= StepSeconds;
+                if (subStep == 0 && director != null) director.FireWeapons();   // _DO_PLAYER_MOVE fires before the tick's move
                 bool tickEnds = ++subStep == SubSteps;
                 if (tickEnds) subStep = 0;
                 if (motor != null && gm.Playing) motor.SubStep(tickEnds);

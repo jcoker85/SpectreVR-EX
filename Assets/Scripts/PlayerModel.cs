@@ -9,7 +9,7 @@ namespace SpectreEX
     // multi-part 2013). PlayerMotor's yaw already carries the original's model heading (+0x80), so
     // the shape sits unturned. Parts whose shape id ends in 0x5F / 0x60 are the wings (_MOVE_OBJECT):
     // they turn by -/+ _WING_ANGLE from the body - tucked at rest, spread while floating. The hull
-    // collider is left as it is.
+    // collider takes the first part's bounds, as the craft's collision object does.
     public class PlayerModel : MonoBehaviour
     {
         // _PLAY_LEVEL tests the craft's object at the floor, then leaves it 0x500 up for drawing
@@ -33,6 +33,17 @@ namespace SpectreEX
             int colour = BuiltinShapes.TypeColour(6);
             int layer = model.gameObject.layer;
             for (int i = model.childCount - 1; i >= 0; i--) Destroy(model.GetChild(i).gameObject);
+
+            // _ADD_ENEMY takes a quarter off the front of the player's box
+            var hull = GetComponent<BoxCollider>();
+            if (hull != null)
+            {
+                Bounds b = parts[0].shape.Body.bounds;
+                Vector3 min = b.min, max = b.max;
+                max.z -= max.z / 4f;
+                hull.center = (min + max) * 0.5f;
+                hull.size = max - min;
+            }
 
             wings.Clear();
             var root = new GameObject("Craft").transform;
