@@ -358,8 +358,7 @@ robots within `_QFIND_DIST` 0x0E / 0x40 / 0x80 lose 5 / 2 / 2, the player takes 
    holds the materials). Checked: all 47 CENTRAL types resolve; level 1 (towers, billboards),
    level 3 (windmills with rolling fans) and level 5 (pyramids block the craft) in Play mode.
    Not done: robots and the player still use the builder's guessed shapes at 0.13 m per unit
-   (the original is 0.1575) - item 6; the `mshp` part angle sign is unverified (every CENTRAL
-   multi-part shape is symmetric); spinning obstacles keep an unrotated collider; the original
+   (the original is 0.1575) - item 6; the `mshp` part angle sign was later settled (see "Full audit"); spinning obstacles keep an unrotated collider; the original
    collides obstacles by their z range against the craft's, ours uses the craft hull as before.
 6. **Robots done:** `Robot` (one robot, ported line by line from `_MOVE_TANKS` / `_CHASE_PLAYER` /
    `_PATROL` / `_CIRCLE_SPOT` / `_FIND_CLEAR_PATH`), `RobotDirector` (ticks robots in spawn order,
@@ -622,7 +621,7 @@ Second pass:
 - Demo (`_MOVE_ATTRACT_TANK`, `_PLAYER_CHASE_THING` and the `_CHASE_` routines): matches, except that its shots come from `_TANK_SHOOT`, 0x400 up, it uses missiles rather than the cannon under the floor, and moving it when boxed in changes only x and y. All three fixed.
 - Shapes (`_ADD_SHAPE`): the 16, 17 and 20 remaps, random picks, nested multi-part shapes, the stop at a missing part and ids 3000-3999 match. `_LOAD_WRLD` also gives types 1000, 10016 and 10017 their own spin, but `_ADD_SHAPE` indexes the shps table by type with no bounds check, so such a type can't get a shape and the spin is never reached. Nothing to port.
 - Colours (`_DRAW_OBJS`, `_SHADE`, `_FIXUP_COLORS`): match the "Colours" section. Matrix textures and movies are loaded with +0x2F -2, so they draw plain, without the outline or colour cycling the code can do for other values.
-- Music (`_PICK_SONG`): matches. Not settled: whether a song loops. `_PLAYMIDI` asks for an end notice, and nothing in the EXE was found replaying `_CURRENT_SONG`, so it may play once and stop. The remake loops.
+- Music (`_PICK_SONG`): matches. Songs loop: `_PLAYMIDI` asks MCI for an end notice, and the window procedure answers MM_MCINOTIFY (0x3B9, successful) with `_LOOPSONG`, which starts `_CURRENT_SONG` again unless it's still playing. The remake loops too.
 - Shots take their shapes from the loaded matrices, as `_CHANGE_SHAPE` does, not always from Central Systems; weapon data likewise.
 - Radar letters checked in the machine code: 0x14 G, 0x15 S, 0x16 H, 0x17 A, 0x18 M; gates 0x13 T, 0x24 U, 0x25 D in colour 0x30; all drawn in their colour + 0xC.
 - Dump pulse measured on the running original (Easy demo): +0x65 goes 0x100, 0x110 ... 0x200 and back to 0x100, 0x10 a tick, every dump in step.
@@ -630,6 +629,9 @@ Second pass:
 - Overhead zoom runs 8 to 74.4 m (100-930), not 20 to 186.
 - Removed the remake's own fallbacks: generated levels when there's no matrix (the game now says "Unable to load Matrix", as the original does), random flags for a grid without any, Central Systems shapes for a matrix without its own, and a stand-in robot shape. The level-select music playlist and its next-track key went with the generated levels.
 - Removed the code that rebuilt shapes when Complex changed mid-game, now that Options can't be reached during a game.
+- Multi-part shapes: `_MOVE_OBJECT` places a part at the parent's heading minus its angle. The one-sided parts settle the sign: wing 10079 (all on -y) sits at 19 degrees and wing 10080 (all on +y) at 341, side piece 10055 (+y) at 296 and 10058 (-y) at 64, so each lands on the side it reaches to. The remake had the angle the other way, putting them on the wrong side (the wings about 0.26 m inward). Fixed.
+- Orbit shields lost over floor pads are the original's behaviour and stay (owner, 2026-11-02).
+- Measuring later robot types on the running original by starting a real game froze the emulator twice (switching sound off in its memory has stopped levels loading before), so `docs/still-to-validate.md` is unchanged.
 
 
 ## Validation pass (no eyes on the original)

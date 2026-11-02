@@ -407,8 +407,10 @@ namespace SpectreEX.Matrix
                     var p = multi[i];
                     float dist = i == 0 ? 0f : p.distance * 0xA00 * PlayerMotor.UnitsToMetres;
                     float height = i == 0 ? 0f : p.height * 0x28 * PlayerMotor.UnitsToMetres;
-                    // Unverified sign: every multi-part shape in Central Systems is left-right symmetric
-                    var dir = Quaternion.Euler(0f, p.angle, 0f) * Vector3.forward;
+                    // _MOVE_OBJECT puts a part along the object's heading less its angle, so a positive
+                    // angle swings it to the object's -y side, which is -x here. The one-sided parts bear
+                    // this out: each wing of 2013 and each side piece of 2006 lands on the side it reaches to.
+                    var dir = Quaternion.Euler(0f, -p.angle, 0f) * Vector3.forward;
                     parts.Add(new Part { shape = shape, offset = dir * dist + Vector3.up * height, id = resolved });
                 }
                 return parts;

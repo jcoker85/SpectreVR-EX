@@ -8,8 +8,9 @@ To record a real game from memory while playing, run `python Tools/win31/memtrac
 
 The rules below are ported line by line from the decompile, so what's left is seeing them run. All of these appear in the bundled levels.
 
-- [ ] **Later robot types:** how Flyers, Cyber Mud, Smart Acid, Smart Walls, Orbiters, Invisible Tanks and Cloaked Tanks move and feel. None of these has been measured moving.
-- [ ] **Firing rhythm:** how often each robot type fires. There were too few shots to compare. Robot Tank, Super Tank and Slicer movement already match.
+- [ ] **Later robot types:** Cyber Mud and Orbiters are still unmeasured. Measured on the running original (Hard level 49, 2026-11-02) and matching the ported rules: Flyers (speed, climb to 0xF00, dive to 0x200-0x400, leaving and chasing), Smart Acid and Smart Walls (speed, standing still more than half the time), Invisible and Cloaked Tanks (speed).
+- [x] **Firing rhythm:** measured on the same run. Super Tanks, Robot Tanks, Cloaked Tanks, Flyers (Seekers) and Invisible Tanks (mines) fire on the rule's minimum gap or one tick after it, which is the sampling.
+- [ ] **Hard level 49 loads seven robots, not ten:** the original added only the first seven of the level's list (no Orbiter, Cyber Mud or Slicer) on two runs. The matrix file is byte-identical to the remake's, the tank tables hold 12 and the object limit would stop the game instead, so the cause is still unknown. The remake loads all ten. Worth finding: it may be a limit the remake should share.
 
 ## Quick side-by-side looks
 
