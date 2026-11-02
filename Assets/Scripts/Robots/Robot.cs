@@ -508,8 +508,7 @@ namespace SpectreEX
                 if (PathClear(director, (want + off) & 0xFF, targetIsPlayer)) return Chose(want + off + flip);
             }
             // Boxed in: the original simply moves the robot somewhere else
-            GameManager.Instance.TryFindHiddenSpot(out var spot);
-            Place(spot);
+            Place(GameManager.Instance.HiddenSpot());
             pathBlock = -1;
             return -1;
         }

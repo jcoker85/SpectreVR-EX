@@ -32,7 +32,8 @@ namespace SpectreEX
         {
             var gm = GameManager.Instance;
             if (gm != null && gm.Demo) return;   // DemoPilot is driving
-            bool canAct = !Health.IsDead && (gm == null || gm.Playing) && (gm == null || !gm.Paused);
+            // _DO_PLAYER_MOVE goes on running for the wreck
+            bool canAct = (gm == null || gm.Playing) && (gm == null || !gm.Paused);
             if (!canAct) { Motor.SetInput(0f, 0f); Weapon.FireHeld = false; return; }
 
             float throttle = 0f, turn = 0f;

@@ -37,7 +37,7 @@ namespace SpectreEX
         void OnTriggerEnter(Collider other)
         {
             var player = other.GetComponentInParent<PlayerTank>();
-            if (player == null || player.Health.IsDead) return;
+            if (player == null) return;
 
             switch (kind)
             {

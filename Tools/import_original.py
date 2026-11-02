@@ -30,7 +30,7 @@ SHAPES_JSON = os.path.join(ROOT, "Assets", "Editor", "Data", "SpectreShapes.json
 # The game's pictures are PCX files named .DAT
 PICTURES = {
     "Menu/MainMenu": "SPCP25", "Menu/Buttons": "SPCP35", "Menu/Matrix": "SPCP34", "Menu/About": "SPCP10",
-    "Menu/Help": "SPCP14", "Menu/Custom": "SPCP13", "Menu/Options": "SPCP20W", "Menu/Vehicles": "SPCP21",
+    "Menu/Help": "SPCP14", "Menu/Custom": "SPCP13", "Menu/Options": "SPCP20W", "Menu/Splash": "SPCP33", "Menu/Vehicles": "SPCP21",
     "HUD/WeaponIcons": "SPCP36",
 }
 MATRIX_FILES = ["CENTRAL.MAT", "CENTRAL.BIG", "CENTRAL.PCX", "BASIC.MAT"]

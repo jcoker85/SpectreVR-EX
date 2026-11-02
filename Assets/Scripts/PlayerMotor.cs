@@ -24,7 +24,7 @@ namespace SpectreEX
         public const int GroundUnits = GroundZ;
         const int BumpHopHeight = 0x600;
         const int GroundZ = 0x500, UnderZ = -0xF00, LifeDropZ = 0xC800, HyperDropZ = 0x5000;
-        const int Gravity = 0x100, JumpVz = 0xC00, HardLanding = -0xF00;
+        const int Gravity = 0x100, JumpVz = 0xC00, HardLanding = -0xF00, WarpClimb = 0x300;
         const int PushSpeed = 0x12;
         public const int FloatMax = 0x546;
         const int FloatGain = 0x10E, FloatHeight = 0x2D00;   // a wings dump: 270 ticks (~15 s) of hover, up to 1350
@@ -71,7 +71,7 @@ namespace SpectreEX
             set => fineHeading = (value & 0xFF) * SubSteps;
         }
         int minZ = GroundZ;
-        bool steered;
+        bool steered, warping;
         int steerTurn, steerSpeed;
         int turningSteps, heightStep, bounceI, acidTimer;
         long moveLeftX, moveLeftY;
@@ -123,6 +123,12 @@ namespace SpectreEX
             if (lastGate == old) lastGate = rebuilt;
         }
 
+        // The last flag or a level skip (_PLAY_LEVEL): the craft climbs away until the level ends
+        public void Warp() => warping = true;
+
+        // Tank record +0x1C: shots pass through a craft dropping in or warping away, until it lands
+        public bool Untouchable { get; private set; }
+
         public void RequestJump() => jumpRequested = true;
         public void RequestHyperspace() => hyperRequested = true;
         public void ResetHyper() => Hyper = HyperMax;
@@ -142,6 +148,8 @@ namespace SpectreEX
             under = false;
             minZ = GroundZ;
             z = dropIn ? LifeDropZ : GroundZ + System.Math.Max(0, ToUnits(position.y));
+            Untouchable = dropIn;
+            warping = false;
             vz = 0;
             Floating = 0;
             bounceI = turningSteps = heightStep = acidTimer = nothingTimer = spinRate = spinTimer = 0;
@@ -164,7 +172,6 @@ namespace SpectreEX
         // One fixed step of SimClock; tickEnds marks the last of an original tick's sub-steps
         public void SubStep(bool tickEnds)
         {
-            if (health != null && health.IsDead) return;
             prevPos = curPos;
             prevYaw = curYaw;
             Step(tickEnds);
@@ -177,7 +184,6 @@ namespace SpectreEX
         // The moment between the last two steps, for this frame
         public void Present(float alpha)
         {
-            if (health != null && health.IsDead) return;
             Write(Vector3.Lerp(prevPos, curPos, alpha), Mathf.LerpAngle(prevYaw, curYaw, alpha));
         }
 
@@ -201,6 +207,8 @@ namespace SpectreEX
                 speed = steerSpeed;
                 turnStep = steerTurn;
             }
+
+            if (health != null && health.IsDead) speed = 0;   // a wreck still turns and jumps, but _SPEED is 0
 
             if (spinRate != 0)
             {
@@ -239,8 +247,19 @@ namespace SpectreEX
             Vector3 blockerAt = default;
             if (robot != null)
             {
-                blocked = !RobotContact(robot, tickEnds);
                 blockerAt = robot.transform.position;
+                // _HIT_A_GATE comes first and takes these two by type, as it does the pads they lay
+                if (robot.matrixType == 23) AcidTouch(tickEnds);
+                else if (robot.matrixType == 24)
+                {
+                    moveX = dx / 4; moveY = dy / 4;
+                    SlowTouch(tickEnds);
+                }
+                else
+                {
+                    blocked = !RobotContact(robot, tickEnds);
+                    DemoTouch(blockerAt, tickEnds);
+                }
             }
             else if (gate != null)
             {
@@ -251,12 +270,13 @@ namespace SpectreEX
                         break;
                     case ObstacleBehaviour.Kind.Pusher:
                     {
-                        // The demo treats pushers as solid and hops them (_PLAY_LEVEL)
+                        // The demo treats pushers as solid and jumps them (_PLAY_LEVEL)
                         if (GameManager.Instance != null && GameManager.Instance.Demo)
                         {
                             blocked = true;
                             blockerAt = gate.transform.position;
-                            DemoHop(blockerAt);
+                            if (!under && z == minZ && Hyper >= JumpCost) { Hyper -= JumpCost; vz = JumpVz; }
+                            DemoTouch(blockerAt, tickEnds);
                             break;
                         }
                         // _HIT_A_GATE moves the craft's object, whose coordinates are the negative of these: along the arrow
@@ -281,21 +301,10 @@ namespace SpectreEX
                         break;
                     case ObstacleBehaviour.Kind.Slow:
                         moveX = dx / 4; moveY = dy / 4;
-                        onIce = false;
-                        if (tickEnds && acidTimer-- < 1) { acidTimer = 8; Sfx.Play(Snd.Goo); }
+                        SlowTouch(tickEnds);
                         break;
                     case ObstacleBehaviour.Kind.Acid:
-                        onIce = false;
-                        if (tickEnds && acidTimer-- < 1)
-                        {
-                            acidTimer = 2;
-                            var gm = GameManager.Instance;
-                            if (health != null)
-                            {
-                                health.TakeRawDamage(gm != null ? gm.AcidDamage : 10, false);
-                                if (!health.IsDead) Sfx.Restart(health.Shields <= 20 ? Snd.HeavyDamage : Snd.Acid);
-                            }
-                        }
+                        AcidTouch(tickEnds);
                         break;
                     case ObstacleBehaviour.Kind.DownTransport:
                         if (!under) Sfx.Play(Snd.TransportDown);
@@ -311,9 +320,10 @@ namespace SpectreEX
             {
                 blocked = true;
                 blockerAt = solid.position;
-                if (GameManager.Instance != null && GameManager.Instance.Demo) DemoHop(blockerAt);
+                DemoTouch(blockerAt, tickEnds);
             }
-            if (gate == null) { lastGate = null; onIce = false; acidTimer = 0; }
+            // _CLEAR_GATE_COLLIDE: touching nothing at all
+            if (gate == null && robot == null && solid == null) { lastGate = null; onIce = false; acidTimer = 0; }
             if (Floating > 0) blocked = false;   // wings carry you over anything
 
             // Blocked: the move is undone, turn included, and on the ground you're nudged 1/32 of the
@@ -370,6 +380,7 @@ namespace SpectreEX
                 z = minZ;
                 vz = 0;
                 heightStep = 0;
+                Untouchable = false;
                 return;
             }
             z += HeightAfter(heightStep + 1) - HeightAfter(heightStep);
@@ -379,6 +390,7 @@ namespace SpectreEX
                 if (vz < HardLanding) Bounce(Snd.Land);
                 vz = 0;
                 heightStep = 0;
+                Untouchable = false;
                 return;
             }
             if (++heightStep == SubSteps)
@@ -393,6 +405,12 @@ namespace SpectreEX
         // What the original does once a tick whatever the sampling rate
         void EndTick(bool active, bool moving)
         {
+            if (warping)
+            {
+                Untouchable = true;
+                vz += WarpClimb;
+            }
+
             // The ground sinks while under the floor (down transport) and rises back afterwards
             if (!under) { if (minZ < GroundZ) minZ += 0x100; }
             else
@@ -416,7 +434,8 @@ namespace SpectreEX
             // Wings: lift toward hover height (a little lower while moving), with a wobble and drag
             if (Floating > 0)
             {
-                long lift = ((FloatHeight - z) >> 4) - (moving ? 0x100 : 0);
+                bool demo = GameManager.Instance != null && GameManager.Instance.Demo;
+                long lift = ((FloatHeight - z) >> 4) - (moving || demo ? 0x100 : 0);
                 if (lift < 0) lift = 0;
                 vz += lift + Random.Range(0, 0x60);
                 vz -= vz >> 4;
@@ -455,7 +474,6 @@ namespace SpectreEX
             if (!e.hasMatrixData) return false;
             int type = e.matrixType, damage = e.collideDamage;
             bool blocks = type == 7 || type == 8 || type == 25 || type == 27;   // robot / super tanks, cyber mud, cloaked tank
-            if (type == 24 && damage == 0) return true;                        // harmless smart wall
             if (blocks && damage == 0) return false;
             if (tickEnds && health != null && damage > 0)   // _DO_COLLIDE_DAMAGE, every tick of contact
             {
@@ -469,13 +487,39 @@ namespace SpectreEX
             return !blocks;
         }
 
-        // In the demo a craft that hits something jumps if it can, and moves away if it's right on top of it
-        void DemoHop(Vector3 at)
+        // _HIT_A_GATE's slow pad and Smart Wall: a quarter speed, with a squelch every ninth tick
+        void SlowTouch(bool tickEnds)
         {
-            if (!under && z == minZ && Hyper >= JumpCost) { Hyper -= JumpCost; vz = JumpVz; }
+            onIce = false;
+            if (tickEnds && acidTimer-- < 1) { acidTimer = 8; Sfx.Play(Snd.Goo); }
+        }
+
+        // _HIT_A_GATE's acid and Smart Acid: burns every third tick
+        void AcidTouch(bool tickEnds)
+        {
+            onIce = false;
+            if (!tickEnds || acidTimer-- >= 1) return;
+            acidTimer = 2;
             var gm = GameManager.Instance;
-            if (OriginalMath.QDist(x - ToUnits(at.x), y - ToUnits(at.z)) < 0xF && gm.TryFindSpawnPoint(out var p, 0f))
-                Place(p, Yaw(), false);
+            if (health == null) return;
+            health.TakeRawDamage(gm != null ? gm.AcidDamage : 10, false);
+            if (!health.IsDead) Sfx.Restart(health.Shields <= 20 ? Snd.HeavyDamage : Snd.Acid);
+        }
+
+        // In the demo anything hit puts the robots back on the chase, and a craft right on top of it moves away
+        void DemoTouch(Vector3 at, bool tickEnds)
+        {
+            var gm = GameManager.Instance;
+            if (!tickEnds || gm == null || !gm.Demo) return;
+            if (OriginalMath.QDist(x - ToUnits(at.x), y - ToUnits(at.z)) < 0xF)
+            {
+                var p = gm.PlaceXY();
+                x = ToUnits(p.x);
+                y = ToUnits(p.z);
+                moveLeftX = moveLeftY = 0;
+                Snap();
+            }
+            gm.ResetRobotChase();
         }
 
         // Raw damage points (collisions and acid count in the original's units, unlike weapon hits)
@@ -511,13 +555,12 @@ namespace SpectreEX
         void Hyperspace()
         {
             var gm = GameManager.Instance;
-            if (gm == null || !gm.TryFindSpawnPoint(out var p, 0f)) return;
+            if (gm == null) return;
+            var p = gm.PlaceXY();
             x = ToUnits(p.x);
             y = ToUnits(p.z);
             FaceRandomly();
-            under = false;
-            minZ = GroundZ;
-            z = HyperDropZ;
+            z = HyperDropZ;   // under the floor you stay under it
             vz = 0;
             Hyper = 0;
             onIce = false;

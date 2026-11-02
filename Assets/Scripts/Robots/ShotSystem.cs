@@ -444,8 +444,9 @@ namespace SpectreEX
                 if (c.GetComponent<OrbitShield>() != null) { if (!s.fromPlayer) struck.Add(c); continue; }
                 if (c.isTrigger) continue;
                 var h = c.GetComponentInParent<Health>();
-                if (h == null || h.IsDead) continue;
+                if (h == null || (h.IsDead && h.team != Team.Player)) continue;   // shots still strike the wreck
                 if (s.fromPlayer && h.team == Team.Player) continue;
+                if (h.team == Team.Player && GameManager.Instance.player.Motor.Untouchable) continue;
                 if (s.owner != null && h.gameObject == s.owner.gameObject) continue;
                 if (!struck.Exists(o => o.GetComponentInParent<Health>() == h)) struck.Add(c);
             }
@@ -483,7 +484,8 @@ namespace SpectreEX
             var p = director.PlayerPos;
             int pq = OriginalMath.QDist(OriginalMath.ToUnits(p.x) - s.x, OriginalMath.ToUnits(p.z) - s.y);
             int bands = (pq < 0x40 ? 1 : 0) + (pq < 0x80 ? 1 : 0) + (pq < 0xC4 ? 1 : 0);
-            if (bands > 0) GameManager.Instance.player.Health.TakeRawDamage(bands * 10, true);
+            var player = GameManager.Instance.player;
+            if (bands > 0 && !player.Motor.Untouchable) player.Health.TakeRawDamage(bands * 10, true);
         }
     }
 }

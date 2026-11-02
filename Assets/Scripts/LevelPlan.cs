@@ -10,7 +10,6 @@ namespace SpectreEX
         public int flags, ammoDumps;
         public int rovers, turrets, orbiters, slicers;
         public int robotShields;
-        public float difficulty;
         public float timeAllowed;
         public Color wallColor;
         public string tip;
@@ -38,7 +37,6 @@ namespace SpectreEX
             p.orbiters = level >= 4 ? Mathf.Min(1 + (level - 4) / 3, 3) : 0;
             p.slicers = level >= 6 ? Mathf.Min(1 + (level - 6) / 2, 5) : 0;
             p.robotShields = 1 + (level - 1) / 5;
-            p.difficulty = 1f + (level - 1) * 0.12f;
             p.timeAllowed = 60f + p.flags * 12f;
             p.wallColor = WallColors[(level - 1) % WallColors.Length];
             p.tip = level switch

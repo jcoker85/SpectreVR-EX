@@ -68,7 +68,7 @@ namespace SpectreEX
 
         void MoveElsewhere(GameManager gm)
         {
-            if (gm.TryFindSpawnPoint(out var p, 0f)) tank.Motor.Place(p, transform.eulerAngles.y, false);
+            tank.Motor.Place(gm.PlaceXY(), transform.eulerAngles.y, false);
         }
 
         // ---------- _FIND_CLEAR_PATH / _CHECK_TANK_PATH, for the player ----------

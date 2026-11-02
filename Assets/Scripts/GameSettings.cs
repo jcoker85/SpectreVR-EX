@@ -55,13 +55,6 @@ namespace SpectreEX
 
         public static bool MusicOn => System.Array.Exists(Music, on => on);   // no style ticked, no music
 
-        public static float DifficultyMultiplier => Difficulty switch
-        {
-            Difficulty.Easy => 0.75f,
-            Difficulty.Hard => 1.3f,
-            _ => 1f,
-        };
-
         public static VehicleSpec Vehicle(int index) => index switch
         {
             1 => VehicleSpec.Speedy,

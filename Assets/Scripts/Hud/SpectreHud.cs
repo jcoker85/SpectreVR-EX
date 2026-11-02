@@ -134,6 +134,7 @@ namespace SpectreEX.Hud
             centre.SetAsFirstSibling();   // under the readouts, which stay up over the recap's blank view
             var ch = NewRect("Crosshair", centre);
             crosshair = ch.gameObject;
+            ch.anchoredPosition = new Vector2(0f, -ViewCamera.CentreDrop * 480f);   // _SHOW_RADAR draws it at _TY
             CrossLine(ch, new Vector2(0, 38), new Vector2(0, 52));
             CrossLine(ch, new Vector2(-58, 0), new Vector2(-42, 0));
             CrossLine(ch, new Vector2(42, 0), new Vector2(58, 0));

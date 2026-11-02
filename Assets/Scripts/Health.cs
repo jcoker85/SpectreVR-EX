@@ -90,7 +90,9 @@ namespace SpectreEX
                 r.enabled = alive;
                 if (alive) GameManager.ApplyFilled(r);   // honour the Options "Filled" setting
             }
-            foreach (var c in GetComponentsInChildren<Collider>()) c.enabled = alive;
+            // The player's wreck still touches things until its time is up (_PLAY_LEVEL)
+            if (team != Team.Player)
+                foreach (var c in GetComponentsInChildren<Collider>()) c.enabled = alive;
             if (rb != null)
             {
                 if (!alive && !rb.isKinematic) rb.linearVelocity = Vector3.zero;

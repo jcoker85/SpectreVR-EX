@@ -66,6 +66,9 @@ namespace SpectreEX.Matrix
         // The bundled Central Systems matrix, whose shapes stand in for a matrix that has none
         public static MatrixFile Central() => Load(Path.Combine(BundledFolder, DefaultMatrix));
 
+        // BASIC.MAT: under every matrix in the original, and the only place the demo's levels are
+        public static MatrixFile Basic() => Load(Path.Combine(BundledFolder, "BASIC.MAT"));
+
         // _SELECT_MATRIX, once at startup: Central Systems unless custom matrices are on; then the only
         // one besides BASIC is taken at once, and with more the player chooses (returned here, BASIC left out)
         public static List<string> ChooseAtStartup()

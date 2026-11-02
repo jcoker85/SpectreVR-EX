@@ -516,6 +516,43 @@ Checked line by line: `_DO_SHOOT`, `_MY_SHOOT`, `_MOVE_SHOTS`, `_KEY_WEAPON`, th
 - Debris cycles shapes 10102-10104 by life; a landed Pulse Burst becomes shape 10096.
 - A Spinner hit spins the player as well as robots: 0x10 a tick for 0xB4 ticks, with no steering or thrust.
 
+## Player, level and demo audit against the decompile
+
+Checked line by line: `_PLAY_LEVEL`, `_DO_PLAYER_MOVE`, `_HIT_A_GATE`, `_DO_COLLIDE_DAMAGE`, `_PLACE_XY`, `_INVISIBLE_PLACE_XY`, `_BUILD_WORLD`, `_LOAD_WAVE`, `_LOAD_WRLD`, `_ADD_ENEMY`, `_LOAD_BVAL`, `_END_LEVEL`, `_START_LEVEL`, and the attract level logic in `_MAIN_MENU`. Differences fixed:
+
+- The last flag or a level skip lifts the craft: +1 flag on the tank record, and 0x300 more climb a tick for the 18 ticks before `_END_LEVEL`. The same flag, set while dropping in, makes the craft untouchable by shots until it lands.
+- Touching a Smart Acid or Smart Wall goes through `_HIT_A_GATE` by type before `_DO_COLLIDE_DAMAGE`: acid burn every third tick, or quarter speed with the squelch, and no collide damage.
+- `_CLEAR_GATE_COLLIDE` runs only when touching nothing at all.
+- Hyperspace doesn't change `_UNDER`: from under the floor you land under it.
+- Random spots are on a 0x800 grid out to about 0x3F800, not 8 m in from the edge, clear of everything by a margin that starts at 0x3200 and shrinks with each try. Robots wait at the middle while dumps are placed, so dumps start clear of it. The player is placed last, then the robots.
+- `_FLAT_CUBE_COLLIDE` has no height at all, so dumps and pads are collected from under the floor too.
+- Every life runs `_START_LEVEL`: all sound stops, the banner shows and the level's song starts again.
+- `_DAMAGE_TIMER` carries across lives. Level 100 wraps to level 1.
+- Demo: its levels are wave 778 in BASIC.MAT (grids 8000-8003), not the matrix's list. It carries on from the last level reached, returns to the first after a level's fourth run, ends after the fourth level and shows no Game Over. A collision there resets the robots' chase, and moves the craft if it's within 0xF; only pushers make it jump.
+- External view: level, at a fixed height of 0x2800 (3.2 m), `_EYE_H` 120 behind, four ticks late, 60-400. Overhead: from height `_EYE_H` << 8, 100-930, always heading 0.
+- A spinning shield ring restarts from slot 0 when one is lost.
+
+- Cockpit eye: `_EZ` is the craft's height + 0x400, and the floor is at 0x500, so 0x900 (0.72 m) up at the craft's centre.
+- Orbit shields: `_CHANGE_SHAPE` 19, the teleport gate's shape, colour 0x40, 0x100 above the craft, starting at roll 0x40 and rolling 0x10 a tick.
+- Field of view: `_XFORM3D_TO_2D` divides by 2 x depth / 256, so the focal length is 128 on the 320x200 screen (256 overhead, where the doubling is skipped), scaled by `_SCALE_X` and `_SCALE_Y` to the window. At 4:3 that's 102.7 degrees across and 76.0 down, or 64.0 and 42.7 overhead. The remake holds the vertical angle, which keeps things the same size against the screen height: 76.0 down and 108.5 across at 16:9, 42.7 and 69.6 overhead. The original's 320x200 frame on a 4:3 screen stretches things 20% taller (11.6% in the 760x530 window); the remake's are true shape.
+  Measured on captured overhead frames at `_EYE_H` 750, against cubes in BASIC.MAT grid 8000's row at y 892: 164 grid apart predicts 185.4 px and shows 185.7, 154 apart predicts 175.1 and shows 175.7, so the focal length of 256 overhead is right. `_P_TO_EYE` reads as twice that (2X / depth), and why it doesn't come out that way on screen isn't explained; the frames are what the remake follows.
+  Cockpit and external, measured on the demo captures in Tools/win31/captures (530x420 window, view centre at row 287 or 288):
+  - Eye heights: `_DRAW_SKY` puts the band `_EZ` >> 11 rows below centre. Its bottom is at row 288 in the cockpit and 292 external, the 1 and 5 rows that 0x900 and 0x2800 give.
+  - Cockpit eye: top and base rows of the cubes give a height of about 8,500 at an eye of 0x900; the shape's is 8,568. Pyramid tops sit at the horizon in external view, as a 10,000 apex under a 10,240 eye should.
+  - Read live from the running demo, frame by frame: `_SCALE_X` 425, `_SCALE_Y` 537, `_TY` 235, `_EZ` 2304 in the cockpit, 10240 external and 192000 overhead. The player's object is at z 1280, not 0: `_PLAY_LEVEL` tests it at the floor, then leaves it at `local_1a` (0x500 on the ground) for drawing, so the craft hovers 0x500 (0.4 m). PlayerModel does the same.
+  - External focal length: the row of the craft's base under the true eye gives 130.4 at distance 40,845, 128.9 at 35,642 and 130.5 at 39,553, against 128. Widths read short because the wings cover the body's corners. Only four cockpit frames could be tested against the objects' true positions; one favours 128 and the others are too noisy to say, but the cockpit shares the external view's code path.
+  - Floor dots, overhead: rows 182-183 px apart against 183.3 predicted, columns 144-146 against 145.1, so lines 0x10000 apart and the overhead scale are right. The window around the eye (`_DRAW_DOTS` stops 0x26000 to 0x30000 out) is left out: the remake draws them all.
+  - Ammo dumps fill their rectangles (99 of 99 px, 108 of 108), so they're square to the axes, 0xC00 across with the rasteriser's extra pixel.
+  - Sky: `_DRAW_SKY`'s band is 32 rows, a linear ramp from black to the sky colour (read off a frame), bottom at `_TY` + (`_EZ` >> 11), none in overhead view. Under the floor rows go at `_EZ` >> 6, so it's gone at -0x800. The remake's is that tall at 530 rows and hides at that depth without the partial cut. Its bottom stays on the true horizon: the original's 1-5 row drop needs the band over the floor, about 0.7% of the screen at most.
+  - Draw distance: the far clip is 1000 m and the arena's diagonal is about 232 m, so nothing is ever cut. There's no setting to add.
+  - `_START_LEVEL`: Space ends the banner at once, and without the sound if before its fifth tick. Alt+S saves (`_SAVE_GAME`): ten named slots of level, score at the level's start and lives, restored with Alt+R (`_RESTORE_GAME`). Alt+P asks for a starting level, 1-50 (`_GET_START_LEVEL`). The remake has them all, in the high-score table's look (SPCP15, the original's dialog, is only a blank frame). A slot never saved to loads nothing, where the original would load no lives.
+  - The wreck: while `_DEAD_TIMER` runs, `_DO_PLAYER_MOVE` and everything after it go on with `_SPEED` 0. It turns, jumps, fires, hyperspaces, rides pads, collects flags and dumps and takes shots, its shields stay up until the next life, and the bonus keeps falling. If the last flag or a jump pad ends the level before the timer does, no life is lost and the level moves on. If the timer gets there first, the life goes and the level ends just after it restarts. Shields also go at every new level, as `_ZAP_OBJECTS` clears them.
+  - The view centre is `_TY` = height - (height - 50) / 2, 290 of 530 rows down at the reference window. The remake shifts its lens and crosshair down by the same 4.7% of the screen's height. Banners stay mid-screen.
+- `_EYE_H` for overhead starts at 500 (40 m), but the demo sets it to 750 (60 m) and nothing sets it back, so that's what the original shows after any demo and all the captured frames. The remake starts at 750.
+- Own craft from the cockpit: `_P_TO_EYE` drops an object if any point has depth below 1, and the craft surrounds the eye. There's no separate hide. The remake switches the model off in that view, so ray tracing can't show it either.
+
+Not ported, or left: mouse and joystick use the remake's modern bindings by choice, not the original's centre zones (held past a zone edge is full turn or thrust);
+
 ## Modern enhancements
 
 Things the remake does differently on purpose, by the owner's choice, rather than as fixes to the original:
@@ -529,6 +566,7 @@ Things the remake does differently on purpose, by the owner's choice, rather tha
 
 Where the original looks like an oversight rather than a design, the remake does what it evidently meant (owner's rule, 2026-10-31):
 
+- `_PLACE_TANKS` measures "out of sight" from the player's object before it has moved: the wreck on a new life, the middle on a new level. The remake measures from the craft's real start, so robots don't start on top of you.
 - A destroyed textured craft throws grey pieces, not its base colour.
 - Quickness: the original's seconds taken * 128 / allowed rates a slow finish Perfect and a fast one Get Help. The remake uses allowed * 128 / seconds taken, capped at 128, so finishing inside the time allowed is Perfect.
 - Stun flash: the original swaps the object colour of a Robot Tank or Super Tank, but the Robot Tank's body faces are a fixed red, so by the code that swap wouldn't show on it. The remake lets the body flash. A Super Tank with textures on keeps its steel: only its plain-colour faces with textures off flash.

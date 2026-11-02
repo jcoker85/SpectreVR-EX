@@ -388,11 +388,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SpectreEX.ViewCamera
   target: {fileID: 90473761}
   mode: 0
-  cockpitOffset: {x: 0, y: 1.85, z: 1.25}
-  externalDistance: 11
-  externalHeight: 4.5
-  overheadHeight: 90
-  followSharpness: 8
+  cockpitOffset: {x: 0, y: 0.72, z: 0}
+  externalDistance: 9.6
+  externalHeight: 3.2
+  overheadHeight: 60
+  followSharpness: 4.5
   cockpitSharpness: 30
   overheadSharpness: 10
   snapDistance: 12
@@ -577,7 +577,7 @@ Camera:
     height: 1
   near clip plane: 0.1
   far clip plane: 1000
-  field of view: 65
+  field of view: 76
   orthographic: 0
   orthographic size: 5
   m_Depth: 0

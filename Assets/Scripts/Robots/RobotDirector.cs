@@ -39,7 +39,7 @@ namespace SpectreEX
         public void SimTick()
         {
             if (gm == null || !gm.Playing) return;
-            if (PlayerAlive && !gm.Paused) gm.player.Weapon.Tick(Shots, gm.Level);
+            if (!gm.Paused) gm.player.Weapon.Tick(Shots, gm.Level);
             bool needChaser = true;
             foreach (var r in Robots) if (r != null && r.mode == 3) needChaser = false;
             foreach (var r in Robots)

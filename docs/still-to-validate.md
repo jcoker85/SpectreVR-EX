@@ -10,7 +10,6 @@ The rules below are ported line by line from the decompile, so what's left is se
 
 - [ ] **Later robot types:** how Flyers, Cyber Mud, Smart Acid, Smart Walls, Orbiters, Invisible Tanks and Cloaked Tanks move and feel. None of these has been measured moving.
 - [ ] **Firing rhythm:** how often each robot type fires. There were too few shots to compare. Robot Tank, Super Tank and Slicer movement already match.
-- [ ] **Heavy weapons:** speed, arc and look of Grenades, Scatter Shots, Seekers, Spinners, Mines, Bombs and Pulse Bursts, and how far Seekers curve. Missiles and the cannon are measured. On purpose: Grenades and Bombs throw no debris, and their blasts only reach robots in range.
 
 ## Quick side-by-side looks
 

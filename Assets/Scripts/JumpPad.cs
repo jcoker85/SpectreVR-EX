@@ -50,8 +50,7 @@ namespace SpectreEX
             var col = go.AddComponent<BoxCollider>();
             col.isTrigger = true;
             float side = 0xC00 * PlayerMotor.UnitsToMetres;   // _FLAT_CUBE_COLLIDE: at any height
-            col.center = Vector3.up * 50f;
-            col.size = new Vector3(side, 100f, side);
+            col.size = new Vector3(side, 200f, side);
             return pad;
         }
 

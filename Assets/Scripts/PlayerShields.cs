@@ -12,12 +12,12 @@ namespace SpectreEX
         public const float Radius = 0x3C * 256 * PlayerMotor.UnitsToMetres;
         const int Slots = 4;
         const float SpinStepsPerTick = 8f;
+        const float Lift = 0x100 * PlayerMotor.UnitsToMetres;
 
         readonly OrbitShield[] slots = new OrbitShield[Slots];
         bool spinning;
         float spinSteps;
-        Health health;
-        TankWeapon weapon;
+        PlayerMotor motor;
 
         public int Count
         {
@@ -26,8 +26,7 @@ namespace SpectreEX
 
         void Awake()
         {
-            health = GetComponent<Health>();
-            weapon = GetComponent<TankWeapon>();
+            motor = GetComponent<PlayerMotor>();
         }
 
         public void Add()
@@ -35,7 +34,7 @@ namespace SpectreEX
             for (int i = 0; i < Slots; i++)
             {
                 if (slots[i] != null) continue;
-                slots[i] = OrbitShield.Create(this, weapon != null ? weapon.projectileMaterial : null);
+                slots[i] = OrbitShield.Create(this);
                 Place(i);
                 return;
             }
@@ -54,8 +53,11 @@ namespace SpectreEX
 
         void LateUpdate()
         {
-            if (health != null && health.IsDead) { Clear(); return; }
-            if (Count < Slots) spinning = false;
+            if (Count < Slots)
+            {
+                spinning = false;
+                spinSteps = 0f;
+            }
             if (spinning) spinSteps = Mathf.Repeat(spinSteps + SpinStepsPerTick * PlayerMotor.TickRate * Time.deltaTime, 256f);
             for (int i = 0; i < Slots; i++) Place(i);
         }
@@ -66,8 +68,8 @@ namespace SpectreEX
             if (s == null) return;
             // Slot 0 dead ahead; each slot a quarter turn further left
             float a = (i * 64 + spinSteps) * (360f / 256f) * Mathf.Deg2Rad;
-            Vector3 local = new Vector3(-Mathf.Sin(a), 0f, Mathf.Cos(a)) * Radius + Vector3.up * 0.8f;
-            s.transform.position = transform.TransformPoint(local);
+            Vector3 local = new Vector3(-Mathf.Sin(a), 0f, Mathf.Cos(a)) * Radius + Vector3.up * Lift;
+            s.transform.SetPositionAndRotation(transform.TransformPoint(local), Quaternion.Euler(0f, OriginalMath.Yaw(motor.OriginalHeading), 0f));
         }
 
         public static int Damage
@@ -81,28 +83,57 @@ namespace SpectreEX
     }
 
     // One orbiting shield: its own root object (a child of the player would collect flags and dumps
-    // through its collider), a trigger that robots touch and enemy bolts are stopped by.
+    // through its collider), a trigger that robots touch and enemy bolts are stopped by. _DO_SHOOT
+    // gives weapon 7 the teleport gate's shape in orange, starting a quarter turn over and rolling 0x10 a tick.
     public class OrbitShield : MonoBehaviour
     {
         public Team team = Team.Player;
-        PlayerShields owner;
+        const int ShapeType = 19, Colour = 0x40, StartRoll = 0x40, RollRate = 0x10;
 
-        public static OrbitShield Create(PlayerShields owner, Material material)
+        PlayerShields owner;
+        Transform visual;
+        BoxCollider box;
+        float roll = StartRoll;
+
+        public static OrbitShield Create(PlayerShields owner)
         {
-            var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            go.name = "Orbit Shield";
-            go.transform.localScale = Vector3.one * 0.9f;
-            go.GetComponent<Collider>().isTrigger = true;
-            if (material != null) go.GetComponent<MeshRenderer>().sharedMaterial = material;
+            var gm = GameManager.Instance;
+            var go = new GameObject("Orbit Shield");
             var s = go.AddComponent<OrbitShield>();
             s.owner = owner;
+            s.visual = new GameObject("Visual").transform;
+            s.visual.SetParent(go.transform, false);
+
+            bool any = false;
+            var bounds = new Bounds();
+            foreach (var part in gm.Shapes.ForType(ShapeType))
+            {
+                var mesh = part.shape.Coloured(Colour);
+                var panels = new GameObject("Panels");
+                panels.transform.SetParent(s.visual, false);
+                panels.transform.localPosition = part.offset;
+                panels.AddComponent<MeshFilter>().sharedMesh = mesh;
+                var r = panels.AddComponent<MeshRenderer>();
+                r.sharedMaterial = gm.obstacleLook.shapes;
+                var b = new Bounds(mesh.bounds.center + part.offset, mesh.bounds.size);
+                if (any) bounds.Encapsulate(b);
+                else bounds = b;
+                any = true;
+            }
+
+            s.box = go.AddComponent<BoxCollider>();
+            s.box.isTrigger = true;
+            s.box.center = bounds.center;
+            s.box.size = bounds.size;
             return s;
         }
 
         void Update()
         {
             if (owner == null) { Destroy(gameObject); return; }
-            foreach (var c in Physics.OverlapSphere(transform.position, 0.6f, ~0, QueryTriggerInteraction.Collide))
+            roll = Mathf.Repeat(roll + RollRate * PlayerMotor.TickRate * Time.deltaTime, 256f);
+            visual.localRotation = Quaternion.Euler(0f, 0f, roll * OriginalMath.StepsToDegrees);
+            foreach (var c in Physics.OverlapBox(transform.TransformPoint(box.center), box.size * 0.5f, transform.rotation, ~0, QueryTriggerInteraction.Collide))
             {
                 // Obstacles end a shield (_MOVE_SHOTS), except the floor pads it passes over
                 var obstacle = c.GetComponentInParent<Matrix.ObstacleBehaviour>();

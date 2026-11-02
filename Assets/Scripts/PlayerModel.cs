@@ -12,6 +12,9 @@ namespace SpectreEX
     // collider is left as it is.
     public class PlayerModel : MonoBehaviour
     {
+        // _PLAY_LEVEL tests the craft's object at the floor, then leaves it 0x500 up for drawing
+        const float HoverHeight = PlayerMotor.GroundUnits * PlayerMotor.UnitsToMetres;
+
         readonly List<(Transform part, int sign)> wings = new List<(Transform, int)>();
         PlayerMotor motor;
 
@@ -34,6 +37,7 @@ namespace SpectreEX
             wings.Clear();
             var root = new GameObject("Craft").transform;
             root.SetParent(model, false);
+            root.localPosition = Vector3.up * HoverHeight;
             foreach (var p in parts)
             {
                 var t = new GameObject("Shape").transform;

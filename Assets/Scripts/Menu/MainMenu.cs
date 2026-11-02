@@ -20,12 +20,10 @@ namespace SpectreEX.Menu
     //   QUIT      -> quit
     // The big panel shows the matrix's own picture; the matrix is settled at startup, before the menu
     // (with custom matrices on and several to pick from, the Choose Matrix dialog comes up first).
-    // Keys: the first letter of each button, and holding Alt while starting a game
-    // begins at a higher level, as in the original.
+    // Keys: the first letter of each button. As in the original, Alt+P asks for a starting level and
+    // Alt+R loads a saved game; Alt+S on a level's banner saves one.
     public class MainMenu : MonoBehaviour
     {
-        public int altStartLevel = 5;
-
         const int MainW = 522, MainH = 332;
 
         // ---------- small screen model: an image plus hotspots, in the image's own pixels ----------
@@ -61,7 +59,23 @@ namespace SpectreEX.Menu
         Vector2Int lastScreen;
         FullScreenMode lastMode;
         readonly List<MenuScreen> stack = new List<MenuScreen>();
-        MenuScreen main, vehicles, custom, options, matrix, about, help, scores, notice;
+        const float SplashSeconds = 2.5f, SplashFadeSeconds = 0.5f;
+        MenuScreen splash;
+        Image splashFade;
+        MenuScreen main, vehicles, custom, options, matrix, about, help, scores, notice, levelPrompt, slots;
+
+        // What Play will start: level 1 afresh, unless Alt+P or Alt+R chose otherwise
+        int startAt = 1, startScore, startLives = -1;
+
+        // The number or name being typed into levelPrompt or slots; the first key replaces what's there
+        string typed = "";
+        bool typedFresh;
+
+        // The slots dialog: loading, or saving (the slot first, then a name)
+        bool slotsSaving, slotsNaming;
+        int slotPicked, saveLevel, saveScore, saveLives;
+        PixelSegmentText levelField, slotsTitle;
+        readonly List<PixelSegmentText[]> slotRows = new List<PixelSegmentText[]>();
         PixelSegmentText noticeText;
         GameManager gm;
         List<string> matrixChoices;
@@ -92,11 +106,11 @@ namespace SpectreEX.Menu
             {
                 gm.ReturnedToMenu += OnReturnedToMenu;
                 gm.Suspend += () => Open(keepMusic: true);
+                gm.SaveRequested += OpenSave;
             }
             if (Keyboard.current != null) Keyboard.current.onTextInput += OnTextInput;
             GraphicsOptions.Load();
             GameKeys.Load();
-            Sfx.Play(Snd.Logo);
             matrixChoices = Matrix.MatrixLibrary.ChooseAtStartup();
             main.refresh();
             StartCoroutine(FirstOpen());
@@ -105,10 +119,28 @@ namespace SpectreEX.Menu
         // The startup movie, then the menu with its theme, so neither talks over the other
         IEnumerator FirstOpen()
         {
+            yield return ShowSplash();
             canvas.enabled = false;
+            Sfx.Play(Snd.Logo);
             yield return Matrix.StartupMovie.Play(this);
             Open();
             if (matrixChoices != null) Push(matrix);
+        }
+
+        // _SHOW_VELOCITY: the logo while the game loads, fading out before the logo sound
+        IEnumerator ShowSplash()
+        {
+            canvas.enabled = true;
+            foreach (var s in AllScreens()) s.root.gameObject.SetActive(false);
+            Push(splash);
+            yield return new WaitForSecondsRealtime(SplashSeconds);
+            for (float t = 0f; t < 1f; t += Time.unscaledDeltaTime / SplashFadeSeconds)
+            {
+                splashFade.color = new Color(0f, 0f, 0f, t);
+                yield return null;
+            }
+            stack.Clear();
+            splash.root.gameObject.SetActive(false);
         }
 
         void OnDestroy()
@@ -170,11 +202,11 @@ namespace SpectreEX.Menu
 
         void StartGame(bool demo)
         {
-            var k = Keyboard.current;
-            bool alt = k != null && (k.leftAltKey.isPressed || k.rightAltKey.isPressed);
             GameSettings.Save();
             Close();
-            gm.StartGame(GameSettings.Vehicle(GameSettings.SelectedVehicle), alt ? altStartLevel : 1, demo);
+            var vehicle = demo ? new VehicleSpec("DEMO", 9, 6, 4) : GameSettings.Vehicle(GameSettings.SelectedVehicle);   // _MAIN_MENU's own for the demo
+            if (demo) gm.StartGame(vehicle, 1, true);
+            else gm.StartGame(vehicle, startAt, false, startScore, startLives);
         }
 
         void Quit()
@@ -211,10 +243,12 @@ namespace SpectreEX.Menu
             rt.offsetMin = rt.offsetMax = Vector2.zero;
         }
 
-        IEnumerable<MenuScreen> AllScreens() => new[] { main, vehicles, custom, options, graphics, controls, pick, matrix, about, help, scores, notice };
+        IEnumerable<MenuScreen> AllScreens() => new[] { splash, main, vehicles, custom, options, graphics, controls, pick, matrix, about, help, scores, notice, levelPrompt, slots };
 
         void BuildScreens()
         {
+            splash = BlackScreen("Splash", "Splash");
+            splashFade = AddRect(splash, new Rect(-2000, -2000, 4368, 4121), new Color(0f, 0f, 0f, 0f));
             BuildMain();
             BuildVehicles();
             BuildCustom();
@@ -226,6 +260,8 @@ namespace SpectreEX.Menu
             help.onAnyClick = help.onEscape = help.onEnter = Pop;
             BuildScores();
             BuildNotice();
+            BuildLevelPrompt();
+            BuildSlots();
             BuildGraphics();
             BuildControls();
             Relayout();
@@ -253,7 +289,7 @@ namespace SpectreEX.Menu
         // A picture on black, not over the menu
         MenuScreen BlackScreen(string name, string tex)
         {
-            var t = LoadTex(tex);
+            var t = LoadTex(tex) ?? Texture2D.blackTexture;
             var s = NewScreen(name, new Vector2(t.width, t.height));
             AddRect(s, new Rect(-2000, -2000, 4000 + t.width, 4000 + t.height), Color.black);
             AddRaw(s, t, new Rect(0, 0, t.width, t.height), new Rect(0, 0, 1, 1));
@@ -271,7 +307,7 @@ namespace SpectreEX.Menu
                 picture.enabled = picture.texture != null;
             };
             AddRaw(main, buttonsTex, new Rect(377, 229, 64, 64), TileUv(0, 3));   // the menu art has MATRIX here
-            Tile(main, 377, 25, 1, 0, () => Push(vehicles), Key.P);
+            Tile(main, 377, 25, 1, 0, PlayFromStart, Key.P);
             Tile(main, 449, 25, 3, 0, () => ShowNotice("CYBERNET NETWORK PLAY\nIS NOT AVAILABLE\nIN THIS VERSION"), Key.C);
             Tile(main, 377, 93, 1, 1, () => Push(ShiftHeld ? settingsPage : options), Key.O);
             optionsHue = AddRect(main, new Rect(377, 93, 64, 64), new Color(0.55f, 0.1f, 1f, 0.5f));
@@ -281,7 +317,7 @@ namespace SpectreEX.Menu
             Tile(main, 449, 161, 3, 2, () => Push(about), Key.A);
             Tile(main, 377, 229, 1, 3, () => StartGame(true), Key.D);
             Tile(main, 449, 229, 3, 3, Quit, Key.Q);
-            main.onEnter = () => Push(vehicles);
+            main.onEnter = PlayFromStart;
             main.onEscape = ResumeGame;
         }
 
@@ -941,8 +977,154 @@ namespace SpectreEX.Menu
 
         void OnTextInput(char c)
         {
-            if (!enteringName || stack.Count == 0 || stack[stack.Count - 1] != scores) return;
+            if (stack.Count == 0) return;
+            var top = stack[stack.Count - 1];
+            if (top == levelPrompt || top == slots)
+            {
+                bool wordy = top == slots && slotsNaming;
+                if (wordy ? (c < ' ' || c >= 127 || c == '|') : !char.IsDigit(c)) return;
+                if (typedFresh) typed = "";
+                typedFresh = false;
+                if (typed.Length < (wordy ? 12 : 2)) typed += char.ToUpperInvariant(c);
+                return;
+            }
+            if (!enteringName || top != scores) return;
             if (c >= ' ' && c < 127 && pendingName.Length < 8) pendingName += char.ToUpperInvariant(c);
+        }
+
+        void PlayFromStart()
+        {
+            startAt = 1;
+            startScore = 0;
+            startLives = -1;
+            Push(vehicles);
+        }
+
+        void Type(string first)
+        {
+            typed = first;
+            typedFresh = true;
+        }
+
+        string Cursor => Time.unscaledTime % 1f < 0.5f ? "_" : "";
+
+        // _GET_START_LEVEL: 1 to 50, then the vehicle as usual
+        void BuildLevelPrompt()
+        {
+            levelPrompt = NewScreen("StartLevel", new Vector2(284, 220));
+            AddRect(levelPrompt, new Rect(-2000, -2000, 4284, 4220), Color.black);
+            Frame(levelPrompt, new Rect(0, 0, 284, 220), SegGreen, 4f);
+            AddText(levelPrompt, new Rect(30, 104, 190, 14), 8, SegGreen, TextAnchor.MiddleLeft).Text = Seg("Enter Starting Level:");
+            levelField = AddText(levelPrompt, new Rect(224, 104, 40, 14), 8, SegGreen, TextAnchor.MiddleLeft);
+            levelPrompt.refresh = () => levelField.Text = Seg(typed + Cursor);
+            levelPrompt.onEscape = Pop;
+            levelPrompt.onEnter = () =>
+            {
+                if (!int.TryParse(typed, out int level) || level < 1 || level > 50) { Type("1"); return; }
+                startAt = level;
+                startScore = 0;
+                startLives = -1;
+                Pop();
+                Push(vehicles);
+            };
+        }
+
+        void OpenLevelPrompt()
+        {
+            Type("1");
+            Push(levelPrompt);
+        }
+
+        // _SHOW_SAVED_GAMES, for _SAVE_GAME and _RESTORE_GAME: the slots, and a number to type
+        void BuildSlots()
+        {
+            slots = NewScreen("Slots", new Vector2(284, 220));
+            AddRect(slots, new Rect(-2000, -2000, 4284, 4220), Color.black);
+            Frame(slots, new Rect(0, 0, 284, 220), SegGreen, 4f);
+            slotsTitle = AddText(slots, new Rect(8, 16, 268, 14), 8, SegGreen, TextAnchor.MiddleCenter);
+            for (int i = 0; i < SavedGames.Slots; i++)
+            {
+                float y = 40 + i * 16;
+                slotRows.Add(new[]
+                {
+                    AddText(slots, new Rect(8, y, 28, 12), 8, SegGreen, TextAnchor.MiddleRight),
+                    AddText(slots, new Rect(42, y, 130, 12), 8, SegGreen, TextAnchor.MiddleLeft),
+                    AddText(slots, new Rect(172, y, 24, 12), 8, SegGreen, TextAnchor.MiddleRight),
+                    AddText(slots, new Rect(198, y, 24, 12), 8, SegGreen, TextAnchor.MiddleRight),
+                    AddText(slots, new Rect(224, y, 52, 12), 8, SegGreen, TextAnchor.MiddleRight),
+                });
+            }
+            slots.refresh = () =>
+            {
+                slotsTitle.Text = Seg((slotsNaming ? "Name: " : slotsSaving ? "Save game in slot (1-10): " : "Load game from slot (1-10): ") + typed + Cursor);
+                for (int i = 0; i < SavedGames.Slots; i++)
+                {
+                    var g = SavedGames.Load(i);
+                    var row = slotRows[i];
+                    row[0].Text = Seg($"{i + 1}.");
+                    row[1].Text = Seg(g.name);
+                    row[2].Text = g.used ? Seg((g.level + 1).ToString()) : "";
+                    row[3].Text = g.used ? Seg(g.lives.ToString()) : "";
+                    row[4].Text = g.used ? Seg(g.score.ToString()) : "";
+                }
+            };
+            slots.onEscape = () =>
+            {
+                if (slotsSaving) FinishSave();
+                else Pop();
+            };
+            slots.onEnter = () =>
+            {
+                if (slotsNaming)
+                {
+                    SavedGames.Save(slotPicked, typed, saveLevel, saveScore, saveLives);
+                    FinishSave();
+                    return;
+                }
+                if (!int.TryParse(typed, out int slot) || slot < 1 || slot > SavedGames.Slots) { Type("1"); return; }
+                var game = SavedGames.Load(slot - 1);
+                if (slotsSaving)
+                {
+                    slotPicked = slot - 1;
+                    slotsNaming = true;
+                    Type(game.name);
+                    return;
+                }
+                if (!game.used) return;   // a slot never saved to would load no lives at all
+                startAt = game.level + 1;
+                startScore = game.score;
+                startLives = game.lives;
+                Pop();
+                Push(vehicles);
+            };
+        }
+
+        void OpenLoad()
+        {
+            slotsSaving = slotsNaming = false;
+            Type("1");
+            Push(slots);
+        }
+
+        // Alt+S on a level's banner: the dialog over the game, which waits for it
+        void OpenSave(int level, int score, int lives)
+        {
+            saveLevel = level;
+            saveScore = score;
+            saveLives = lives;
+            slotsSaving = true;
+            slotsNaming = false;
+            Type("1");
+            canvas.enabled = true;
+            stack.Clear();
+            foreach (var s in AllScreens()) s.root.gameObject.SetActive(false);
+            Push(slots);
+        }
+
+        void FinishSave()
+        {
+            Close();
+            gm.SaveFinished();
         }
 
         void BuildNotice()
@@ -1155,6 +1337,7 @@ namespace SpectreEX.Menu
             if (top == pick || top == graphics || top == controls) ScrollLists(top);
             if (top == custom) StepCustom();
             if (top == scores && enteringName) scores.refresh();   // blink the cursor
+            if (top == levelPrompt || top == slots) top.refresh();
             if (top == scores && scoresCloseAt > 0f && Time.unscaledTime >= scoresCloseAt) { CloseScores(); return; }
 
             // Mouse position in the top screen's image pixels (y down)
@@ -1189,6 +1372,23 @@ namespace SpectreEX.Menu
                 if (k.enterKey.wasPressedThisFrame || k.numpadEnterKey.wasPressedThisFrame) top.onEnter?.Invoke();
                 if (k.escapeKey.wasPressedThisFrame) top.onEscape?.Invoke();
                 return;
+            }
+            if (top == levelPrompt || top == slots)
+            {
+                if (k.backspaceKey.wasPressedThisFrame)
+                {
+                    if (typedFresh) typed = "";
+                    else if (typed.Length > 0) typed = typed.Substring(0, typed.Length - 1);
+                    typedFresh = false;
+                }
+                if (k.enterKey.wasPressedThisFrame || k.numpadEnterKey.wasPressedThisFrame) top.onEnter?.Invoke();
+                else if (k.escapeKey.wasPressedThisFrame) top.onEscape?.Invoke();
+                return;
+            }
+            if (top == main && (k.leftAltKey.isPressed || k.rightAltKey.isPressed))
+            {
+                if (k.pKey.wasPressedThisFrame) { Sfx.Play(Snd.TimeTick); OpenLevelPrompt(); return; }
+                if (k.rKey.wasPressedThisFrame) { Sfx.Play(Snd.TimeTick); OpenLoad(); return; }
             }
             // (not on the frame a screen opened: the in-game Esc that brought the menu up mustn't also close it)
             if (k.escapeKey.wasPressedThisFrame && Time.frameCount != ignoreClickFrame) { top.onEscape?.Invoke(); return; }

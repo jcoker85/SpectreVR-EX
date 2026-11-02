@@ -4,24 +4,24 @@ namespace SpectreEX
 {
     public enum ViewMode { Internal, External, Overhead, Map }
 
-    // Spectre's three views, cycled with Tab / numpad *: internal (cockpit), external (behind the
-    // tank) and overhead map. + / - zoom the external and overhead views.
+    // Spectre's three views, cycled with Tab / numpad *: internal (cockpit), external (a level view
+    // from a fixed height behind the tank, trailing it) and overhead (from straight above, always the
+    // same way up). + / - zoom the external and overhead views (_EYE_H).
     public class ViewCamera : MonoBehaviour
     {
         public Transform target;
         public ViewMode mode = ViewMode.Internal;
-        public Vector3 cockpitOffset = new Vector3(0f, 1.9f, 0.9f);
-        public float externalDistance = 11f;
-        public float externalHeight = 4.5f;
-        public float overheadHeight = 90f;
-        public float followSharpness = 8f;
+        public Vector3 cockpitOffset = new Vector3(0f, 0.72f, 0f);   // _PLAY_LEVEL: 0x400 above the craft, whose floor height is 0x500
+        public float externalDistance = 9.6f;
+        public float externalHeight = 3.2f;
+        public float overheadHeight = 60f;   // _EYE_H 750, as the demo leaves it; the exe's first value is 500 (40 m)
+        public float followSharpness = 4.5f;   // the external view runs four ticks behind
         public float cockpitSharpness = 30f;   // high: feels locked on, but filters per-physics-step judder
         public float overheadSharpness = 10f;
         public float snapDistance = 12f;       // bigger jumps (hyperspace, teleports) cut instantly
-        public string playerModelLayer = "PlayerModel";
 
         Camera cam;
-        int playerMask;
+        Transform model;
         Vector3 smoothPos;
         float smoothYaw;
         bool hasSmooth;
@@ -30,8 +30,9 @@ namespace SpectreEX
         {
             if (GetComponent<MapView>() == null) gameObject.AddComponent<MapView>();
             cam = GetComponent<Camera>();
-            int layer = LayerMask.NameToLayer(playerModelLayer);
-            playerMask = layer >= 0 ? 1 << layer : 0;
+            cam.usePhysicalProperties = true;
+            cam.gateFit = Camera.GateFitMode.Vertical;
+            cam.lensShift = new Vector2(0f, CentreDrop);
         }
 
         float demoClock, deadTimer;
@@ -39,6 +40,16 @@ namespace SpectreEX
 
         // In demo mode the view moves on every 126 ticks (_PLAY_LEVEL), and a real game starts inside
         void NextMode() => mode = (int)mode >= 2 ? ViewMode.Internal : mode + 1;
+
+        // _XFORM3D_TO_2D projects at 128 on the 320x200 screen, 256 from overhead: 2 atan(100 / 128) and
+        // 2 atan(100 / 256) top to bottom. That's held on any window, so a wider one just sees further round.
+        const float ViewFov = 76f, OverheadFov = 42.68f;
+
+        // _TY: the view's centre is 290 rows down the 530, below the score panel, not mid-window. A
+        // fraction of the screen's height, kept by a lens shift so the field of view doesn't change.
+        public const float CentreDrop = 290f / 530f - 0.5f;
+
+        const float ZoomRate = 10 * 256 * PlayerMotor.UnitsToMetres * PlayerMotor.TickRate;   // _EYE_H: 10 a tick
 
         void CycleInDemo()
         {
@@ -49,6 +60,8 @@ namespace SpectreEX
                 if (demoClock < 126f / PlayerMotor.TickRate) return;
                 demoClock = 0f;
                 NextMode();
+                if (mode == ViewMode.External) externalDistance = 9.6f;
+                if (mode == ViewMode.Overhead) overheadHeight = 60f;   // and it stays there after the demo
             }
             else if (demoClock > 0f)
             {
@@ -67,16 +80,18 @@ namespace SpectreEX
             float zoom = 0f;
             if (GameKeys.ZoomIn.Held) zoom -= 1f;
             if (GameKeys.ZoomOut.Held) zoom += 1f;
-            if (mode == ViewMode.External) externalDistance = Mathf.Clamp(externalDistance + zoom * 15f * Time.deltaTime, 5f, 40f);
-            if (mode == ViewMode.Overhead) overheadHeight = Mathf.Clamp(overheadHeight + zoom * 80f * Time.deltaTime, 30f, 320f);
+            if (mode == ViewMode.External) externalDistance = Mathf.Clamp(externalDistance + zoom * ZoomRate * Time.deltaTime, 4.8f, 32f);
+            if (mode == ViewMode.Overhead) overheadHeight = Mathf.Clamp(overheadHeight + zoom * ZoomRate * Time.deltaTime, 20f, 186f);
 
             health = health != null ? health : target.GetComponent<Health>();
             bool dead = health != null && health.IsDead;
+            cam.fieldOfView = mode == ViewMode.Overhead && !dead ? OverheadFov : ViewFov;
             deadTimer = dead ? Mathf.Min(deadTimer + 0x32 * PlayerMotor.TickRate * Time.deltaTime, 0x9C3) : 0f;
 
-            // Hide our own hull from the inside
-            if (playerMask != 0)
-                cam.cullingMask = mode == ViewMode.Internal && !dead ? cam.cullingMask & ~playerMask : cam.cullingMask | playerMask;
+            // The original drops any object with a point behind the eye, which from the cockpit is the
+            // craft itself. Switched off, not just unseen, so ray tracing can't show it in the floor.
+            model = model != null ? model : target.Find("Model");
+            if (model != null) model.gameObject.SetActive(mode != ViewMode.Internal || dead);
 
             Quaternion yaw = Quaternion.Euler(0f, target.eulerAngles.y, 0f);
             float t = 1f - Mathf.Exp(-followSharpness * Time.deltaTime);
@@ -123,14 +138,14 @@ namespace SpectreEX
                     break;   // MapView draws it; the rows it leaves keep this view where it was
                 case ViewMode.External:
                 {
-                    Vector3 desired = target.position + yaw * new Vector3(0f, externalHeight, -externalDistance);
+                    Vector3 desired = target.position - yaw * Vector3.forward * externalDistance;
+                    desired.y = externalHeight;
                     transform.position = Vector3.Lerp(transform.position, desired, t);
-                    Vector3 focus = target.position + yaw * Vector3.forward * 8f + Vector3.up * 1.2f;
-                    transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(focus - transform.position), t);
+                    transform.rotation = Quaternion.Slerp(transform.rotation, yaw, t);
                     break;
                 }
                 case ViewMode.Overhead:
-                    transform.SetPositionAndRotation(smoothPos + Vector3.up * overheadHeight, Quaternion.Euler(90f, smoothYaw, 0f));
+                    transform.SetPositionAndRotation(new Vector3(smoothPos.x, overheadHeight, smoothPos.z), Quaternion.Euler(90f, 180f, 0f));
                     break;
             }
         }
