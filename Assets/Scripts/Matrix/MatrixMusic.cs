@@ -20,15 +20,6 @@ namespace SpectreEX.Matrix
             { 24001, "5THEME" }, { 24002, "AWARD" }, { 24003, "HIGAME" }, { 24004, "5THEME" },
         };
 
-        // Every track in each style, for levels without a matrix song
-        public static List<string> StyleTracks(int style)
-        {
-            var list = new List<string>();
-            foreach (var kv in Tracks)
-                if (kv.Key / 1000 - 20 == style && !list.Contains(kv.Value)) list.Add(kv.Value);
-            return list;
-        }
-
         // The track to play for a level's song id, honouring the ticked music styles.
         // Returns null for "no music".
         public static string TrackFor(int songId)

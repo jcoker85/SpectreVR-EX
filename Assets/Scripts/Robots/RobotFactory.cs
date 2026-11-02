@@ -29,8 +29,6 @@ namespace SpectreEX
     // does with _ADD_SHAPE - with a collider round the exact bounds (_CUBE_COLLIDE).
     public static class RobotFactory
     {
-        const int FallbackShape = 10010;
-
         public static Robot Build(int type, ShapeSet shapes, RobotLook look, float edgeThickness)
         {
             var parts = Parts(type, shapes);
@@ -53,31 +51,11 @@ namespace SpectreEX
             return robot;
         }
 
-        // A robot already in play takes on the current shapes, as when Complex changes mid-game
-        public static void Reshape(Robot robot, ShapeSet shapes, RobotLook look, float edgeThickness)
-        {
-            var parts = Parts(robot.matrixType, shapes);
-            var model = robot.transform.Find("Model");
-            if (parts == null || model == null) return;
-            var old = new System.Collections.Generic.List<GameObject>();
-            foreach (Transform child in model) old.Add(child.gameObject);
-            model.DetachChildren();
-            foreach (var o in old) Object.Destroy(o);
-            Fill(model, robot.GetComponent<BoxCollider>(), robot.matrixType, parts, look, edgeThickness);
-            robot.ShapesChanged();
-        }
-
         static System.Collections.Generic.List<ShapeSet.Part> Parts(int type, ShapeSet shapes)
         {
+            // No shape, no robot: _ADD_ENEMY gives up on it
             var parts = shapes?.ForType(type);
-            if (parts == null || parts.Count == 0)
-            {
-                var central = MatrixLibrary.Central();
-                if (central == null || !central.Shapes.TryGetValue(FallbackShape, out var g)) return null;
-                parts = new System.Collections.Generic.List<ShapeSet.Part> { new ShapeSet.Part { shape = g, id = FallbackShape } };
-            }
-
-            return parts;
+            return parts == null || parts.Count == 0 ? null : parts;
         }
 
         static void Fill(Transform model, BoxCollider col, int type, System.Collections.Generic.List<ShapeSet.Part> parts, RobotLook look, float edgeThickness)

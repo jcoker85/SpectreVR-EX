@@ -54,6 +54,7 @@ namespace SpectreEX
                 r.Tick(this, ref needChaser);
                 r.EndTick();
             }
+            gm.player.Shields.Tick();
             Shots.Tick();
         }
 

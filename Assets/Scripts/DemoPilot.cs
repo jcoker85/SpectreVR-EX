@@ -11,7 +11,7 @@ namespace SpectreEX
     public class DemoPilot : MonoBehaviour
     {
         const int CloseRobot = 500, BackOff = 0x50, Range = 0x244, MaxGoalTicks = 0x10E, OnGround = 0x500;
-        const int DumpLimit = 2000, FarLimit = 20000;
+        const int DumpLimit = 2000, FarLimit = 20000, TankShotLift = 0x400;
         const int FullSpeed = 10, SlowSpeed = 5, TurnLimit = 3, SlowUntil = 0x5B, StallAfter = 0x7E;
         const int PathLength = 0x6400, PathWidth = 0xA00, PathHeight = 0x1800, FlatTop = 0xFF;   // the player's probe
 
@@ -68,7 +68,7 @@ namespace SpectreEX
 
         void MoveElsewhere(GameManager gm)
         {
-            tank.Motor.Place(gm.PlaceXY(), transform.eulerAngles.y, false);
+            tank.Motor.MoveTo(gm.PlaceXY());
         }
 
         // ---------- _FIND_CLEAR_PATH / _CHECK_TANK_PATH, for the player ----------
@@ -129,20 +129,21 @@ namespace SpectreEX
             return true;
         }
 
-        // The cannon for Robot Tanks from the ground or when short of ammo, otherwise a missile
+        // The cannon for Robot Tanks from the ground (not under it) or when short of ammo, otherwise a
+        // missile, both through _TANK_SHOOT
         void Shoot(GameManager gm, Robot robot, int distance)
         {
             var shots = gm.GetComponent<RobotDirector>().Shots;
-            bool cannon = (tank.Motor.ZUnits <= OnGround && robot.matrixType == 7) || tank.Weapon.Ammo < 10;
+            bool cannon = (!tank.Motor.Under && tank.Motor.ZUnits <= OnGround && robot.matrixType == 7) || tank.Weapon.Ammo < 10;
             if (cannon)
             {
-                shots.PlayerShoot(0);
+                shots.PlayerShoot(0, TankShotLift);
                 tank.Weapon.AddAmmo(-1);
                 Sfx.Play(Snd.EnemyShot);   // _TANK_SHOOT fires it as _DO_SHOOT does a robot's
             }
             else
             {
-                shots.PlayerShoot(10);
+                shots.PlayerShoot(10, TankShotLift);
                 tank.Weapon.AddAmmo(-6);
             }
             shotTimer = Mathf.Max(6, (distance >> 4) - ((gm.Level - 1) >> 1));

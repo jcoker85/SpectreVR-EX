@@ -73,7 +73,6 @@ namespace SpectreEX.EditorTools
             var gm = gmGo.AddComponent<GameManager>();
             gm.player = player;
             gm.horizon = horizon;
-            gm.arenaHalfSize = ArenaHalfSize;
             gm.flagPrefab = prefabs.flag;
             gm.ammoDumpPrefab = prefabs.dump;
             // Robots too (RobotFactory), each edged in its own colour

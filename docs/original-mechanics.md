@@ -147,7 +147,7 @@ count, then three words per type (textured shape, plain shape, spare). With the 
 - 10000-10999: `shap` meshes. The loader (jump table at 1020:08ED, handler 1020:106B) stores each
   16.16 point >> 7, less 1/64, file x/y/z → world y/z/x: 1.0 = 504 units = 0.1575 m.
 - A matrix without `shps` gets no world objects at all (`_SHPSP == 0`); the EXE loads `Basic.mat`
-  first, then the chosen matrix. BASIC.MAT has no shapes. We fall back to CENTRAL's.
+  first, then the chosen matrix. BASIC.MAT has no shapes. The remake does the same: shapes come from the chosen matrix or BASIC.MAT, never from Central Systems unless that's the one chosen.
 - `_LOAD_WRLD` spin per tick (+0x3A): type 2 -2, type 36 +3, type 37 -3. Windmill fans: a child
   object 0x800 forward, 0x1D00 up, roll +2/tick from a random start, never collides (type 0xF8).
 - Collision is `_CUBE_COLLIDE`: the exact point bounds (`_SIZE_OBJECT`, +0x24..+0x2E), in 3D,
@@ -464,6 +464,8 @@ DOS `SVR.EXE` in `Tools/SpectreVR` is the one to run for side-by-side checks.
 - Heading has 8 parts to a step, with the sine and cosine tables read between entries.
 - Damage, sounds and timers still go by whole ticks. A blocked step undoes only that step.
 - Robots and shots stay at 18.2 Hz with display interpolation.
+- Every timer counts `SimClock` ticks: the banner, level end, recap, death, Game Over and the camera's swing round the wreck.
+- The views are where the original puts them on each tick, drawn between ticks. The cockpit and overhead views sit on the craft's interpolated position; the external view replays `_PUT_VIEW`'s queue, four ticks behind, moving from one queued eye to the next through the tick.
 - Catch-up is limited by Unity's maximumDeltaTime, so a stall longer than that loses time rather than speeding up afterwards.
 
 Measured with collisions off, Balance craft, at 10 / 30 / 59 / 117 / 128 fps: speed 11.64-11.67 m/s (calculated 11.65), jump 6.25 m in about 1.38 s (calculated 6.24), about 36 heading steps a second.
@@ -527,11 +529,11 @@ Checked line by line: `_PLAY_LEVEL`, `_DO_PLAYER_MOVE`, `_HIT_A_GATE`, `_DO_COLL
 - Every life runs `_START_LEVEL`: all sound stops, the banner shows and the level's song starts again.
 - `_DAMAGE_TIMER` carries across lives. Level 100 wraps to level 1.
 - Demo: its levels are wave 778 in BASIC.MAT (grids 8000-8003), not the matrix's list. It carries on from the last level reached, returns to the first after a level's fourth run, ends after the fourth level and shows no Game Over. A collision there resets the robots' chase, and moves the craft if it's within 0xF; only pushers make it jump.
-- External view: level, at a fixed height of 0x2800 (3.2 m), `_EYE_H` 120 behind, four ticks late, 60-400. Overhead: from height `_EYE_H` << 8, 100-930, always heading 0.
+- External view: level, at a fixed height of 0x2800 (3.2 m), `_EYE_H` 120 behind, four ticks late, 60-400. `_PUT_VIEW` queues the eye (behind the craft along its heading at that moment) and `_GET_VIEW` takes the one four ticks older, so the view follows the craft's path, not its present heading. Overhead: from height `_EYE_H` << 8, 100-930 (8 to 74.4 m), always heading 0.
 - A spinning shield ring restarts from slot 0 when one is lost.
 
 - Cockpit eye: `_EZ` is the craft's height + 0x400, and the floor is at 0x500, so 0x900 (0.72 m) up at the craft's centre.
-- Orbit shields: `_CHANGE_SHAPE` 19, the teleport gate's shape, colour 0x40, 0x100 above the craft, starting at roll 0x40 and rolling 0x10 a tick.
+- Orbit shields: `_CHANGE_SHAPE` 19, built-in shape 19 from `_OT_TO_SHAPE` (a ring about 3.5 m tall, centred on the shield; not the teleport gate, whose 19 is a world type), colour 0x40, 0x100 above the craft, starting at roll 0x40 and rolling 0x10 a tick. Its box reaches below the floor, so `_CHECK_OBJ_COLLIDE` ends a shield over any floor pad as well as against a solid obstacle; only fans are left out.
 - Field of view: `_XFORM3D_TO_2D` divides by 2 x depth / 256, so the focal length is 128 on the 320x200 screen (256 overhead, where the doubling is skipped), scaled by `_SCALE_X` and `_SCALE_Y` to the window. At 4:3 that's 102.7 degrees across and 76.0 down, or 64.0 and 42.7 overhead. The remake holds the vertical angle, which keeps things the same size against the screen height: 76.0 down and 108.5 across at 16:9, 42.7 and 69.6 overhead. The original's 320x200 frame on a 4:3 screen stretches things 20% taller (11.6% in the 760x530 window); the remake's are true shape.
   Measured on captured overhead frames at `_EYE_H` 750, against cubes in BASIC.MAT grid 8000's row at y 892: 164 grid apart predicts 185.4 px and shows 185.7, 154 apart predicts 175.1 and shows 175.7, so the focal length of 256 overhead is right. `_P_TO_EYE` reads as twice that (2X / depth), and why it doesn't come out that way on screen isn't explained; the frames are what the remake follows.
   Cockpit and external, measured on the demo captures in Tools/win31/captures (530x420 window, view centre at row 287 or 288):
@@ -598,7 +600,7 @@ Checked and needing no change: `_TIME_ALLOWED` counts the player's slot in `_MAX
 
 ## Full audit, 2026-11-02
 
-Everything was compared with the decompile again, and the radar and HUD for the first time. Differences fixed:
+The gameplay code was compared with the decompile again, and the radar and HUD for the first time. Shapes, colours, music and the demo were added in a second pass. Differences fixed:
 
 - Craft hit box: the first part's bounds with a quarter off the front (`_ADD_ENEMY`), replacing the old 4.5 x 1.5 x 4.5 m box.
 - Robots read the object's height, 0x500 less than `local_1a`, so rising shots start 0x600 above `_MIN_Z`, "on the ground" reaches 0x500 up, and Flyers dive to 0x300 over the floor-level height.
@@ -614,6 +616,21 @@ Everything was compared with the decompile again, and the radar and HUD for the 
 Radar (`_SHOW_RADAR`): about +-0x7C000 units in a square. Dumps and jump pads are points; robots are points except Turret G, Slicer S, Flyer H, Smart Acid A, Smart Wall M; gates T, up transports U, down transports D (letter pairing from the code's order, not seen on screen, except Slicer); flags off when `_LEVEL_TIMER & 0xC` is 0. Colours are the object's ramp + 0xC. Cloaked Tanks don't show, dying robots do.
 
 Not ported: the green dumps' full repair for the names Moses Ma, MattHarm and Lucky 13 needs the network name, which comes with multiplayer.
+
+Second pass:
+
+- Demo (`_MOVE_ATTRACT_TANK`, `_PLAYER_CHASE_THING` and the `_CHASE_` routines): matches, except that its shots come from `_TANK_SHOOT`, 0x400 up, it uses missiles rather than the cannon under the floor, and moving it when boxed in changes only x and y. All three fixed.
+- Shapes (`_ADD_SHAPE`): the 16, 17 and 20 remaps, random picks, nested multi-part shapes, the stop at a missing part and ids 3000-3999 match. `_LOAD_WRLD` also gives types 1000, 10016 and 10017 their own spin, but `_ADD_SHAPE` indexes the shps table by type with no bounds check, so such a type can't get a shape and the spin is never reached. Nothing to port.
+- Colours (`_DRAW_OBJS`, `_SHADE`, `_FIXUP_COLORS`): match the "Colours" section. Matrix textures and movies are loaded with +0x2F -2, so they draw plain, without the outline or colour cycling the code can do for other values.
+- Music (`_PICK_SONG`): matches. Not settled: whether a song loops. `_PLAYMIDI` asks for an end notice, and nothing in the EXE was found replaying `_CURRENT_SONG`, so it may play once and stop. The remake loops.
+- Shots take their shapes from the loaded matrices, as `_CHANGE_SHAPE` does, not always from Central Systems; weapon data likewise.
+- Radar letters checked in the machine code: 0x14 G, 0x15 S, 0x16 H, 0x17 A, 0x18 M; gates 0x13 T, 0x24 U, 0x25 D in colour 0x30; all drawn in their colour + 0xC.
+- Dump pulse measured on the running original (Easy demo): +0x65 goes 0x100, 0x110 ... 0x200 and back to 0x100, 0x10 a tick, every dump in step.
+- Orbit shields: the right shape, and checked on the tick in `_MOVE_SHOTS`'s order (robots, then obstacles), floor pads included.
+- Overhead zoom runs 8 to 74.4 m (100-930), not 20 to 186.
+- Removed the remake's own fallbacks: generated levels when there's no matrix (the game now says "Unable to load Matrix", as the original does), random flags for a grid without any, Central Systems shapes for a matrix without its own, and a stand-in robot shape. The level-select music playlist and its next-track key went with the generated levels.
+- Removed the code that rebuilt shapes when Complex changed mid-game, now that Options can't be reached during a game.
+
 
 ## Validation pass (no eyes on the original)
 

@@ -22,3 +22,9 @@ generated from it locally. Nothing imported is ever committed.
 
 The built-in shapes are read using a layout made from one specific `SVRWIN.EXE`; the importer stops if yours
 is a different release.
+
+## Credits
+
+The star skybox (`Assets/Resources/Skybox/Stars.cubemap`) is made from the HYG star database by David Nash
+(astronexus.com), licensed under [CC BY-SA 2.5](https://creativecommons.org/licenses/by-sa/2.5/). The skybox is
+shared under the same licence.

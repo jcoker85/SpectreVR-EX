@@ -114,8 +114,7 @@ namespace SpectreEX
             Wire = New("WIRE", Key.F),
             Textures = New("TEXTURES", Key.F5),
             Movies = New("MOVIES", Key.F6),
-            Music = New("MUSIC", Key.M),
-            NextTrack = New("NEXT TRACK", Key.N);
+            Music = New("MUSIC", Key.M);
 
         public static readonly GameKey[] Weapons = MakeWeapons();
 
@@ -132,7 +131,7 @@ namespace SpectreEX
         {
             var all = new List<GameKey> { Forward, Back, TurnLeft, TurnRight, ForwardLeft, ForwardRight, BackLeft, BackRight, Fire, HeavyWeapon, NextWeapon };
             all.AddRange(Weapons);
-            all.AddRange(new[] { Hyperspace, Jump, LookLeft, LookRight, NextView, ZoomIn, ZoomOut, Pause, Sound, FloorDots, Wire, Textures, Movies, Music, NextTrack });
+            all.AddRange(new[] { Hyperspace, Jump, LookLeft, LookRight, NextView, ZoomIn, ZoomOut, Pause, Sound, FloorDots, Wire, Textures, Movies, Music });
             return all;
         }
 

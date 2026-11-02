@@ -83,7 +83,7 @@ namespace SpectreEX
 
         static int Cost(int shotType)
         {
-            var m = GameManager.Instance != null ? GameManager.Instance.CurrentMatrix ?? MatrixLibrary.Central() : null;
+            var m = GameManager.Instance != null ? GameManager.Instance.CurrentMatrix : null;
             return m != null && m.Weapons.TryGetValue(shotType, out var w) ? w.ammo : 1;
         }
 

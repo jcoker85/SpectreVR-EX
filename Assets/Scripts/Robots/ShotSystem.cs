@@ -58,13 +58,14 @@ namespace SpectreEX
 
         public void ResetCounts() => MyShots = MyHits = RobotShots = RobotHits = 0;
 
-        // _MY_SHOOT: from the craft, at its height, along its heading (weapon 5 three ways)
-        public void PlayerShoot(int weapon)
+        // _MY_SHOOT: from the craft, at its height, along its heading (weapon 5 three ways). The demo's
+        // craft fires through _TANK_SHOOT, 0x400 higher.
+        public void PlayerShoot(int weapon, int lift = 0)
         {
             var motor = director.Motor;
             if (motor == null) return;
             Vector3 p = motor.SimPosition;
-            long x = OriginalMath.ToUnits(p.x), y = OriginalMath.ToUnits(p.z), z = motor.ZUnits;
+            long x = OriginalMath.ToUnits(p.x), y = OriginalMath.ToUnits(p.z), z = motor.ZUnits + lift;
             int h = motor.OriginalHeading;
             if (weapon == 5)
             {
@@ -176,13 +177,9 @@ namespace SpectreEX
 
         static ShapeGeometry Geometry(int shape)
         {
-            ShapeGeometry geometry = BuiltinShapes.Named("SHOT");
-            if (shape != 0)
-            {
-                var central = MatrixLibrary.Central();
-                if (central != null) central.Shapes.TryGetValue(shape, out geometry);
-            }
-            return geometry;
+            // _CHANGE_SHAPE looks in the loaded matrices; a shape it can't find leaves the shot as it was
+            var geometry = shape != 0 ? GameManager.Instance.Shapes?.ShapeById(shape) : null;
+            return geometry ?? BuiltinShapes.Named("SHOT");
         }
 
         // _CHANGE_OBJECT's _COPY_SIZE: a shot collides at the size of the shape it has now
@@ -247,8 +244,8 @@ namespace SpectreEX
         // A plain shape swap on a flying shot (_CHANGE_SHAPE)
         void ChangeShape(Shot s, int shape)
         {
-            var central = MatrixLibrary.Central();
-            if (s.visual == null || central == null || !central.Shapes.TryGetValue(shape, out var geometry)) return;
+            var geometry = GameManager.Instance.Shapes?.ShapeById(shape);
+            if (s.visual == null || geometry == null) return;
             var filter = s.visual.GetComponentInChildren<MeshFilter>();
             if (filter != null) filter.sharedMesh = geometry.Coloured(s.colour);
             if (s.weapon != Debris) SetBox(s, shape);
@@ -423,7 +420,7 @@ namespace SpectreEX
 
         static int Damage(int weapon)
         {
-            var m = GameManager.Instance.CurrentMatrix ?? MatrixLibrary.Central();
+            var m = GameManager.Instance.CurrentMatrix;
             return m != null && m.Weapons.TryGetValue(weapon, out var w) ? w.damage : 1;
         }
 

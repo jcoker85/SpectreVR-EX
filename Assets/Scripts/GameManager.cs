@@ -10,9 +10,8 @@ namespace SpectreEX
 {
     // Spectre VR session rules: lives, score, levels, the level clock and its time bonus, and respawns.
     // Levels come from the chosen matrix (.MAT, as in the original game): each level's game grid
-    // (obstacles and flags), enemy set and enemy data, tip and song. Without a matrix it falls back to
-    // generated levels (LevelPlan). Games are started from the main menu; Esc ends the game, P pauses
-    // in place, and demo mode ends on any key.
+    // (obstacles and flags), enemy set and enemy data, tip and song. Games are started from the main menu; Esc ends the game, P pauses in place, and
+    // demo mode ends on any key.
     public class GameManager : MonoBehaviour
     {
         // Re-found on demand so a script recompile during Play mode doesn't strand everything
@@ -34,14 +33,12 @@ namespace SpectreEX
         public PlayerTank player;
         public Renderer horizon;
         public Renderer floorDots;
-        public float arenaHalfSize = 82f;
 
         [Header("Prefabs")]
         public Flag flagPrefab;
         public AmmoDump ammoDumpPrefab;
         public ObstacleLook obstacleLook = new ObstacleLook();
         public RobotLook robotLook = new RobotLook();
-        public int fallbackObstacleType = 15;   // cube
 
         // Obstacle shapes for the level being built: the matrix's own, else Central Systems'
         ShapeSet shapes;
@@ -70,7 +67,6 @@ namespace SpectreEX
         public bool Paused { get; private set; }
         int demoStartFrame = -1;
         public bool Demo { get; private set; }
-        public LevelPlan Plan { get; private set; }
         public MatrixFile CurrentMatrix { get; private set; }
 
         // One slot per flag, null once collected: robots belong to a slot, and the spots stay in use
@@ -129,8 +125,10 @@ namespace SpectreEX
         // ---------- session control (called by the main menu) ----------
 
         // A restored game passes the score and lives it was saved with
-        public void StartGame(VehicleSpec vehicle, int startLevel, bool demo, int score = 0, int lives = -1)
+        // False when there's no matrix to play: the original stops with "Unable to load Matrix"
+        public bool StartGame(VehicleSpec vehicle, int startLevel, bool demo, int score = 0, int lives = -1)
         {
+            if (MatrixLibrary.Current() == null) return false;
             StopAllCoroutines();
             session = down = null;
             saving = false;
@@ -147,6 +145,7 @@ namespace SpectreEX
             ApplySettings();
             InGame = true;
             session = StartCoroutine(NewGame(Mathf.Max(1, startLevel), score, lives));
+            return true;
         }
 
         // The original's _LEVEL, and how the demo picks up from it: it carries on from the level the
@@ -201,37 +200,10 @@ namespace SpectreEX
         {
             Sfx.Enabled = GameSettings.SoundEffectsOn && !GameSettings.SoundMuted;
             ShowFloorDots();
-            ApplyComplex();
             foreach (var r in FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None)) ApplyFilled(r);
             foreach (var r in director.Robots)
                 if (r != null && (r.matrixType == 26 || !r.visible))
                     foreach (var part in r.GetComponentsInChildren<Renderer>()) part.enabled = false;
-        }
-
-        // Complex changed during a level: everything built from a shape takes the other column where it stands
-        void ApplyComplex()
-        {
-            if (!InGame || shapes == null || !shapes.ComplexChanged) return;
-            shapes.FollowComplex();
-            var craft = player.GetComponent<PlayerModel>();
-            if (craft != null) craft.Rebuild(shapes, obstacleLook.shapes, obstacleLook.edgeThickness);
-            foreach (var r in director.Robots)
-                if (r != null) RobotFactory.Reshape(r, shapes, robotLook, obstacleLook.edgeThickness);
-            for (int i = 0; i < Obstacles.Count; i++)
-            {
-                var old = Obstacles[i];
-                var was = old != null ? old.GetComponent<ObstacleBehaviour>() : null;
-                if (was == null) continue;
-                var go = ObstacleFactory.Build(was.type, shapes.ForType(was.type), obstacleLook);
-                if (go == null) continue;
-                go.transform.SetPositionAndRotation(old.transform.position, old.transform.rotation);
-                var now = go.GetComponent<ObstacleBehaviour>();
-                now.heading = was.heading;
-                player.Motor.GateReplaced(was, now);
-                Obstacles[i] = go;
-                Destroy(old);
-            }
-            Physics.SyncTransforms();
         }
 
 
@@ -273,13 +245,7 @@ namespace SpectreEX
             Level = Level >= 100 ? 1 : Level + 1;
             lastLevel = Level - 1;
             levelStartScore = Score;
-            if (CurrentMatrix != null) levelTip = BuildMatrixLevel(Level);
-            else
-            {
-                Plan = LevelPlan.For(Level);
-                BuildGeneratedLevel(Plan);
-                levelTip = Plan.tip;
-            }
+            levelTip = BuildMatrixLevel(Level);
             yield return LevelBanner();
         }
 
@@ -296,11 +262,7 @@ namespace SpectreEX
             if (!bannerSkipped) Sfx.Play(Snd.LevelStart);
             yield return BannerTicks(27);
             HideOverlays?.Invoke();
-            if (MusicPlayer.Instance != null)
-            {
-                if (CurrentMatrix != null) MusicPlayer.Instance.PlayTrackOrStop(levelSong);
-                else MusicPlayer.Instance.PlayForLevel(Level);
-            }
+            if (MusicPlayer.Instance != null) MusicPlayer.Instance.PlayTrackOrStop(levelSong);
             Playing = true;
             player.Weapon.Announce();   // _ALT_WEAPON_TIMER, every life
         }
@@ -315,7 +277,7 @@ namespace SpectreEX
         // Space ends the banner early, and so does saving a game
         IEnumerator BannerTicks(int ticks)
         {
-            for (float t = 0f; t < ticks / PlayerMotor.TickRate && !bannerSkipped; t += Time.deltaTime)
+            for (long until = SimClock.Ticks + ticks; SimClock.Ticks < until && !bannerSkipped;)
             {
                 var keys = Keyboard.current;
                 if (keys != null && keys.spaceKey.wasPressedThisFrame) bannerSkipped = true;
@@ -532,14 +494,10 @@ namespace SpectreEX
             Physics.SyncTransforms();
 
             foreach (var p in flagSpots) Flags.Add(Spawn(flagPrefab, p, Quaternion.identity));
-            if (Flags.Count == 0)
-                for (int i = 0; i < 5 + levelNumber; i++)
-                    if (TryFindSpawnPoint(out var p, 25f)) Flags.Add(Spawn(flagPrefab, p, Quaternion.identity));
 
             FlagsTotal = Flags.Count;
             FlagsCollected = 0;
             foreach (var f in Flags) flagSpots.Add(f.transform.position);
-            Plan = new LevelPlan { level = levelNumber, robotShields = 1, wallColor = LevelPlan.WallColor(levelNumber) };
 
             // The enemy set (_ADD_ENEMY): a count between its two numbers when the first is the smaller,
             // else exactly the second; each robot comes back 'regen' more times. Strength rises by one a lap.
@@ -575,41 +533,6 @@ namespace SpectreEX
 
             levelSong = MatrixMusic.TrackFor(lv.song);
             return lap == 0 ? m.Tip(lv.tip) : "";   // _LOAD_WAVE: no tip once the list repeats
-        }
-
-        void BuildGeneratedLevel(LevelPlan plan)
-        {
-            ClearLevel();
-            director.Shots.ResetCounts();
-            SetHorizonColor(plan.wallColor);
-            UseShapes(null);
-
-            var rng = new System.Random(1991);
-            for (int i = 0; i < 14; i++)
-            {
-                var pos = new Vector3((float)(rng.NextDouble() * 2 - 1) * (arenaHalfSize - 15f), 0f, (float)(rng.NextDouble() * 2 - 1) * (arenaHalfSize - 15f));
-                if (pos.magnitude > 20f) SpawnObstacle(fallbackObstacleType, pos, rng.Next(0, 90));
-            }
-            Physics.SyncTransforms();
-
-            for (int i = 0; i < plan.flags; i++)
-                if (TryFindSpawnPoint(out var p, 25f)) Flags.Add(Spawn(flagPrefab, p, Quaternion.identity));
-            DumpOdds = DefaultDumpOdds;
-            for (int i = 0; i < plan.ammoDumps; i++) SpawnDump();
-
-            FlagsTotal = Flags.Count;
-            FlagsCollected = 0;
-            foreach (var f in Flags) flagSpots.Add(f.transform.position);
-
-            // Without a matrix: Robot Tanks, Turrets, Orbiters and Slicers with Central Systems' enemy data
-            void Add(int type, int n) { for (int i = 0; i < n; i++) SpawnRobot(type, DefaultRobotData(type, 0), 99); }
-            Add(7, plan.rovers);
-            Add(20, plan.turrets);
-            Add(35, plan.orbiters);
-            Add(21, plan.slicers);
-            PlacePlayerAtStart();
-            PlaceRobotsAgain();
-            StartBonus();
         }
 
         static Robot.Data DefaultRobotData(int type, int lap)
@@ -667,9 +590,8 @@ namespace SpectreEX
 
         void UseShapes(MatrixFile m)
         {
-            var central = MatrixLibrary.Central();
-            if (central == null) Debug.LogWarning("Spectre VR-EX: Central Systems matrix not found - matrices without shapes will have no obstacles");
-            shapes = new ShapeSet(m, central);
+            // The original has BASIC.MAT loaded under the chosen matrix, and nothing else
+            shapes = new ShapeSet(m, MatrixLibrary.Basic());
             shapes.NewLevel();
             MovieTextures.NewLevel();
             var craft = player.GetComponent<PlayerModel>();
@@ -842,22 +764,6 @@ namespace SpectreEX
             ApplyFilled(robot.gameObject);
         }
 
-        // Random open spot on the arena floor, clear of obstacles and at least minDistance from the player.
-        public bool TryFindSpawnPoint(out Vector3 point, float minDistanceFromPlayer, bool nearCentre = false)
-        {
-            float range = nearCentre ? 20f : arenaHalfSize - 8f;
-            for (int i = 0; i < 300; i++)
-            {
-                var p = new Vector3(Random.Range(-range, range), 0.1f, Random.Range(-range, range));
-                if (minDistanceFromPlayer > 0f && player != null && Vector3.Distance(p, player.transform.position) < minDistanceFromPlayer) continue;
-                if (Physics.CheckBox(p + Vector3.up * 2f, new Vector3(3.5f, 1.5f, 3.5f), Quaternion.identity, ~0, QueryTriggerInteraction.Collide)) continue;
-                point = p;
-                return true;
-            }
-            point = Vector3.zero + Vector3.up * 0.1f;
-            return false;
-        }
-
         // With a skybox behind it the band has to blend over the picture, or its fade cuts a black curve
         public void UseSkyBand(bool on)
         {
@@ -950,7 +856,7 @@ namespace SpectreEX
         // _END_LEVEL, 18 ticks after the last flag: the bonus left goes on the score
         IEnumerator LevelComplete()
         {
-            yield return new WaitForSeconds(LevelEndTicks / PlayerMotor.TickRate);
+            yield return Ticks(LevelEndTicks);
             // Destroyed just after the last flag: the level ends first, so no life is lost
             if (down != null)
             {
@@ -973,13 +879,12 @@ namespace SpectreEX
                 Rate(shots.MyHits, shots.MyShots),
                 Rate(shots.RobotShots - shots.RobotHits, shots.RobotShots),
             };
-            var tick = new WaitForSeconds(1f / PlayerMotor.TickRate);
             for (int step = 0; step < 16; step++)
             {
                 ShowRecap?.Invoke(rates, step);
-                yield return tick;
+                yield return Ticks(1);
             }
-            for (float t = 0f; t < 18f / PlayerMotor.TickRate; t += Time.deltaTime)
+            for (long until = SimClock.Ticks + 18; SimClock.Ticks < until;)
             {
                 var keys = UnityEngine.InputSystem.Keyboard.current;
                 if (keys != null && keys.anyKey.wasPressedThisFrame) break;
@@ -1005,6 +910,7 @@ namespace SpectreEX
             {
                 director.Shots.ExplodePlayer();
                 DeRes.Play(player.gameObject, 0x5A, DeadTicks / PlayerMotor.TickRate, false);
+                DeathTick = SimClock.Ticks;
                 down = StartCoroutine(PlayerDown());
                 return;
             }
@@ -1030,7 +936,7 @@ namespace SpectreEX
         IEnumerator PlayerDown()
         {
             Sfx.Play(Snd.PlayerDestroyed);
-            yield return new WaitForSeconds(DeadWaitTicks / PlayerMotor.TickRate);
+            yield return Ticks(DeadWaitTicks);
             down = null;
             Lives--;
 
@@ -1056,16 +962,25 @@ namespace SpectreEX
         // _GAME_OVER / _SPIN_UP: the words spin in over 33 ticks, then hold for 15
         IEnumerator SpinGameOver()
         {
-            var tick = new WaitForSeconds(1f / PlayerMotor.TickRate);
             for (int step = 0; step < 0x21; step++)
             {
                 GameOverSpin?.Invoke(step);
-                yield return tick;
+                yield return Ticks(1);
             }
             GameOverSpin?.Invoke(-1);
-            yield return new WaitForSeconds(15f / PlayerMotor.TickRate);
+            yield return Ticks(15);
             HideOverlays?.Invoke();
         }
+
+        // Whole ticks of SimClock, the game's one clock: a pause that only P makes, and a frame rate that
+        // changes nothing
+        static IEnumerator Ticks(int n)
+        {
+            for (long until = SimClock.Ticks + n; SimClock.Ticks < until;) yield return null;
+        }
+
+        // When the craft was destroyed, for the camera's swing round the wreck (_DEAD_TIMER)
+        public long DeathTick { get; private set; }
 
         // _PLACE_TANKS, at the start of every life: each robot still in play goes somewhere new
         void PlaceRobotsAgain()

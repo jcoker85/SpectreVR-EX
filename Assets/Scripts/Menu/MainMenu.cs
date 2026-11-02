@@ -194,8 +194,12 @@ namespace SpectreEX.Menu
             GameSettings.Save();
             Close();
             var vehicle = demo ? new VehicleSpec("DEMO", 9, 6, 4) : GameSettings.Vehicle(GameSettings.SelectedVehicle);   // _MAIN_MENU's own for the demo
-            if (demo) gm.StartGame(vehicle, 1, true);
-            else gm.StartGame(vehicle, startAt, false, startScore, startLives);
+            bool started = demo ? gm.StartGame(vehicle, 1, true) : gm.StartGame(vehicle, startAt, false, startScore, startLives);
+            if (!started)
+            {
+                Open();
+                ShowNotice("UNABLE TO LOAD MATRIX");
+            }
         }
 
         void Quit()

@@ -63,14 +63,6 @@ namespace SpectreEX
             _ => VehicleSpec.Balance,
         };
 
-        public static List<string> Playlist()
-        {
-            var list = new List<string>();
-            for (int i = 0; i < Music.Length; i++)
-                if (Music[i]) list.AddRange(Matrix.MatrixMusic.StyleTracks(i));
-            return list;
-        }
-
         static bool loaded;
 
         public static void Load()

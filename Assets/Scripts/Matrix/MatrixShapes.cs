@@ -355,9 +355,9 @@ namespace SpectreEX.Matrix
 
     // The shape(s) for a world object type, picked as SVRWIN.EXE's _ADD_SHAPE does from a matrix's
     // shps table: ids 1-999 are built in, 1000-1999 random lists (one pick per list per level),
-    // 2000-2999 multi-part shapes, 10000-10999 the matrix's own shap meshes. Shape tables and shapes
-    // a matrix lacks come from Central Systems (the original has no shapes at all for a matrix
-    // without a shps table).
+    // 2000-2999 multi-part shapes, 10000-10999 the matrix's own shap meshes. Resources come from the
+    // chosen matrix or BASIC.MAT, the two files the original has loaded; a matrix without a shps table
+    // gets no shapes at all.
     public class ShapeSet
     {
         public struct Part
@@ -367,18 +367,14 @@ namespace SpectreEX.Matrix
             public int id;           // the resolved shape id (for the original's special parts)
         }
 
-        readonly MatrixFile matrix, central;
+        readonly MatrixFile matrix, basic;
         readonly Dictionary<int, int> picks = new Dictionary<int, int>();
 
-        public ShapeSet(MatrixFile matrix, MatrixFile central)
+        public ShapeSet(MatrixFile matrix, MatrixFile basic)
         {
-            this.matrix = matrix != null && matrix.HasShapeTable ? matrix : central;
-            this.central = central;
+            this.matrix = matrix;
+            this.basic = basic;
         }
-
-        // Complex changed mid-game: the other column, keeping the level's random picks
-        public bool ComplexChanged => plain == GameSettings.DisplayComplex;
-        public void FollowComplex() => plain = !GameSettings.DisplayComplex;
 
         // _LOAD_WRLD clears every random list's pick at the start of a level
         public void NewLevel()
@@ -389,7 +385,7 @@ namespace SpectreEX.Matrix
 
         bool plain = !GameSettings.DisplayComplex;
 
-        int[] Table => matrix?.ShapeTable ?? central?.ShapeTable;
+        int[] Table => matrix != null && matrix.HasShapeTable ? matrix.ShapeTable : basic != null && basic.HasShapeTable ? basic.ShapeTable : null;
 
         // Complex picks the textured column, off the plain one (_TEXTURES bit 1)
         public List<Part> ForType(int type)
@@ -460,7 +456,7 @@ namespace SpectreEX.Matrix
         T Find<T>(Func<MatrixFile, Dictionary<int, T>> pick, int id) where T : class
         {
             if (matrix != null && pick(matrix).TryGetValue(id, out var v)) return v;
-            if (central != null && pick(central).TryGetValue(id, out v)) return v;
+            if (basic != null && pick(basic).TryGetValue(id, out v)) return v;
             return null;
         }
     }

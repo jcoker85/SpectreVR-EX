@@ -51,6 +51,8 @@ namespace SpectreEX
         public int CenterX { get; private set; }         // _CENTER_X / _CENTER_Y: the view's shake in a bounce, in 320x200 pixels
         public int CenterY { get; private set; }
         public Vector3 SimPosition => curPos;        // the latest step's position (the transform is interpolated)
+        public float SimYaw => curYaw;
+        public event System.Action<Vector3, float> TickEnded;   // where the craft is at the end of each tick
         public Vector3 TickDelta => tickEndPos - lastTickEndPos;
         // The heading in the robots' frame (0 = +X, 0x40 = +Z): this motor's heading points along
         // (sin, -cos), which is the original's (cos, sin) a quarter turn on
@@ -124,10 +126,13 @@ namespace SpectreEX
 
         public void ReleaseSteering() => steered = false;
 
-        // A gate was rebuilt: standing in it shouldn't count as arriving at a new one
-        public void GateReplaced(ObstacleBehaviour old, ObstacleBehaviour rebuilt)
+        // _PLACE_XY on the craft's object: a new x and y, and nothing else changes
+        public void MoveTo(Vector3 position)
         {
-            if (lastGate == old) lastGate = rebuilt;
+            x = ToUnits(position.x);
+            y = ToUnits(position.z);
+            moveLeftX = moveLeftY = 0;
+            Snap();
         }
 
         // The last flag or a level skip (_PLAY_LEVEL): the craft climbs away until the level ends
@@ -185,7 +190,7 @@ namespace SpectreEX
             curPos = Position();
             curYaw = Yaw();
             if (snapped) { prevPos = curPos; prevYaw = curYaw; snapped = false; }   // teleports cut, not sweep
-            if (tickEnds) { lastTickEndPos = tickEndPos; tickEndPos = curPos; }
+            if (tickEnds) { lastTickEndPos = tickEndPos; tickEndPos = curPos; TickEnded?.Invoke(curPos, curYaw); }
         }
 
         // The moment between the last two steps, for this frame

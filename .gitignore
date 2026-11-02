@@ -127,6 +127,9 @@ InitTestScene*.unity*
 /Tools/dosbox_run/
 /Tools/win31/
 
+# Python bytecode
+__pycache__/
+
 # Generated from the player's own copy of Spectre VR by Tools/import_original.py - never commit
 /Assets/Imported/
 /Assets/Imported.meta

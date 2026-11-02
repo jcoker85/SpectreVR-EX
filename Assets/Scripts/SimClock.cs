@@ -12,6 +12,10 @@ namespace SpectreEX
         public const int SubSteps = PlayerMotor.SubSteps;
         const double StepSeconds = 1.0 / (PlayerMotor.TickRate * SubSteps);
 
+        // Original ticks since the game started, and how far the frame is drawn towards the next one
+        public static long Ticks { get; private set; }
+        public static float TickFraction { get; private set; }
+
         GameManager gm;
         RobotDirector director;
         double accumulator;
@@ -34,7 +38,7 @@ namespace SpectreEX
                 accumulator -= StepSeconds;
                 if (subStep == 0 && director != null) director.FireWeapons();   // _DO_PLAYER_MOVE fires before the tick's move
                 bool tickEnds = ++subStep == SubSteps;
-                if (tickEnds) subStep = 0;
+                if (tickEnds) { subStep = 0; Ticks++; }
                 if (motor != null && gm.Playing) motor.SubStep(tickEnds);
                 if (tickEnds)
                 {
@@ -45,7 +49,8 @@ namespace SpectreEX
 
             float alpha = (float)(accumulator / StepSeconds);
             if (motor != null) motor.Present(alpha);
-            if (director != null) director.Present((subStep + alpha) / SubSteps);
+            TickFraction = (subStep + alpha) / SubSteps;
+            if (director != null) director.Present(TickFraction);
         }
     }
 }
