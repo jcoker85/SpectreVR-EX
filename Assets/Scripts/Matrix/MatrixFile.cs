@@ -180,12 +180,38 @@ namespace SpectreEX.Matrix
             return g;
         }
 
+        // The enem loader (_LOAD_RESOURCE's handler at 1020:0E05) keeps seven entries at most, and eight
+        // tanks with the player: while the counts add up to more, each type with more than one gives one
+        // up, round the list, and gets an extra regeneration for it instead
+        const int MaxEnemyTypes = 7, MaxTanks = 8;
+
         static List<EnemyCount> ParseEnemySet(byte[] b)
         {
             var w = Words(b);
             var list = new List<EnemyCount>();
-            for (int i = 1; i + 3 < w.Length; i += 4)
+            int count = w.Length > 0 ? w[0] : 0;
+            for (int i = 1; i + 3 < w.Length && list.Count < count; i += 4)
                 list.Add(new EnemyCount { type = w[i], max = w[i + 1], min = w[i + 2], regen = w[i + 3] });
+            if (list.Count > MaxEnemyTypes) list.RemoveRange(MaxEnemyTypes, list.Count - MaxEnemyTypes);
+
+            int tanks = 1;
+            foreach (var e in list) tanks += e.min;
+            while (tanks > MaxTanks)
+            {
+                bool gave = false;
+                for (int i = 0; i < list.Count && tanks > MaxTanks; i++)
+                {
+                    var e = list[i];
+                    if (e.min <= 1) continue;
+                    e.min--;
+                    e.regen++;
+                    if (e.max > e.min) e.max = e.min;
+                    list[i] = e;
+                    tanks--;
+                    gave = true;
+                }
+                if (!gave) break;
+            }
             return list;
         }
 

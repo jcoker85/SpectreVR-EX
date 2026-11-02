@@ -631,6 +631,7 @@ Second pass:
 - Removed the code that rebuilt shapes when Complex changed mid-game, now that Options can't be reached during a game.
 - Multi-part shapes: `_MOVE_OBJECT` places a part at the parent's heading minus its angle. The one-sided parts settle the sign: wing 10079 (all on -y) sits at 19 degrees and wing 10080 (all on +y) at 341, side piece 10055 (+y) at 296 and 10058 (-y) at 64, so each lands on the side it reaches to. The remake had the angle the other way, putting them on the wrong side (the wings about 0.26 m inward). Fixed.
 - Orbit shields lost over floor pads are the original's behaviour and stay (owner, 2026-11-02).
+- Robot limits: the enem loader (the `_LOAD_RESOURCE` handler at 1020:0E05) keeps the first seven entries of an enemy set and caps the tanks at eight with the player. While the counts add up to more, it goes round the list taking one from each type with more than one, adding a regeneration for it and lowering the other count to match. Hard level 49's ten types are cut to the first seven, seen on the running original. The remake had no limit; it now does the same, in MatrixFile.ParseEnemySet. The entry count also comes from the set's first word, not the resource's length.
 - Measuring later robot types on the running original by starting a real game froze the emulator twice (switching sound off in its memory has stopped levels loading before), so `docs/still-to-validate.md` is unchanged.
 
 
