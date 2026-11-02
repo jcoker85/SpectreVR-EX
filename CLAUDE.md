@@ -77,7 +77,7 @@ Gameplay code works in the original's integer units, not metres, and keeps its f
 
 What stays faithful:
 
-- Keep every original detail, however small, except the agreed modern items: HDRP and ray-traced graphics, the 16:9 HUD, smooth fixed-step physics, QoL such as resuming from the menu, the modern options menu, modern controls and rebinding, 3D layered sound and the star skybox. The game must stay as close to the original as possible, so don't leave something out as unimportant.
+- Keep every original detail, however small, except the agreed modern items: HDRP and ray-traced graphics, the 16:9 HUD, smooth fixed-step physics, the modern options menu, modern controls and rebinding, 3D layered sound and the star skybox. The game must stay as close to the original as possible, so don't leave something out as unimportant.
 - Where the manual and the decompile disagree, ask the owner.
 - List each evident original bug you fix to its intent under "Deliberate fixes to the original's intent", and tell the owner.
 - Don't re-raise settled decisions: harmless-robot contact is silent, flags stay lit on the hidden map, Skybox is on/off with stars only, and the Quickness rating is inverted on purpose. The mechanics doc has the others.

@@ -33,7 +33,15 @@ namespace SpectreEX
         int keyWeapon;
         int fireTimer;
 
-        void Awake() => Ammo = maxAmmo;
+        PlayerMotor motor;
+        Health health;
+
+        void Awake()
+        {
+            Ammo = maxAmmo;
+            motor = GetComponent<PlayerMotor>();
+            health = GetComponent<Health>();
+        }
 
         public void Refill() => Ammo = maxAmmo;
         public void AddAmmo(int rounds) => Ammo = Mathf.Clamp(Ammo + rounds, 0, maxAmmo);
@@ -81,6 +89,14 @@ namespace SpectreEX
 
         public void Tick(ShotSystem shots, int level)
         {
+            // Nothing fires while spun by a Spinner, or from a wreck
+            if (motor.Spinning || health.IsDead)
+            {
+                altPressed = cyclePressed = false;
+                keyWeapon = fireTimer = 0;
+                return;
+            }
+
             // Cycle to the next unlocked heavy weapon (back to none after the last)
             if (cyclePressed)
             {

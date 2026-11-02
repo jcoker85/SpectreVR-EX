@@ -59,18 +59,6 @@ namespace SpectreEX
             else PlayTrack(name);
         }
 
-        // Esc menu over a running game: hold the level's song where it is
-        public void PauseGameMusic() => source.Pause();
-        // Carry on with the level's song, or change to it if settings moved it (null keeps the playlist's)
-        public void ResumeGameMusic(string song)
-        {
-            if (!GameSettings.MusicOn) { source.Stop(); return; }
-            if (song != null && (source.clip == null || source.clip.name != song)) { PlayTrack(song); return; }
-            if (muted) return;
-            source.UnPause();
-            if (!source.isPlaying) source.Play();
-        }
-
         public void PlayTrack(string name, bool loop = true)
         {
             if (!GameSettings.MusicOn) { source.Stop(); return; }

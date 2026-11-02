@@ -40,7 +40,7 @@ namespace SpectreEX
         void OnTriggerEnter(Collider other)
         {
             var player = other.GetComponentInParent<PlayerTank>();
-            if (player == null) return;
+            if (player == null || player.Health.IsDead) return;
             if (GameManager.Instance != null) GameManager.Instance.OnFlagCollected(this);
             Destroy(gameObject);
         }

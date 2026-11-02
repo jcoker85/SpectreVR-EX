@@ -11,8 +11,8 @@ namespace SpectreEX
     // Spectre VR session rules: lives, score, levels, the level clock and its time bonus, and respawns.
     // Levels come from the chosen matrix (.MAT, as in the original game): each level's game grid
     // (obstacles and flags), enemy set and enemy data, tip and song. Without a matrix it falls back to
-    // generated levels (LevelPlan). Games are started from the main menu; Esc pauses to the menu and
-    // Esc again resumes, P pauses in place, and demo mode ends on any key.
+    // generated levels (LevelPlan). Games are started from the main menu; Esc ends the game, P pauses
+    // in place, and demo mode ends on any key.
     public class GameManager : MonoBehaviour
     {
         // Re-found on demand so a script recompile during Play mode doesn't strand everything
@@ -59,7 +59,7 @@ namespace SpectreEX
         public int Score { get; private set; }
         public int Lives { get; private set; }
         public int Level { get; private set; }
-        // _BONUS: (flags + tanks) x 10 + 30 "seconds" x 4 at the start of each life, falling by 4 every
+        // _BONUS: (flags + tanks) x 10 + 30 "seconds" x 4 at the start of the level, falling by 4 every
         // 18 ticks; what's left is added to the score when the level is won. There's no time limit.
         public int Bonus { get; private set; }
         public int TimeAllowed { get; private set; }
@@ -68,8 +68,7 @@ namespace SpectreEX
         public bool Playing { get; private set; }
         public bool InGame { get; private set; }
         public bool Paused { get; private set; }
-        public bool Suspended { get; private set; }   // paused behind the main menu (Esc)
-        int resumedFrame = -1, demoStartFrame = -1;
+        int demoStartFrame = -1;
         public bool Demo { get; private set; }
         public LevelPlan Plan { get; private set; }
         public MatrixFile CurrentMatrix { get; private set; }
@@ -88,7 +87,6 @@ namespace SpectreEX
         public System.Action HideOverlays;
         public System.Action<int> GameOverSpin;                     // a step of _SPIN_UP, or -1 for the words at rest
         public System.Action<int, int> ReturnedToMenu;              // final score and level (0 if abandoned)
-        public System.Action Suspend;                               // Esc in game: show the menu over the paused game
 
         // The robots run on the original's tick (RobotDirector); _TANKS_LEFT counts every robot still to
         // be destroyed, regenerations included, and the destroyed robots' bonuses are paid when it hits 0
@@ -100,7 +98,6 @@ namespace SpectreEX
         Color horizonColor;
         Material horizonSolid, horizonBand;
         Coroutine session, down;
-        float downAt;
         DemoPilot demoPilot;
 
         // What animations go by: P stops the things _MOVE_THINGS moves, though the craft carries on
@@ -139,7 +136,6 @@ namespace SpectreEX
             saving = false;
             Time.timeScale = 1f;
             Paused = false;
-            Suspended = false;
             Demo = demo;
             if (demo) DemoHasRun = true;
             levelFinished = false;
@@ -175,30 +171,12 @@ namespace SpectreEX
             EndSession(0, 0);
         }
 
-        // Back from the menu to the paused game (Esc again, or the menu's resume)
-        public void Resume()
-        {
-            if (!InGame || !Suspended) return;
-            Suspended = false;
-            Paused = false;
-            resumedFrame = Time.frameCount;   // the Esc that resumed us mustn't re-suspend this frame
-            Time.timeScale = 1f;
-            ApplySettings();
-            if (MusicPlayer.Instance != null)
-            {
-                // The song again, in case Options changed which styles are on
-                if (CurrentMatrix != null) levelSong = MatrixMusic.TrackFor(levelSongId);
-                MusicPlayer.Instance.ResumeGameMusic(CurrentMatrix != null ? levelSong : null);
-            }
-        }
-
         void EndSession(int finalScore, int finalLevel)
         {
             StopAllCoroutines();
             session = null;
             Time.timeScale = 1f;
             Paused = false;
-            Suspended = false;
             Playing = false;
             InGame = false;
             Demo = false;
@@ -425,7 +403,7 @@ namespace SpectreEX
 
         void Update()
         {
-            if (!InGame || Suspended || saving) return;
+            if (!InGame || saving) return;
             var k = Keyboard.current;
             if (k != null) DisplayKeys(k);
             MovieTextures.Advance(Time.unscaledDeltaTime);
@@ -437,7 +415,7 @@ namespace SpectreEX
             }
             else if (k != null)
             {
-                if (k.escapeKey.wasPressedThisFrame && Time.frameCount != resumedFrame) { SuspendToMenu(); return; }
+                if (k.escapeKey.wasPressedThisFrame && Playing) { EscapeGame(); return; }
                 if (GameKeys.Pause.Pressed) TogglePause();
             }
 
@@ -459,10 +437,10 @@ namespace SpectreEX
 
         public int LevelTicks { get; private set; }
         string levelSong, levelTip;
-        int levelSongId;
         int repairTimer;
 
-        // _TIME_ALLOWED and the bonus, at the start of a level and of every life
+        // _TIME_ALLOWED and the bonus, at the start of a level. The original restarts them with every
+        // life, which pays you for dying; here they run on through the level.
         void StartBonus()
         {
             TimeAllowed = FlagsTotal * 10 + (director.Robots.Count + 1) * 10 + 30;
@@ -470,16 +448,23 @@ namespace SpectreEX
             LevelTicks = 0;
         }
 
-        // Esc: freeze the game and bring up the main menu over it; Esc again resumes
-        void SuspendToMenu()
+        // _PLAY_LEVEL's Esc, paused or not: LTRDUDE and the game ends, with Game Over and, after a
+        // finished level, the score table (_SPECTRE_MAIN)
+        void EscapeGame()
         {
-            if (Paused) HideOverlays?.Invoke();
-            Suspended = true;
-            Paused = true;
-            Time.timeScale = 0f;
+            StopAllCoroutines();
+            session = down = null;
+            Playing = false;
+            Paused = false;
             player.Motor.SetInput(0f, 0f);
-            if (MusicPlayer.Instance != null) MusicPlayer.Instance.PauseGameMusic();
-            Suspend?.Invoke();
+            Sfx.Play(Snd.Leave);
+            session = StartCoroutine(GameOver());
+        }
+
+        IEnumerator GameOver()
+        {
+            yield return SpinGameOver();
+            EndSession(levelFinished ? Score : 0, Level);   // no finished level, no score table
         }
 
         void TogglePause()
@@ -588,7 +573,6 @@ namespace SpectreEX
             AcidDamage = source.TryGetEnemyData(lv.enemyData, 23, out var acid) ? acid.collideDamage : 10;
             StartBonus();
 
-            levelSongId = lv.song;
             levelSong = MatrixMusic.TrackFor(lv.song);
             return lap == 0 ? m.Tip(lv.tip) : "";   // _LOAD_WAVE: no tip once the list repeats
         }
@@ -931,17 +915,10 @@ namespace SpectreEX
             if (left == 0 && Playing) FinishLevel();
         }
 
-        // The last flag or a jump pad, even for a wreck: if the level ends first no life is lost. If the
-        // wreck's time will run out first the life goes, and the level ends just after it restarts.
+        // The last flag or a jump pad
         void FinishLevel()
         {
             player.Motor.Warp();
-            if (down != null)
-            {
-                if (Time.time - downAt > (DeadWaitTicks - LevelEndTicks) / PlayerMotor.TickRate) return;
-                StopCoroutine(down);
-                down = null;
-            }
             session = StartCoroutine(LevelComplete());
         }
 
@@ -951,7 +928,7 @@ namespace SpectreEX
         public void TakeJumpPad(JumpPad pad)
         {
             if (!Playing || FlagsCollected >= FlagsTotal) return;   // the level is already ending
-            AddScore(pad.score - Score);
+            AddScore(Mathf.Max(0, pad.score - Score));   // a score already past it stays
             var m = CurrentMatrix;
             if (m != null)
             {
@@ -974,6 +951,12 @@ namespace SpectreEX
         IEnumerator LevelComplete()
         {
             yield return new WaitForSeconds(LevelEndTicks / PlayerMotor.TickRate);
+            // Destroyed just after the last flag: the level ends first, so no life is lost
+            if (down != null)
+            {
+                StopCoroutine(down);
+                down = null;
+            }
             Playing = false;
             levelFinished = true;
             Sfx.Play(Snd.Award);
@@ -1023,7 +1006,6 @@ namespace SpectreEX
                 director.Shots.ExplodePlayer();
                 DeRes.Play(player.gameObject, 0x5A, DeadTicks / PlayerMotor.TickRate, false);
                 down = StartCoroutine(PlayerDown());
-                downAt = Time.time;
                 return;
             }
 
@@ -1034,7 +1016,7 @@ namespace SpectreEX
             robot.Killed();
             director.Shots.Explode(robot);
             DeRes.Play(robot.gameObject, 10, 10f / PlayerMotor.TickRate, false);
-            bankedBonus += Mathf.Max(0, robot.data.bonus);
+            if (robot.hitByPlayer) bankedBonus += Mathf.Max(0, robot.data.bonus);   // robots' own kills pay nothing
             if (--robotsLeft == 0)
             {
                 Sfx.Play(Snd.AllRobots);
@@ -1044,7 +1026,7 @@ namespace SpectreEX
         }
 
         // Destroyed (_PLAY_LEVEL): 50 ticks later a life goes, and the level starts again with its banner
-        // and song from a new spot, the flags and robots as they were, shots cleared and the bonus restarted
+        // and song from a new spot, the flags and robots as they were, shots cleared, the bonus running on
         IEnumerator PlayerDown()
         {
             Sfx.Play(Snd.PlayerDestroyed);
@@ -1061,17 +1043,14 @@ namespace SpectreEX
                     EndSession(0, Level);
                     yield break;
                 }
-                yield return SpinGameOver();
-                EndSession(levelFinished ? Score : 0, Level);   // _SPECTRE_MAIN: no finished level, no score table
+                yield return GameOver();
                 yield break;
             }
 
             director.Shots.Clear();
             PlacePlayerAtStart();
             PlaceRobotsAgain();
-            StartBonus();
             yield return LevelBanner();
-            if (FlagsTotal > 0 && FlagsCollected >= FlagsTotal) FinishLevel();
         }
 
         // _GAME_OVER / _SPIN_UP: the words spin in over 33 ticks, then hold for 15

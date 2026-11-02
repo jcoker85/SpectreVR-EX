@@ -66,7 +66,8 @@ namespace SpectreEX
         void OnTriggerEnter(Collider other)
         {
             var gm = GameManager.Instance;
-            if (gm == null || !gm.Playing || other.GetComponentInParent<PlayerTank>() == null) return;
+            var player = other.GetComponentInParent<PlayerTank>();
+            if (gm == null || !gm.Playing || player == null || player.Health.IsDead) return;
             gm.TakeJumpPad(this);
         }
     }

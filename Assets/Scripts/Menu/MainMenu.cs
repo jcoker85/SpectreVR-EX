@@ -105,7 +105,6 @@ namespace SpectreEX.Menu
             if (gm != null)
             {
                 gm.ReturnedToMenu += OnReturnedToMenu;
-                gm.Suspend += () => Open(keepMusic: true);
                 gm.SaveRequested += OpenSave;
             }
             if (Keyboard.current != null) Keyboard.current.onTextInput += OnTextInput;
@@ -150,25 +149,14 @@ namespace SpectreEX.Menu
 
         // ---------- open / close ----------
 
-        // keepMusic: opened over a paused game (Esc), so leave the level's song paused rather than switching
-        public void Open(bool keepMusic = false)
+        public void Open()
         {
             idleSince = Time.unscaledTime;
             canvas.enabled = true;
             stack.Clear();
             foreach (var s in AllScreens()) s.root.gameObject.SetActive(false);
             Push(main);
-            if (!keepMusic && MusicPlayer.Instance != null) MusicPlayer.Instance.PlayMenuTheme();
-        }
-
-        bool GameSuspended => gm != null && gm.InGame && gm.Suspended;
-
-        // Esc on the main menu while a game is paused behind it: straight back into the game
-        void ResumeGame()
-        {
-            if (!GameSuspended) return;
-            Close();
-            gm.Resume();
+            if (MusicPlayer.Instance != null) MusicPlayer.Instance.PlayMenuTheme();
         }
 
         // Jump straight to a dialog by name ("Vehicles", "Options", "Scores", ...), over the main menu
@@ -319,7 +307,7 @@ namespace SpectreEX.Menu
             Tile(main, 377, 229, 1, 3, () => StartGame(true), Key.D);
             Tile(main, 449, 229, 3, 3, Quit, Key.Q);
             main.onEnter = PlayFromStart;
-            main.onEscape = ResumeGame;
+            main.onEscape = Quit;   // _MAIN_MENU: Esc leaves, as Q does
         }
 
         static bool ShiftHeld
@@ -506,8 +494,8 @@ namespace SpectreEX.Menu
             {
                 GameSettings.Save();
                 if (gm != null) gm.ApplySettings();
-                // Over a paused game the level's song stays paused; otherwise restart the theme (music settings may have changed)
-                if (!GameSuspended && MusicPlayer.Instance != null) MusicPlayer.Instance.PlayMenuTheme();
+                // Restart the theme, as music settings may have changed
+                if (MusicPlayer.Instance != null) MusicPlayer.Instance.PlayMenuTheme();
                 Pop();
             };
             Button(options, new Rect(199, 287, 170, 41), done, Key.D);
@@ -1315,19 +1303,19 @@ namespace SpectreEX.Menu
             var now = stack[stack.Count - 1];
             now.root.gameObject.SetActive(true);
             now.refresh?.Invoke();
-            if (now == main && !GameSuspended && MusicPlayer.Instance != null) MusicPlayer.Instance.PlayMenuTheme();
+            if (now == main && MusicPlayer.Instance != null) MusicPlayer.Instance.PlayMenuTheme();
             ignoreClickFrame = Time.frameCount;
         }
 
         int ignoreClickFrame;
         float idleSince;
 
-        // _MOUSE_KEY: left alone, the main menu runs the demo, sooner once it has run. Never over a paused game.
+        // _MOUSE_KEY: left alone, the main menu runs the demo, sooner once it has run
         bool IdleDemo(MenuScreen top)
         {
             bool pressed = (Keyboard.current != null && Keyboard.current.anyKey.wasPressedThisFrame) ||
                            (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame);
-            if (top != main || GameSuspended || pressed) { idleSince = Time.unscaledTime; return false; }
+            if (top != main || pressed) { idleSince = Time.unscaledTime; return false; }
             int ticks = GameManager.DemoHasRun ? 0x10E : 0x21C;
             if (Time.unscaledTime - idleSince < ticks / PlayerMotor.TickRate) return false;
             idleSince = Time.unscaledTime;

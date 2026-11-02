@@ -133,12 +133,12 @@ namespace SpectreEX
         // _DO_SHOOT. The player's own fire sounds come from its weapon (the original's later call wins).
         void Fire(Robot owner, bool fromPlayer, long x, long y, long z, int heading, int weapon)
         {
+            if (shots.Count >= MaxShots) return;   // no slot, no shot, so it doesn't count against Accuracy
             if (weapon != Debris)
             {
                 if (fromPlayer) MyShots++;
                 else RobotShots++;
             }
-            if (shots.Count >= MaxShots) return;
             var s = new Shot { x = x, y = y, z = z, heading = heading & 0xFF, owner = owner, fromPlayer = fromPlayer, weapon = weapon, life = 0x12, speed = 0x2000 };
             string sound = Snd.RobotShot;
             int shape = 0;
@@ -460,6 +460,7 @@ namespace SpectreEX
         {
             var robot = health.GetComponent<Robot>();
             if (robot != null && robot.dying != 0) return false;
+            if (robot != null) robot.hitByPlayer = s.fromPlayer;
             if (s.fromPlayer) MyHits++;
             else if (health.team == Team.Player) RobotHits++;
             if (s.weapon == 1 || s.weapon == 17) return true;   // splash instead
@@ -520,6 +521,7 @@ namespace SpectreEX
                 if (r == null || !r.visible || r.dying != 0 || r == s.owner) continue;
                 int q = OriginalMath.QDist(r.x - s.x, r.y - s.y);
                 int loss = (q < 0xE ? 5 : 0) + (q < 0x40 ? 2 : 0) + (q < 0x80 ? 2 : 0);
+                r.hitByPlayer = s.fromPlayer;
                 if (loss > 0) r.Health.TakeDamage(loss);
             }
             if (s.fromPlayer || !director.PlayerAlive) return;

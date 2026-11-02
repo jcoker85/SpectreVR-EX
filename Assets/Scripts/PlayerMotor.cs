@@ -45,6 +45,7 @@ namespace SpectreEX
         public bool Airborne => z - GroundZ > minZ + 0x100;
         public bool LowForRobots => z - GroundZ <= minZ;
         public bool Under => under;
+        public bool Spinning => spinRate != 0;       // a Spinner hit: no steering, thrust or firing
         public long ZUnits => z;                     // height in original units, the floor at GroundZ
         public int CommandSpeed { get; private set; }   // _SPEED, forward positive: what the craft is told to do, blocked or not
         public int CenterX { get; private set; }         // _CENTER_X / _CENTER_Y: the view's shake in a bounce, in 320x200 pixels
@@ -214,7 +215,13 @@ namespace SpectreEX
                 turnStep = steerTurn;
             }
 
-            if (health != null && health.IsDead) speed = 0;   // a wreck still turns and jumps, but _SPEED is 0
+            // A wreck is out of the game: it drops where it was and does nothing more
+            bool wrecked = health != null && health.IsDead;
+            if (wrecked)
+            {
+                speed = turnStep = 0;
+                jumpRequested = hyperRequested = false;
+            }
 
             if (spinRate != 0)
             {
@@ -249,6 +256,7 @@ namespace SpectreEX
             long nx = x + dx / SubSteps, ny = y + dy / SubSteps;
 
             Classify(nx, ny, heading, out var robot, out var gate, out var solid);
+            if (wrecked) gate = null;
 
             bool blocked = false;
             Vector3 blockerAt = default;
@@ -294,11 +302,13 @@ namespace SpectreEX
                         break;
                     }
                     case ObstacleBehaviour.Kind.Ice:
-                        if (!onIce)
+                        // Arriving at rest (a landing) there's nothing to slide on yet, so the first
+                        // move sets it; the original would hold the craft still and locked here
+                        if (!onIce || (iceDx == 0 && iceDy == 0))
                         {
+                            if (!onIce) Sfx.Play(Snd.IceSlide);
                             onIce = true;
                             iceDx = dx; iceDy = dy; iceFineHeading = fineHeading;
-                            Sfx.Play(Snd.IceSlide);
                         }
                         else
                         {
@@ -572,7 +582,9 @@ namespace SpectreEX
             x = ToUnits(p.x);
             y = ToUnits(p.z);
             FaceRandomly();
-            z = HyperDropZ;   // under the floor you stay under it
+            z = HyperDropZ;
+            under = false;    // a drop from above always lands on the floor
+            minZ = GroundZ;
             vz = 0;
             Hyper = 0;
             onIce = false;

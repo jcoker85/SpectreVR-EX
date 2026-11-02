@@ -85,7 +85,7 @@ namespace SpectreEX
         // _MOVE_SHOTS: every hit scores the robot's points; one it survives stuns it for 18 ticks
         void OnDamaged(int points)
         {
-            if (GameManager.Instance != null) GameManager.Instance.AddScore(Mathf.Max(0, data.score));
+            if (hitByPlayer && GameManager.Instance != null) GameManager.Instance.AddScore(Mathf.Max(0, data.score));
             if (health.Shields > 0) stun = 0x12;
         }
 
@@ -204,7 +204,6 @@ namespace SpectreEX
                     else if (matrixType == 22) Patrol(director, director.PlayerPos, true);
                     else ChasePlayer(director);
                 }
-                else heading = (heading + spinRate) & 0xFF;
 
                 if (dying > 0 && dying++ > 10)
                 {
@@ -215,7 +214,8 @@ namespace SpectreEX
             }
             else stun--;
 
-            // _MOVE_OBJECT: a weapon-11 hit keeps the robot spinning a while
+            // A weapon-11 hit keeps the robot spinning a while, at the craft's rate. The original also adds
+            // it in _MOVE_TANKS, which turns a robot twice as fast.
             if (spinRate != 0)
             {
                 heading = (heading + spinRate) & 0xFF;

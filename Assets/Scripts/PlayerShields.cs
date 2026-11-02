@@ -150,6 +150,7 @@ namespace SpectreEX
                 var robot = c.GetComponentInParent<EnemyBase>();
                 if (robot == null || robot.Health == null || robot.Health.IsDead) continue;
                 GameManager.Instance.GetComponent<RobotDirector>().Shots.MyHits++;
+                robot.hitByPlayer = true;
                 robot.Health.TakeDamage(PlayerShields.Damage);
                 Absorb();
                 return;

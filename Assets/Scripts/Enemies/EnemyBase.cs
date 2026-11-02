@@ -14,6 +14,7 @@ namespace SpectreEX
         public int matrixType = 7;          // VRchitect enemy type (7 Robot Tank, 20 Turret, 21 Slicer, 35 Orbiter...)
         public int collideDamage;           // raw damage points per tick of contact (matrix enemy data)
         public bool hasMatrixData = true;   // false: plain obstacle as far as contact goes
+        public bool hitByPlayer = true;     // the last hit was yours: robots hitting each other score nothing
 
         protected Health health;
         public Health Health => health;

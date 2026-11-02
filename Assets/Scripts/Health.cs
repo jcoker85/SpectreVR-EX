@@ -96,7 +96,7 @@ namespace SpectreEX
                 r.enabled = alive;
                 if (alive) GameManager.ApplyFilled(r);   // honour the Options "Filled" setting
             }
-            // The player's wreck still touches things until its time is up (_PLAY_LEVEL)
+            // The player's wreck still stops shots until its time is up
             if (team != Team.Player)
                 foreach (var c in GetComponentsInChildren<Collider>()) c.enabled = alive;
             if (rb != null)

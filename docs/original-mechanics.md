@@ -126,9 +126,7 @@ The world object type **is the wrld type**. Behaviours:
 | 39 | **pusher** | pushed `18 × 256` units/tick (≈26 m/s) along gate heading + 0x40 (sign: see note below) |
 | others | solid | block (see Collisions) |
 
-Pusher/teleport direction note: the tank model heading is stored as move heading + 0x80, and the
-code works in negated coordinates, so in move terms the teleport exit faces gate deg + 90° and the
-pusher shoves toward gate deg - 90° (worked through by hand - verify in game).
+Pusher/teleport direction note: the code works in negated coordinates and the tank's move heading is its object heading + 0x80, so the teleport exit faces gate deg + 90 in move terms. Pushers move the craft along the way the arrow points, seen on the running original; see "Compared with the running original".
 
 **Flags:** the first `_MAX_FLAGS` wrld entries are flags whatever their type (we use type 14).
 Picking one up: +20 score, sound 0x11 (0x17 for one left, 0x3C for the last).
@@ -292,7 +290,7 @@ Each robot (`_TANKS` + i×0x22; tank 0 is the player) has: +0 object, +8 mode, +
 
 Hits (`_CUBE_COLLIDE` against every robot and the player except the shooter - robots can hit each
 other): damage = wval damage of the weapon. Player: `_DAMAGE += damage × 10`, sound 3 (9 when
-low). Robot: hits left -= damage, the player scores the robot's score **on every hit**, sound 4
+low). Robot: hits left -= damage, the player scores the robot's score **on every hit** (the original pays this for robots' hits too; see "Deliberate fixes"), sound 4
 and an 18-tick stun; at 0 it dies (sound 5, or 0x2C for the last robot), its bonus is banked and
 paid when the last one dies, `_EXPLODE_TANK` throws 5 debris shots. Weapons 1 and 17 splash:
 robots within `_QFIND_DIST` 0x0E / 0x40 / 0x80 lose 5 / 2 / 2, the player takes 10 per band
@@ -398,7 +396,7 @@ robots within `_QFIND_DIST` 0x0E / 0x40 / 0x80 lose 5 / 2 / 2, the player takes 
      10000 below 60000, then every 20000, nine at most, sound NEWMAN.
    - Every 0x21C ticks (~30 s) 10 points of damage are mended (TMTICK).
    - Death: CYBOVRL, a life goes 50 ticks later, and the level carries on from the start position
-     (drop-in) with flags as they were, shots cleared, ammo full, the bonus restarted. Robots still in play are re-placed (`_PLACE_TANKS`) and their chase states reset; hyperspace resets chase too.
+     (drop-in) with flags as they were, shots cleared, ammo full; the original restarts the bonus here, the remake doesn't. Robots still in play are re-placed (`_PLACE_TANKS`) and their chase states reset; hyperspace resets chase too.
    - First level only: two spinning pads labelled Level 5 / Level 10 (`_JUMP_OBJ`, the fuel shape,
      random spots); driving onto one sets the score to 5000 / 10000, unlocks the heavy weapons of
      levels before (pad level - 2), mends damage and ends the level.
@@ -452,7 +450,7 @@ DOS `SVR.EXE` in `Tools/SpectreVR` is the one to run for side-by-side checks.
 - The bonus goes on the score, the view is blanked, the three lines animate over 16 ticks, then 18 ticks or a key press.
 - Rates out of 128, clamped: Quickness = seconds taken * 128 / TIME_ALLOWED; Accuracy = my hits * 128 / my shots; Avoidance = (robot shots - robot hits on the player) * 128 / robot shots. A zero divisor gives 128.
 - Quickness comes from the disassembly (DI = `_LEVEL_TIMER` / 18 at [BP+C], `_TIME_ALLOWED` at [BP+A]): it rises the longer a level takes. Seen on the running original: a demo level finished with Bonus 0 (over the allowed time) rated PERFECT, which fits this formula. The remake inverts it (see "Deliberate fixes to the original's intent").
-- `_LEVEL_TIMER` restarts with each life; the shot counts only with each level. Debris (weapon 0x7F) isn't counted; each of a triple shot's three is.
+- `_LEVEL_TIMER` restarts with each life in the original, and the remake's runs through the level (see "Deliberate fixes"); the shot counts only with each level. Debris (weapon 0x7F) isn't counted; each of a triple shot's three is. The original also counts a shot that found no free slot; the remake doesn't.
 - Words: 128 Perfect, 101-127 Radical, 65-100 Not Bad, 33-64 Marginal, 0-32 Get Help (colours 0x2F, 0x2F, 0xF, 0x1F, 0x1F; wedge 0xC).
 - Layout measured on the original (532-wide game window): labels at the left edge in white, wedge from about 0.31 to 0.69 of the width in light grey, words at about 0.77, lines 30 pixels apart from the middle of the screen, wedge 20 high. PERFECT and RADICAL green, MARGINAL and GET HELP red.
 - In the demo the recap stayed up for over 3 minutes although `_END_LEVEL` reads as 18 ticks or a key. Not explained: a hold in demo mode or a hang under emulation. A normal level finish hasn't been timed; the remake keeps 18 ticks.
@@ -523,7 +521,7 @@ Checked line by line: `_PLAY_LEVEL`, `_DO_PLAYER_MOVE`, `_HIT_A_GATE`, `_DO_COLL
 - The last flag or a level skip lifts the craft: +1 flag on the tank record, and 0x300 more climb a tick for the 18 ticks before `_END_LEVEL`. The same flag, set while dropping in, makes the craft untouchable by shots until it lands.
 - Touching a Smart Acid or Smart Wall goes through `_HIT_A_GATE` by type before `_DO_COLLIDE_DAMAGE`: acid burn every third tick, or quarter speed with the squelch, and no collide damage.
 - `_CLEAR_GATE_COLLIDE` runs only when touching nothing at all.
-- Hyperspace doesn't change `_UNDER`: from under the floor you land under it.
+- Hyperspace doesn't change `_UNDER`: from under the floor the original lands you under it again. The remake brings you up (see "Deliberate fixes").
 - Random spots are on a 0x800 grid out to about 0x3F800, not 8 m in from the edge, clear of everything by a margin that starts at 0x3200 and shrinks with each try. Robots wait at the middle while dumps are placed, so dumps start clear of it. The player is placed last, then the robots.
 - `_FLAT_CUBE_COLLIDE` has no height at all, so dumps and pads are collected from under the floor too.
 - Every life runs `_START_LEVEL`: all sound stops, the banner shows and the level's song starts again.
@@ -546,7 +544,7 @@ Checked line by line: `_PLAY_LEVEL`, `_DO_PLAYER_MOVE`, `_HIT_A_GATE`, `_DO_COLL
   - Sky: `_DRAW_SKY`'s band is 32 rows, a linear ramp from black to the sky colour (read off a frame), bottom at `_TY` + (`_EZ` >> 11), none in overhead view. Under the floor rows go at `_EZ` >> 6, so it's gone at -0x800. The remake's is that tall at 530 rows and hides at that depth without the partial cut. Its bottom stays on the true horizon: the original's 1-5 row drop needs the band over the floor, about 0.7% of the screen at most.
   - Draw distance: the far clip is 1000 m and the arena's diagonal is about 232 m, so nothing is ever cut. There's no setting to add.
   - `_START_LEVEL`: Space ends the banner at once, and without the sound if before its fifth tick. Alt+S saves (`_SAVE_GAME`): ten named slots of level, score at the level's start and lives, restored with Alt+R (`_RESTORE_GAME`). Alt+P asks for a starting level, 1-50 (`_GET_START_LEVEL`). The remake has them all, in the high-score table's look (SPCP15, the original's dialog, is only a blank frame). A slot never saved to loads nothing, where the original would load no lives.
-  - The wreck: while `_DEAD_TIMER` runs, `_DO_PLAYER_MOVE` and everything after it go on with `_SPEED` 0. It turns, jumps, fires, hyperspaces, rides pads, collects flags and dumps and takes shots, its shields stay up until the next life, and the bonus keeps falling. If the last flag or a jump pad ends the level before the timer does, no life is lost and the level moves on. If the timer gets there first, the life goes and the level ends just after it restarts. Shields also go at every new level, as `_ZAP_OBJECTS` clears them.
+  - The wreck: while `_DEAD_TIMER` runs, the original's `_DO_PLAYER_MOVE` and everything after it go on with `_SPEED` 0, so it turns, jumps, fires, hyperspaces, rides pads, collects flags and dumps and takes shots, and can finish the level. The remake stops all of that (see "Deliberate fixes"). Shields stay up until the next life and go at every new level, as `_ZAP_OBJECTS` clears them. If the last flag was taken just before the craft was destroyed, the level ends first and no life is lost.
   - The view centre is `_TY` = height - (height - 50) / 2, 290 of 530 rows down at the reference window. The remake shifts its lens and crosshair down by the same 4.7% of the screen's height. Banners stay mid-screen.
 - `_EYE_H` for overhead starts at 500 (40 m), but the demo sets it to 750 (60 m) and nothing sets it back, so that's what the original shows after any demo and all the captured frames. The remake starts at 750.
 - Hit ripple: `_DRAW_OBJS` hands `_PLAYER_DE_RES` to every filled face in view 0, and only to the craft in the others, so from the cockpit a hit ripples the obstacles, flags, dumps, jump pads, robots, shots and shields, including shots fired during it. The floor dots and sky aren't polygons, so they stay still. Textured faces ripple in plain grey.
@@ -563,7 +561,6 @@ Things the remake does differently on purpose, by the owner's choice, rather tha
 - **Movement:** smooth movement between the original's ticks (see "Remake timing").
 - **Controls and settings:** the Shift + Options menu, with rebinding for keyboard, mouse and gamepad.
 - **HUD layout:** placement, fonts and styling are the remake's own, so the radar sits bottom right and the weapon message at the bottom. What the HUD shows and how it behaves follows `_SHOW_SCORE` and `_SHOW_RADAR`.
-- **Esc:** suspends to the menu and resumes. The original's Esc ends the game with Game Over and, after a finished level, the score table.
 
 ## Deliberate fixes to the original's intent
 
@@ -577,7 +574,16 @@ Where the original looks like an oversight rather than a design, the remake does
 - Top-heavy obstacles (the trees, shapes 10004 and 10007): the original's one box per shape blocks at the width of the top. The remake gives a narrow stem its own box. Each part of a multi-part shape has its own box in both.
 - Damage sounds use the player's real maximum rather than the fixed 0x1E in the splash code.
 - Extra lives: `_END_LEVEL` awards a life for its bonus but leaves `_OLD_BONUS_SCORE` alone, so `_PLAY_LEVEL`'s next frame awards it again. The remake gives one.
-- A robot that blocks you shoves you away from the robot. The original indexes the world objects by the tank number, so the shove comes from an unrelated object.
+- A robot that blocks you shoves you away from the robot. The original indexes the world objects by the tank number, so the shove comes from whichever flag has that slot.
+- Landing on ice with no way on: the original stores a slide of zero and holds the craft still with its heading locked until it jumps or hyperspaces. In the remake the first move sets the slide.
+- Robots hitting robots score nothing. The original pays you for every hit and banks the bonus for every kill, whoever fired. The kill still counts towards the last robot.
+- The bonus and `_LEVEL_TIMER` run through the level. The original restarts them with each life, so dying refills the bonus and Quickness counts only the last life.
+- A wreck is out of the game: it doesn't turn, jump, fire or hyperspace, ride gates, or collect anything, so it can't finish a level.
+- Hyperspace from under the floor lands on the floor.
+- A Spinner hit stops firing as well as steering and thrust. The original clears only the mouse and joystick fire, so the keyboard still fires.
+- A spun robot turns at the craft's rate. The original adds the spin in both `_MOVE_TANKS` and `_MOVE_OBJECT`, doubling it.
+- A first-level jump pad can't lower the score. The original sets it to 5000 or 10000 whatever it was.
+- A shot that finds no free slot isn't counted against Accuracy.
 - Turrets: `(wait * interval) / 0x78` is 16-bit (`IMUL`, `CWD`, `IDIV`), so at the edge of a Turret's range, about 70 m, it overflows and they fire every tick. The remake doesn't overflow.
 - A robot's blast only sounds and ripples for the player in range. The original does both at any distance.
 - Player shots always start at the craft's drawn height. In the original a second tick in the same frame fires from floor level, so the height depends on the frame rate.
@@ -603,7 +609,7 @@ Everything was compared with the decompile again, and the radar and HUD for the 
 - Shots collide at the size of their current shape (`_COPY_SIZE`). Orbit shields count in Accuracy.
 - `_CENTER_X` and `_CENTER_Y` shake the view, radar and crosshair during a bounce.
 - P isn't a freeze: `local_34` stops the level clock, hyperspace charge, robots and shots, but the craft falls and floats, pickups work and the death and level-end timers run.
-- No tip on later laps. Game Over spins in (`_SPIN_UP`). The score table needs a finished level. The menu runs the demo after 0x21C idle ticks, 0x10E once it has run.
+- No tip on later laps. Game Over spins in (`_SPIN_UP`). The score table needs a finished level. Esc ends the game the original's way, with LTRDUDE, Game Over and the score table after a finished level, and Esc on the main menu quits; P is the pause. The earlier Esc-to-menu suspend is gone (owner, 2026-11-02). The menu runs the demo after 0x21C idle ticks, 0x10E once it has run.
 
 Radar (`_SHOW_RADAR`): about +-0x7C000 units in a square. Dumps and jump pads are points; robots are points except Turret G, Slicer S, Flyer H, Smart Acid A, Smart Wall M; gates T, up transports U, down transports D (letter pairing from the code's order, not seen on screen, except Slicer); flags off when `_LEVEL_TIMER & 0xC` is 0. Colours are the object's ramp + 0xC. Cloaked Tanks don't show, dying robots do.
 
