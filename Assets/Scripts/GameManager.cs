@@ -256,6 +256,7 @@ namespace SpectreEX
             Paused = false;   // P belongs to one run of _PLAY_LEVEL
             Sfx.Stop();
             if (MusicPlayer.Instance != null) MusicPlayer.Instance.Stop();
+            SimClock.DropFrame();   // _CHECK_TIMER: the banner is timed from here, not from before the level loaded
             ShowBanner?.Invoke($"LEVEL {Level}", levelTip, true);
             bannerSkipped = false;
             yield return BannerTicks(5);

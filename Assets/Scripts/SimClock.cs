@@ -20,6 +20,11 @@ namespace SpectreEX
         RobotDirector director;
         double accumulator;
         int subStep;
+        static bool dropFrame;
+
+        // _START_LEVEL calls _CHECK_TIMER once the level is loaded, so the time spent loading never
+        // reaches the game. Here the frame that built the level, and drew it for the first time, is dropped.
+        public static void DropFrame() => dropFrame = true;
 
         void Awake()
         {
@@ -32,7 +37,8 @@ namespace SpectreEX
             var motor = gm.player != null ? gm.player.Motor : null;
             if (motor != null) motor.BeforeSim();
 
-            accumulator += Time.deltaTime;
+            if (dropFrame) dropFrame = false;
+            else accumulator += Time.deltaTime;
             while (accumulator >= StepSeconds)
             {
                 accumulator -= StepSeconds;
