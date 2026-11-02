@@ -249,8 +249,8 @@ namespace SpectreEX
             yield return LevelBanner();
         }
 
-        // _START_LEVEL, for every life: everything stops, the banner shows with its sound five ticks
-        // in, and the level's song starts from the top as the banner goes
+        // _START_LEVEL, for every life: everything stops, the banner spins in with its sound five ticks
+        // in, holds, and the level's song starts from the top as the banner goes
         IEnumerator LevelBanner()
         {
             Paused = false;   // P belongs to one run of _PLAY_LEVEL
@@ -258,17 +258,22 @@ namespace SpectreEX
             if (MusicPlayer.Instance != null) MusicPlayer.Instance.Stop();
             SimClock.DropFrame();   // _CHECK_TIMER: the banner is timed from here, not from before the level loaded
             ShowBanner?.Invoke($"LEVEL {Level}", levelTip, true);
-            bannerSkipped = false;
+            bannerSkipped = bannerSaved = false;
             yield return BannerTicks(5);
             if (!bannerSkipped) Sfx.Play(Snd.LevelStart);
-            yield return BannerTicks(27);
+            // The spin loop runs until its count passes 0x20, so it ends on tick 0x21
+            yield return BannerTicks(0x21 - 5);
+            // Then _CHECK_DONE_CMD(0xF): fifteen _DELAY(1)s with the words at rest, which no key cuts short.
+            // Space skips this as well, but a save comes back to it.
+            if (bannerSaved) ShowBanner?.Invoke($"LEVEL {Level}", levelTip, false);
+            if (!bannerSkipped || bannerSaved) yield return Ticks(0xF);
             HideOverlays?.Invoke();
             if (MusicPlayer.Instance != null) MusicPlayer.Instance.PlayTrackOrStop(levelSong);
             Playing = true;
             player.Weapon.Announce();   // _ALT_WEAPON_TIMER, every life
         }
 
-        bool bannerSkipped, saving;
+        bool bannerSkipped, bannerSaved, saving;
         int levelStartScore;
 
         // Alt+S on the banner (_SAVE_GAME): the menu takes it from here, level, score and lives in hand
@@ -284,7 +289,7 @@ namespace SpectreEX
                 if (keys != null && keys.spaceKey.wasPressedThisFrame) bannerSkipped = true;
                 if (keys != null && !Demo && keys.sKey.wasPressedThisFrame && (keys.leftAltKey.isPressed || keys.rightAltKey.isPressed))
                 {
-                    bannerSkipped = saving = true;
+                    bannerSkipped = bannerSaved = saving = true;
                     SaveRequested?.Invoke(Level - 1, levelStartScore, Lives);
                     while (saving) yield return null;
                 }
