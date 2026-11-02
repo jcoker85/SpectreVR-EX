@@ -19,12 +19,12 @@ namespace SpectreEX
         public static readonly int[] IconCell = { 6, 0, 3, 2, 1, 5, 4, 7, 8 };              // _WEAPON_X / 16 in SPCP36
         // _ALLOW_ALT_WEAPON_STRS: which weapon(s) a level's unlock number (its tip number) turns on
         static readonly int[] Unlocks = { 0, 0, 0, 0x10, 0x40, 0, 0, 0, 0, 0, 0x2, 0x8, 0x10, 0x40, 0x20, 0x4, 0xFFFF, 0x80, 0x100, 0 };
-        public const float BannerSeconds = 0x36 / OriginalMath.TickRate;                     // _ALT_WEAPON_TIMER
+        public const int BannerTicks = 0x36;                                                 // _ALT_WEAPON_TIMER
 
         public int Ammo { get; private set; }
         public int AltWeapon { get; private set; }
         public int Allowed { get; private set; } = 1;
-        public float BannerUntil { get; private set; }
+        public long BannerUntil { get; private set; }   // a SimClock tick
         public bool HasAll => (Allowed & 0x1FF) == 0x1FF;
 
         // Input, set every frame by PlayerTank / DemoPilot; presses are kept until a tick uses them
@@ -52,7 +52,7 @@ namespace SpectreEX
         public void PressWeaponKey(int n) => keyWeapon = n;
 
         // _PLAY_LEVEL shows what's selected at the start of every life
-        public void Announce() => BannerUntil = Time.time + BannerSeconds;
+        public void Announce() => BannerUntil = SimClock.Ticks + BannerTicks;
 
         // A new game: the cannon only
         public void ResetHeavyWeapons()
@@ -78,7 +78,7 @@ namespace SpectreEX
         void Select(int w)
         {
             AltWeapon = w;
-            BannerUntil = Time.time + BannerSeconds;
+            BannerUntil = SimClock.Ticks + BannerTicks;
         }
 
         static int Cost(int shotType)

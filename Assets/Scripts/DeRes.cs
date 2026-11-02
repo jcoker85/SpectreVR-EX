@@ -33,25 +33,30 @@ namespace SpectreEX
         Mesh mesh;
         MeshRenderer own;
         bool isPlayer;
-        float age, seconds;
+        float startTick;
+        int ticks;
         int peak;
         bool returns;
 
         // The cockpit ripple running now, for anything that appears during it
-        static float rippleStart = float.NegativeInfinity, rippleSeconds;
+        static float rippleStart = float.NegativeInfinity;
+        static int rippleTicks;
         static int ripplePeak;
 
-        public static void Play(GameObject source, int peak, float seconds, bool returns, float elapsed = 0f)
+        // Ticks of SimClock, drawn between them
+        static float Now => SimClock.Ticks + SimClock.TickFraction;
+
+        public static void Play(GameObject source, int peak, int ticks, bool returns, float elapsed = 0f)
         {
             var gm = GameManager.Instance;
             if (gm == null || !playing.Add(source)) return;
             var go = new GameObject("DeRes");
             var d = go.AddComponent<DeRes>();
             d.peak = peak;
-            d.seconds = seconds;
+            d.ticks = ticks;
             d.returns = returns;
             d.source = source;
-            d.age = elapsed;
+            d.startTick = Now - elapsed;
             var dump = source.GetComponent<AmmoDump>();
             foreach (var f in source.GetComponentsInChildren<MeshFilter>(true))
             {
@@ -79,30 +84,30 @@ namespace SpectreEX
             d.own = go.AddComponent<MeshRenderer>();
             d.own.sharedMaterial = gm.obstacleLook.shapes;
             d.own.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            if (d.isPlayer && returns && ViewCamera.CraftHidden) PlayWorld(gm, peak, seconds);
+            if (d.isPlayer && returns && ViewCamera.CraftHidden) PlayWorld(gm, peak, ticks);
         }
 
         // _DRAW_OBJS: from the cockpit the player's de-res goes to every filled shape in the view instead
-        static void PlayWorld(GameManager gm, int peak, float seconds)
+        static void PlayWorld(GameManager gm, int peak, int ticks)
         {
             if (!GameSettings.DisplayFilled) return;
-            rippleStart = Time.time;
-            rippleSeconds = seconds;
+            rippleStart = Now;
+            rippleTicks = ticks;
             ripplePeak = peak;
-            foreach (var o in gm.Obstacles) if (o != null) Play(o, peak, seconds, true);
-            foreach (var f in gm.Flags) if (f != null) Play(f.gameObject, peak, seconds, true);
-            foreach (var d in gm.Dumps) if (d != null) Play(d.gameObject, peak, seconds, true);
-            foreach (var p in gm.JumpPads) if (p != null) Play(p.gameObject, peak, seconds, true);
-            foreach (var r in gm.Robots) if (r != null && !r.IsDead) Play(r.gameObject, peak, seconds, true);
-            foreach (var s in Object.FindObjectsByType<OrbitShield>(FindObjectsSortMode.None)) Play(s.gameObject, peak, seconds, true);
-            gm.GetComponent<RobotDirector>().Shots.ForEachVisual(v => Play(v, peak, seconds, true));
+            foreach (var o in gm.Obstacles) if (o != null) Play(o, peak, ticks, true);
+            foreach (var f in gm.Flags) if (f != null) Play(f.gameObject, peak, ticks, true);
+            foreach (var d in gm.Dumps) if (d != null) Play(d.gameObject, peak, ticks, true);
+            foreach (var p in gm.JumpPads) if (p != null) Play(p.gameObject, peak, ticks, true);
+            foreach (var r in gm.Robots) if (r != null && !r.IsDead) Play(r.gameObject, peak, ticks, true);
+            foreach (var s in Object.FindObjectsByType<OrbitShield>(FindObjectsSortMode.None)) Play(s.gameObject, peak, ticks, true);
+            gm.GetComponent<RobotDirector>().Shots.ForEachVisual(v => Play(v, peak, ticks, true));
         }
 
         // A shot fired mid-ripple joins it where it has got to
         public static void JoinRipple(GameObject source)
         {
-            float elapsed = Time.time - rippleStart;
-            if (elapsed < rippleSeconds && ViewCamera.CraftHidden) Play(source, ripplePeak, rippleSeconds, true, elapsed);
+            float elapsed = Now - rippleStart;
+            if (elapsed < rippleTicks && ViewCamera.CraftHidden) Play(source, ripplePeak, rippleTicks, true, elapsed);
         }
 
         bool Dead
@@ -116,8 +121,8 @@ namespace SpectreEX
 
         void LateUpdate()
         {
-            age += Time.deltaTime;
-            if (age >= seconds)
+            float age = Now - startTick;
+            if (age >= ticks)
             {
                 playing.Remove(source);
                 if (returns)
@@ -132,7 +137,7 @@ namespace SpectreEX
                 return;
             }
             own.enabled = !(isPlayer && ViewCamera.CraftHidden);
-            float t = age / seconds;
+            float t = age / ticks;
             Build(peak * (returns ? Mathf.Sin(t * Mathf.PI) : t));
         }
 

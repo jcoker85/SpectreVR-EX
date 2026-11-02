@@ -237,7 +237,7 @@ namespace SpectreEX
             s.fading = struck ? 7 : 9;
             if (struck) s.vx = s.vy = 0;
             if (s.visual == null) return;
-            DeRes.Play(s.visual.gameObject, 10, s.fading / OriginalMath.TickRate, false);
+            DeRes.Play(s.visual.gameObject, 10, s.fading, false);
             foreach (var r in s.visual.GetComponentsInChildren<Renderer>()) r.enabled = false;
         }
 
@@ -471,7 +471,7 @@ namespace SpectreEX
             int damage = Damage(s.weapon);
             if (damage <= 0 && robot != null) robot.HitWithoutDamage();   // Spinners: still scores and stuns
             else health.TakeDamage(damage);
-            if (health.team == Team.Player && !health.IsDead) DeRes.Play(health.gameObject, Health.RipplePeak, Health.RippleTicks / OriginalMath.TickRate, true);   // _D_P_DE_RES
+            if (health.team == Team.Player && !health.IsDead) DeRes.Play(health.gameObject, Health.RipplePeak, Health.RippleTicks, true);   // _D_P_DE_RES
             return true;
         }
 

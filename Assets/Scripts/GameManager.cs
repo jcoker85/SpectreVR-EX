@@ -78,7 +78,7 @@ namespace SpectreEX
         public readonly List<GameObject> Obstacles = new List<GameObject>();
         public int AcidDamage { get; private set; } = 10;   // raw points every third tick in acid
 
-        public System.Action<string, string> ShowBanner;           // big title, red tip
+        public System.Action<string, string, bool> ShowBanner;     // big title, red tip, whether the title spins up
         public System.Action<int[], int> ShowRecap;                 // Quickness, Accuracy, Avoidance out of 128; animation step
         public System.Action HideOverlays;
         public System.Action<int> GameOverSpin;                     // a step of _SPIN_UP, or -1 for the words at rest
@@ -256,7 +256,7 @@ namespace SpectreEX
             Paused = false;   // P belongs to one run of _PLAY_LEVEL
             Sfx.Stop();
             if (MusicPlayer.Instance != null) MusicPlayer.Instance.Stop();
-            ShowBanner?.Invoke($"LEVEL {Level}", levelTip);
+            ShowBanner?.Invoke($"LEVEL {Level}", levelTip, true);
             bannerSkipped = false;
             yield return BannerTicks(5);
             if (!bannerSkipped) Sfx.Play(Snd.LevelStart);
@@ -434,7 +434,7 @@ namespace SpectreEX
             // Not a freeze: _PLAY_LEVEL stops the bonus, the robots and the shots, while the craft keeps
             // falling and floating, pickups still work and the death and level-end timers run on
             Paused = !Paused;
-            if (Paused) ShowBanner?.Invoke("PAUSED", $"PRESS {GameKeys.First(GameKeys.Pause)} TO CONTINUE");
+            if (Paused) ShowBanner?.Invoke("PAUSED", $"PRESS {GameKeys.First(GameKeys.Pause)} TO CONTINUE", false);
             else HideOverlays?.Invoke();
         }
 
@@ -506,14 +506,16 @@ namespace SpectreEX
                 foreach (var e in set)
                 {
                     int count = e.max < e.min ? Random.Range(e.max, e.min + 1) : e.min;
-                    var data = source.TryGetEnemyData(lv.enemyData, e.type, out var d) ? Robot.Data.From(d, lap) : DefaultRobotData(e.type, lap);
+                    // A type the level's data doesn't cover has nothing for the original to run on; it isn't placed
+                    if (!EnemyData(lv.enemyData, e.type, out var d)) continue;
+                    var data = Robot.Data.From(d, lap);
                     for (int i = 0; i < count; i++) SpawnRobot(e.type, data, Mathf.Max(0, e.regen));
                 }
             }
 
             // Ten ammo dumps, their kinds weighted by the enemy data's type-5 entry (_LOAD_BVAL). The robots
             // are all still at the middle, so the dumps keep clear of it as they do in the original.
-            DumpOdds = source.TryGetEnemyData(lv.enemyData, 5, out var fuel)
+            DumpOdds = EnemyData(lv.enemyData, 5, out var fuel)
                 ? new[] { fuel.strength, fuel.collideDamage, fuel.attackRange / 7, fuel.firingRange / 7 }
                 : DefaultDumpOdds;
             for (int i = 0; i < DumpsPerLevel; i++) SpawnDump();
@@ -528,18 +530,20 @@ namespace SpectreEX
             PlaceRobotsAgain();
 
             // Acid burns for the level's Smart Acid collision damage, or 10 (_LOAD_BVAL)
-            AcidDamage = source.TryGetEnemyData(lv.enemyData, 23, out var acid) ? acid.collideDamage : 10;
+            AcidDamage = EnemyData(lv.enemyData, 23, out var acid) ? acid.collideDamage : 10;
             StartBonus();
 
             levelSong = MatrixMusic.TrackFor(lv.song);
             return lap == 0 ? m.Tip(lv.tip) : "";   // _LOAD_WAVE: no tip once the list repeats
         }
 
-        static Robot.Data DefaultRobotData(int type, int lap)
+        // _LOAD_BVAL finds a level's enemy data in the files loaded, the chosen matrix and BASIC.MAT
+        bool EnemyData(int setId, int type, out MatrixFile.EnemyData data)
         {
-            var central = MatrixLibrary.Central();
-            if (central != null && central.TryGetEnemyData(10000, type, out var d)) return Robot.Data.From(d, lap);
-            return new Robot.Data { strength = 1, chaseDist = 1750, firingRange = 560, interval = 120, speed = 5, turn = 1, score = 25, weapon = 0 };
+            data = default;
+            if (CurrentMatrix != null && CurrentMatrix.EnemyDataSets.ContainsKey(setId)) return CurrentMatrix.TryGetEnemyData(setId, type, out data);
+            var basic = MatrixLibrary.Basic();
+            return basic != null && basic.TryGetEnemyData(setId, type, out data);
         }
 
         // The original starts every level 15 grid units south of the middle, facing north, dropping in
@@ -909,7 +913,7 @@ namespace SpectreEX
             if (h.team == Team.Player)
             {
                 director.Shots.ExplodePlayer();
-                DeRes.Play(player.gameObject, 0x5A, DeadTicks / PlayerMotor.TickRate, false);
+                DeRes.Play(player.gameObject, 0x5A, DeadTicks, false);
                 DeathTick = SimClock.Ticks;
                 down = StartCoroutine(PlayerDown());
                 return;
@@ -921,7 +925,7 @@ namespace SpectreEX
             if (robot == null) return;
             robot.Killed();
             director.Shots.Explode(robot);
-            DeRes.Play(robot.gameObject, 10, 10f / PlayerMotor.TickRate, false);
+            DeRes.Play(robot.gameObject, 10, 10, false);
             if (robot.hitByPlayer) bankedBonus += Mathf.Max(0, robot.data.bonus);   // robots' own kills pay nothing
             if (--robotsLeft == 0)
             {

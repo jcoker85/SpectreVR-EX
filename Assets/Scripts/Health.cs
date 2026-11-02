@@ -52,7 +52,7 @@ namespace SpectreEX
             Damaged?.Invoke(points);
             // The craft goes only past its limit (_MAX_DAMAGE < _DAMAGE), so exactly at it you're still flying
             if (Shields < (team == Team.Player ? 0 : 1)) { Die(); return; }
-            if (team == Team.Player) DeRes.Play(gameObject, RipplePeak, RippleTicks / PlayerMotor.TickRate, true);   // _D_P_DE_RES: any damage at all
+            if (team == Team.Player) DeRes.Play(gameObject, RipplePeak, RippleTicks, true);   // _D_P_DE_RES: any damage at all
             if (!sound) return;
             if (team == Team.Player) Sfx.Play(PlayerHitSound);
             else Sfx.PlayAt(hitSound, transform.position);

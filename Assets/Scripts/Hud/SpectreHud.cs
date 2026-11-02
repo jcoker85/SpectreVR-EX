@@ -42,8 +42,7 @@ namespace SpectreEX.Hud
         readonly List<Text> recapWords = new List<Text>();
         readonly List<RecapWedge> recapWedges = new List<RecapWedge>();
         readonly Dictionary<RectTransform, Vector2> fullSizes = new Dictionary<RectTransform, Vector2>();
-        float messageUntil;
-        RectTransform damageGroup, gameOverRoot, radarCornerRoot;
+        RectTransform damageGroup, gameOverRoot, radarCornerRoot, bannerTitleRoot;
         Image hFillImg;
         Vector2 crosshairAt, radarAt;
         readonly List<Text> radarLetters = new List<Text>();
@@ -160,7 +159,10 @@ namespace SpectreEX.Hud
 
             var banner = NewRect("Banner", centre);
             bannerRoot = banner.gameObject;
-            bannerTitle = MakeText(banner, "", 0, 50, 54, DigitGreen, TextAnchor.MiddleCenter);
+            // The title turns about its own middle
+            bannerTitleRoot = NewRect("Title", banner);
+            bannerTitleRoot.anchoredPosition = new Vector2(0f, -50f);
+            bannerTitle = MakeText(bannerTitleRoot, "", 0, 0, 54, DigitGreen, TextAnchor.MiddleCenter);
             bannerTip = MakeText(banner, "", 0, 142, 16, AlertRed, TextAnchor.MiddleCenter);
             bannerRoot.SetActive(false);
 
@@ -329,30 +331,55 @@ namespace SpectreEX.Hud
 
         // ---------- overlays ----------
 
-        void OnBanner(string title, string tip)
+        // _START_LEVEL spins "LEVEL n" up as _SPIN_UP does Game Over, over the banner's 32 ticks (the
+        // fifth tick's sound resets its clock to five, so the count runs on unbroken); the tip line stays still
+        bool titleSpinning;
+        long titleStart;
+
+        void OnBanner(string title, string tip, bool spin)
         {
             statsRoot.SetActive(false);
             bannerRoot.SetActive(true);
             bannerTitle.text = Seg(title);
             bannerTip.text = Seg(tip ?? "");
+            titleSpinning = spin;
+            titleStart = SimClock.Ticks;
+            ShowSpin(bannerTitleRoot, spin ? 0f : 32f);
         }
 
-        // _SPIN_UP: turning and growing to full size, its height swinging with a cosine, then at rest
+        // _SPIN_UP: turning 8 steps a tick and growing to full size over 32 ticks, its height times the
+        // cosine of the same angle, so the words tumble once like a spun coin; then at rest. Drawn between
+        // ticks: stepping it 18 times a second makes it flicker.
+        bool spinning;
+        long spinStart;
+
         void OnGameOverSpin(int step)
         {
             bannerRoot.SetActive(false);
             statsRoot.SetActive(false);
             gameOverRoot.gameObject.SetActive(true);
-            if (step < 0)
+            // Timed from its first step only: the later ones arrive after this frame's drawing has moved
+            // on, so letting them set it would pull it back
+            if (step == 0)
             {
-                gameOverRoot.localRotation = Quaternion.identity;
-                gameOverRoot.localScale = Vector3.one;
-                return;
+                spinStart = SimClock.Ticks;
+                spinning = true;
+                ShowSpin(gameOverRoot, 0f);
             }
-            int turn = step & 0x1F;
+            else if (step < 0)
+            {
+                spinning = false;
+                ShowSpin(gameOverRoot, 32f);
+            }
+        }
+
+        // _VECTOR_TEXT's angle (step * 8) & 0xFF, width step * 8 of 0x100 and height that times _COST[angle]
+        static void ShowSpin(RectTransform root, float step)
+        {
+            float angle = Mathf.Repeat(step * 8f, 256f);
+            root.localRotation = Quaternion.Euler(0f, 0f, angle * OriginalMath.StepsToDegrees);
             float size = step / 32f;
-            gameOverRoot.localRotation = Quaternion.Euler(0f, 0f, turn * 8 * OriginalMath.StepsToDegrees);
-            gameOverRoot.localScale = new Vector3(size, size * OriginalMath.Cos[(turn << 5) & 0xFF] / 256f, 1f);
+            root.localScale = new Vector3(size, size * Mathf.Cos(angle * Mathf.PI * 2f / 256f), 1f);
         }
 
         // _SHOW_RECAP / _SHOW_TRIANGLE, measured off the running original: x in SCALE_X units on a 320-wide
@@ -398,16 +425,14 @@ namespace SpectreEX.Hud
             gameOverRoot.gameObject.SetActive(false);
         }
 
-        public void Flash(string text, float seconds = 1.5f)
-        {
-            message.text = Seg(text);
-            messageUntil = Time.time + seconds;
-        }
-
         // ---------- per-frame ----------
 
         void Update()
         {
+            if (spinning && gameOverRoot.gameObject.activeSelf)
+                ShowSpin(gameOverRoot, Mathf.Min(SimClock.Ticks - spinStart + SimClock.TickFraction, 32f));
+            if (titleSpinning && bannerRoot.activeSelf)
+                ShowSpin(bannerTitleRoot, Mathf.Min(SimClock.Ticks - titleStart + SimClock.TickFraction, 32f));
             if (gm == null || gm.player == null) return;
             var p = gm.player;
 
@@ -440,12 +465,12 @@ namespace SpectreEX.Hud
                 shownWeapon = p.Weapon.AltWeapon;
                 weaponIcon.sprite = LoadWeaponIcon(TankWeapon.IconCell[shownWeapon]);
             }
-            float banner = p.Weapon.BannerUntil - Time.time;
-            if (banner > 0f && gm.Playing)
-                Flash(p.Weapon.AltWeapon == 0 ? "HEAVY WEAPONS OFFLINE" : TankWeapon.Names[p.Weapon.AltWeapon].ToUpperInvariant() + " ONLINE", banner);
+            // "<name> Online" while _ALT_WEAPON_TIMER runs
+            message.enabled = SimClock.Ticks < p.Weapon.BannerUntil && gm.Playing;
+            if (message.enabled)
+                message.text = Seg(p.Weapon.AltWeapon == 0 ? "HEAVY WEAPONS OFFLINE" : TankWeapon.Names[p.Weapon.AltWeapon].ToUpperInvariant() + " ONLINE");
 
             demoRoot.SetActive(gm.Demo && gm.Playing);
-            message.enabled = Time.time < messageUntil;
             radarRoot.parent.gameObject.SetActive(view == null || view.mode == ViewMode.Internal || view.mode == ViewMode.External);   // _SHOW_RADAR
             if (crosshair != null) crosshair.SetActive(view == null || view.mode == ViewMode.Internal);
 

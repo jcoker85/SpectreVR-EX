@@ -352,8 +352,6 @@ namespace SpectreEX.Matrix
         public bool TryGetEnemyData(int setId, int type, out EnemyData data)
         {
             if (EnemyDataSets.TryGetValue(setId, out var set) && set.TryGetValue(type, out data)) return true;
-            foreach (var s in EnemyDataSets.Values)
-                if (s.TryGetValue(type, out data)) return true;
             data = default;
             return false;
         }
