@@ -55,7 +55,8 @@ namespace SpectreEX.Matrix
             var root = new GameObject($"Obstacle_{type}");
             var model = new GameObject("Model").transform;
             model.SetParent(root.transform, false);
-            if (pad) model.localPosition = Vector3.up * 0.04f;   // drawn just above the floor
+            // Pads and the flat type 40 walls lie at height 0: drawn just above the floor, or they'd z-fight it
+            if (pad || type == 40) model.localPosition = Vector3.up * 0.04f;
 
             Bounds bounds = default;
             bool first = true;
