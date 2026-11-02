@@ -22,6 +22,9 @@ namespace SpectreEX
 
         Camera cam;
         Transform model;
+
+        // From the cockpit the player's own craft isn't there to see, its de-res included
+        public static bool CraftHidden { get; private set; }
         Vector3 smoothPos;
         float smoothYaw;
         bool hasSmooth;
@@ -91,7 +94,8 @@ namespace SpectreEX
             // The original drops any object with a point behind the eye, which from the cockpit is the
             // craft itself. Switched off, not just unseen, so ray tracing can't show it in the floor.
             model = model != null ? model : target.Find("Model");
-            if (model != null) model.gameObject.SetActive(mode != ViewMode.Internal || dead);
+            CraftHidden = mode == ViewMode.Internal && !dead;
+            if (model != null) model.gameObject.SetActive(!CraftHidden);
 
             Quaternion yaw = Quaternion.Euler(0f, target.eulerAngles.y, 0f);
             float t = 1f - Mathf.Exp(-followSharpness * Time.deltaTime);

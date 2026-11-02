@@ -947,6 +947,7 @@ namespace SpectreEX
         }
 
         readonly List<JumpPad> jumpPads = new List<JumpPad>();
+        public List<JumpPad> JumpPads => jumpPads;
 
         // _END_LEVEL, 18 ticks after the last flag: the bonus left goes on the score
         IEnumerator LevelComplete()

@@ -427,8 +427,7 @@ namespace SpectreEX.EditorTools
             trigger.isTrigger = true;
             // _FLAT_CUBE_COLLIDE: the square's own extent, at any height
             float side = 0xC00 * PlayerMotor.UnitsToMetres;
-            trigger.size = new Vector3(side, 100f, side);
-            trigger.center = new Vector3(0f, 50f, 0f);
+            trigger.size = new Vector3(side, 200f, side);
 
             // The built-in fuel shape: one flat square, 0xC00 units across
             var tiles = new List<Transform> { Box("Tile", d.transform, new Vector3(0f, 0.05f, 0f), new Vector3(side, 0.02f, side), dumpMat, false).transform };
@@ -551,7 +550,7 @@ namespace SpectreEX.EditorTools
             var cam = camGo.AddComponent<Camera>();
             cam.nearClipPlane = 0.1f;
             cam.farClipPlane = 1000f;
-            cam.fieldOfView = 65f;
+            cam.fieldOfView = 76f;
             camGo.AddComponent<AudioListener>();
             var hd = camGo.AddComponent<HDAdditionalCameraData>();
             hd.antialiasing = HDAdditionalCameraData.AntialiasingMode.TemporalAntialiasing;
@@ -563,7 +562,6 @@ namespace SpectreEX.EditorTools
             var view = camGo.AddComponent<ViewCamera>();
             view.target = player;
             // Sit just above the canopy, a little forward of the hull's middle
-            view.cockpitOffset = new Vector3(0f, playerBounds.max.y + 0.35f, playerBounds.center.z + 0.5f);
             camGo.transform.SetPositionAndRotation(player.position + view.cockpitOffset, player.rotation);
         }
 

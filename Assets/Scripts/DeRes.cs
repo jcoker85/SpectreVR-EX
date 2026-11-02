@@ -32,11 +32,17 @@ namespace SpectreEX
         readonly List<Vector2> uvs = new List<Vector2>();
         readonly List<int> tris = new List<int>();
         Mesh mesh;
+        MeshRenderer own;
+        bool isPlayer;
         float age, seconds;
         int peak;
         bool returns;
 
-        public static void Play(GameObject source, int peak, float seconds, bool returns)
+        // The cockpit ripple running now, for anything that appears during it
+        static float rippleStart = float.NegativeInfinity, rippleSeconds;
+        static int ripplePeak;
+
+        public static void Play(GameObject source, int peak, float seconds, bool returns, float elapsed = 0f)
         {
             var gm = GameManager.Instance;
             if (gm == null || !playing.Add(source)) return;
@@ -46,11 +52,14 @@ namespace SpectreEX
             d.seconds = seconds;
             d.returns = returns;
             d.source = source;
+            d.age = elapsed;
+            var dump = source.GetComponent<AmmoDump>();
             foreach (var f in source.GetComponentsInChildren<MeshFilter>(true))
             {
-                bool shown = f.name == "Panels" || f.name == (GameSettings.DisplayTextures ? "Textured" : "Flat");
+                bool shown = f.name == "Panels" || f.name == (GameSettings.DisplayTextures ? "Textured" : "Flat") || (dump != null && f.name == "Tile");
                 if (!shown || f.sharedMesh == null || !f.sharedMesh.isReadable) continue;
                 var r = f.GetComponent<Renderer>();
+                if (returns && !r.enabled) continue;   // a cloaked robot stays that way
                 go.layer = f.gameObject.layer;
                 d.parts.Add(new Part
                 {
@@ -59,16 +68,42 @@ namespace SpectreEX
                     verts = f.sharedMesh.vertices,
                     uvs = f.sharedMesh.uv,
                     tris = f.sharedMesh.triangles,
-                    uv = r.sharedMaterial == gm.obstacleLook.shapes ? (Vector2?)null : SpectrePalette.Uv(SpectrePalette.Entry(0xB0)),
+                    uv = dump != null ? SpectrePalette.Uv(SpectrePalette.Entry(dump.Ramp))
+                        : r.sharedMaterial == gm.obstacleLook.shapes ? (Vector2?)null : SpectrePalette.Uv(SpectrePalette.Entry(0xB0)),
                 });
                 if (returns) r.enabled = false;
             }
             d.mesh = new Mesh { name = "DeRes" };
             d.mesh.MarkDynamic();
             go.AddComponent<MeshFilter>().sharedMesh = d.mesh;
-            var own = go.AddComponent<MeshRenderer>();
-            own.sharedMaterial = gm.obstacleLook.shapes;
-            own.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            d.isPlayer = source.GetComponent<PlayerTank>() != null;
+            d.own = go.AddComponent<MeshRenderer>();
+            d.own.sharedMaterial = gm.obstacleLook.shapes;
+            d.own.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            if (d.isPlayer && returns && ViewCamera.CraftHidden) PlayWorld(gm, peak, seconds);
+        }
+
+        // _DRAW_OBJS: from the cockpit the player's de-res goes to every filled shape in the view instead
+        static void PlayWorld(GameManager gm, int peak, float seconds)
+        {
+            if (!GameSettings.DisplayFilled) return;
+            rippleStart = Time.time;
+            rippleSeconds = seconds;
+            ripplePeak = peak;
+            foreach (var o in gm.Obstacles) if (o != null) Play(o, peak, seconds, true);
+            foreach (var f in gm.Flags) if (f != null) Play(f.gameObject, peak, seconds, true);
+            foreach (var d in gm.Dumps) if (d != null) Play(d.gameObject, peak, seconds, true);
+            foreach (var p in gm.JumpPads) if (p != null) Play(p.gameObject, peak, seconds, true);
+            foreach (var r in gm.Robots) if (r != null && !r.IsDead) Play(r.gameObject, peak, seconds, true);
+            foreach (var s in Object.FindObjectsByType<OrbitShield>(FindObjectsSortMode.None)) Play(s.gameObject, peak, seconds, true);
+            gm.GetComponent<RobotDirector>().Shots.ForEachVisual(v => Play(v, peak, seconds, true));
+        }
+
+        // A shot fired mid-ripple joins it where it has got to
+        public static void JoinRipple(GameObject source)
+        {
+            float elapsed = Time.time - rippleStart;
+            if (elapsed < rippleSeconds && ViewCamera.CraftHidden) Play(source, ripplePeak, rippleSeconds, true, elapsed);
         }
 
         bool Dead
@@ -88,11 +123,16 @@ namespace SpectreEX
                 playing.Remove(source);
                 if (returns)
                     foreach (var p in parts)
-                        if (p.renderer != null && !Dead) GameManager.ApplyFilled(p.renderer);
+                        if (p.renderer != null && !Dead)
+                        {
+                            p.renderer.enabled = true;
+                            GameManager.ApplyFilled(p.renderer);
+                        }
                 Destroy(mesh);
                 Destroy(gameObject);
                 return;
             }
+            own.enabled = !(isPlayer && ViewCamera.CraftHidden);
             float t = age / seconds;
             Build(peak * (returns ? Mathf.Sin(t * Mathf.PI) : t));
         }

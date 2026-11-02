@@ -164,6 +164,7 @@ namespace SpectreEX
             s.y += s.vy >> 1;
             s.colour = ShotColour(weapon);
             s.visual = MakeVisual(shape, s.colour);
+            DeRes.JoinRipple(s.visual.gameObject);
             s.curPos = s.prevPos = s.Position;
             Place(s, s.curPos);
             shots.Add(s);
@@ -390,6 +391,11 @@ namespace SpectreEX
         }
 
         // Every shot in flight, with its colour, for the hidden map
+        public void ForEachVisual(System.Action<GameObject> visit)
+        {
+            foreach (var s in shots) if (s.visual != null) visit(s.visual.gameObject);
+        }
+
         public void ForEachShot(System.Action<Vector3, int> visit)
         {
             foreach (var s in shots)
