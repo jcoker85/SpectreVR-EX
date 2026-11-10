@@ -18,6 +18,7 @@ Version 0.1 is the first release. See [Known limits in 0.1](#known-limits-in-01)
 - [Menus and settings](#menus-and-settings)
 - [Differences from the original](#differences-from-the-original)
 - [Building it yourself](#building-it-yourself)
+- [AI disclosure](#ai-disclosure)
 - [Credits and licences](#credits-and-licences)
 
 ## Download and install
@@ -271,6 +272,27 @@ You can also build from the command line, with Unity closed:
 
 Original game data must never go under `Assets/`, because anything there can be built into a release. See
 [CLAUDE.md](CLAUDE.md) for the conventions the code follows.
+
+## AI disclosure
+
+Spectre VR-EX is built with AI help. Most of its code, tools and documentation were written by
+[Claude](https://www.anthropic.com/claude), Anthropic's AI model, working in
+[Claude Code](https://claude.com/claude-code). Every commit in this repository was made that way, and each
+one says so in a `Co-Authored-By: Claude` line.
+
+The project's owner directs the work and makes the decisions. That covers what to build, how faithful to
+stay, which differences from the original to allow, and how it should look, sound and feel. The owner also
+reviews the changes and tests them by playing.
+
+The game's rules aren't guessed from memory, by a person or by the AI. They're read from the decompiled
+original, and where that isn't enough, measured by running the original game.
+[docs/original-mechanics.md](docs/original-mechanics.md) records what was read, what was measured and what
+is still unverified.
+
+No AI image, sound or music generator made any of the game's art or audio. The pictures, sounds, music,
+levels, shapes and movies are the original's, built from your own copy. The new parts, such as the settings
+screens and the HUD's layout, are drawn by the game's code with the DSEG font. The other assets are credited
+below.
 
 ## Credits and licences
 
