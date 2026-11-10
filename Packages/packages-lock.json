@@ -1,5 +1,12 @@
 {
   "dependencies": {
+    "com.local.gsync-profile-guard": {
+      "version": "https://github.com/jcoker85/GSyncProfileGuard.git#v1.0.0",
+      "depth": 0,
+      "source": "git",
+      "dependencies": {},
+      "hash": "9af3a4f5d36002b516e876edfae5f77468badaf1"
+    },
     "com.unity.2d.sprite": {
       "version": "1.0.0",
       "depth": 1,
