@@ -88,6 +88,7 @@ namespace SpectreEX.Menu
         readonly List<PixelSegmentText[]> scoreRows = new List<PixelSegmentText[]>();
 
         public bool IsOpen => canvas != null && canvas.enabled;
+        bool startingUp = true;   // the splash and the startup movie, before the menu first opens
 
         void Start()
         {
@@ -124,6 +125,7 @@ namespace SpectreEX.Menu
             Sfx.Play(Snd.Logo);
             yield return Matrix.StartupMovie.Play(this);
             Open();
+            startingUp = false;
             if (matrixChoices != null) Push(matrix);
         }
 
@@ -626,6 +628,7 @@ namespace SpectreEX.Menu
                 When(taa, Choice("TAA QUALITY", GraphicsOptions.TaaQuality, GraphicsOptions.TaaNames)),
                 When(dlss, Number("DLSS SCALE", GraphicsOptions.DlssScale, 25, 100, 5, "%")),
                 When(dlss, Number("DLSS SHARPNESS", GraphicsOptions.DlssSharpness, 0, 100, 5, "%")),
+                Number("MOTION BLUR", GraphicsOptions.MotionBlurAmount, 0, 100, 5, "%"),
 
                 Toggle("RAY TRACING", GraphicsOptions.RayTracing),
                 When(tracing, Toggle("RT SHADOWS", GraphicsOptions.Shadows)),
@@ -1415,6 +1418,9 @@ namespace SpectreEX.Menu
             StartGame(true);
             return true;
         }
+
+        // Everything this draws covers the screen, so the arena isn't rendered behind it
+        void LateUpdate() => GraphicsOptions.MenuShown(IsOpen || startingUp);
 
         void Update()
         {

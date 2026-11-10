@@ -17,7 +17,8 @@ namespace SpectreEX
             Reflections = "gfx.ssr", ReflectionDistance = "gfx.ssr.distance", ReflectionSamples = "gfx.ssr.samples", ReflectionBounces = "gfx.ssr.bounces",
             Lighting = "gfx.gi", LightingDistance = "gfx.gi.distance", LightingSamples = "gfx.gi.samples", LightingBounces = "gfx.gi.bounces",
             Occlusion = "gfx.ao", OcclusionDistance = "gfx.ao.distance", OcclusionSamples = "gfx.ao.samples",
-            AntiAliasing = "gfx.aa", TaaQuality = "gfx.taa.quality", DlssScale = "gfx.dlss.scale", DlssSharpness = "gfx.dlss.sharpness";
+            AntiAliasing = "gfx.aa", TaaQuality = "gfx.taa.quality", DlssScale = "gfx.dlss.scale", DlssSharpness = "gfx.dlss.sharpness",
+            MotionBlurAmount = "gfx.motionblur";
 
         public const int AaOff = 0, AaTaa = 1, AaDlss = 2;
         public static readonly string[] AaNames = { "None", "TAA", "DLSS" };
@@ -32,7 +33,23 @@ namespace SpectreEX
         static readonly Dictionary<string, int> values = new Dictionary<string, int>();
         static int reflectionTier, lightingTier, occlusionTier, plainSkyType;
         static float occlusionIntensity;
-        static bool skyHidden;
+        static bool skyHidden, menuShown;
+        static int gameVSync, gameCulling;
+        static bool gameCustomFrame;
+        static FrameSettings gameFrame;
+        static FrameSettingsOverrideMask gameFrameMask;
+
+        // What the camera leaves out behind a menu. Not passthrough: HDRP draws the overlay UI inside the
+        // camera's own render, so a skipped camera leaves the player's screen black.
+        static readonly FrameSettingsField[] MenuOff =
+        {
+            FrameSettingsField.RayTracing, FrameSettingsField.SSR, FrameSettingsField.SSAO, FrameSettingsField.SSGI,
+            FrameSettingsField.Volumetrics, FrameSettingsField.ShadowMaps, FrameSettingsField.ContactShadows, FrameSettingsField.ScreenSpaceShadows,
+            FrameSettingsField.Postprocess, FrameSettingsField.MotionVectors, FrameSettingsField.OpaqueObjects, FrameSettingsField.TransparentObjects,
+            FrameSettingsField.AtmosphericScattering, FrameSettingsField.Refraction, FrameSettingsField.Distortion, FrameSettingsField.Decals,
+            FrameSettingsField.SubsurfaceScattering, FrameSettingsField.ReflectionProbe, FrameSettingsField.PlanarProbe, FrameSettingsField.SkyReflection,
+            FrameSettingsField.CustomPass,
+        };
         static HDAdditionalCameraData.ClearColorMode plainClear;
 
         // The star map. SkyBrightness is its exposure in tenths; high enough and the stars pass the
@@ -171,6 +188,7 @@ namespace SpectreEX
             Default(TaaQuality, camera != null ? (int)camera.TAAQuality : 1);
             Default(DlssScale, 60);
             Default(DlssSharpness, 0);
+            Default(MotionBlurAmount, 50);                                         // HDRP's own 0.5, the default volume's
         }
 
         // The vSync choice stays as it is whichever level is picked: a level's own setting would change it
@@ -198,6 +216,63 @@ namespace SpectreEX
             ApplyRayTracing();
             ApplyAntiAliasing();
             ApplySkybox();
+            ApplyMotionBlur();
+        }
+
+        // The amount, in percent, overrides the default volume's intensity in the scene volume's runtime
+        // copy; 0 turns the blur off.
+        static void ApplyMotionBlur()
+        {
+            var profile = Profile();
+            if (profile == null) return;
+            if (!profile.TryGet<MotionBlur>(out var blur)) blur = profile.Add<MotionBlur>();
+            blur.intensity.Override(Get(MotionBlurAmount) / 100f);
+        }
+
+        // While a menu, the startup movie or the save dialog covers the whole screen, the camera behind
+        // them draws nothing but the UI (no objects, ray tracing or effects) and the frame rate is held at
+        // 60. The game's own camera settings and vSync come back with the game.
+        public static void MenuShown(bool shown)
+        {
+            if (shown == menuShown) return;
+            menuShown = shown;
+            var camera = Camera();
+            if (camera != null)
+            {
+                var view = camera.GetComponent<UnityEngine.Camera>();
+                if (shown)
+                {
+                    gameCulling = view.cullingMask;
+                    gameCustomFrame = camera.customRenderingSettings;
+                    gameFrame = camera.renderingPathCustomFrameSettings;
+                    gameFrameMask = camera.renderingPathCustomFrameSettingsOverrideMask;
+                    view.cullingMask = 0;
+                    camera.customRenderingSettings = true;
+                    foreach (var field in MenuOff)
+                    {
+                        camera.renderingPathCustomFrameSettingsOverrideMask.mask[(uint)field] = true;
+                        camera.renderingPathCustomFrameSettings.SetEnabled(field, false);
+                    }
+                }
+                else
+                {
+                    view.cullingMask = gameCulling;
+                    camera.customRenderingSettings = gameCustomFrame;
+                    camera.renderingPathCustomFrameSettings = gameFrame;
+                    camera.renderingPathCustomFrameSettingsOverrideMask = gameFrameMask;
+                }
+            }
+            if (shown)
+            {
+                gameVSync = QualitySettings.vSyncCount;
+                QualitySettings.vSyncCount = 0;
+                Application.targetFrameRate = 60;
+            }
+            else
+            {
+                QualitySettings.vSyncCount = gameVSync;
+                Application.targetFrameRate = -1;
+            }
         }
 
         // Off is the original's plain sky. The horizon band blends over the picture while it's on.

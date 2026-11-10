@@ -8,8 +8,9 @@ namespace SpectreEX
     // time, and with p set each row is slid sideways by a whole number of pixels before it's drawn, so the
     // shape itself bends and tears along a wave. Here each face of the model is cut into bands of the
     // original's screen rows and each band moved across the view by that row's step, in the original's
-    // pixels at the reference window's 530 rows, keeping its face's colour and lighting. Textured faces
-    // stay still and whole, as the original's _POLYTEXTURE takes no de-res.
+    // pixels at the reference window's 530 rows, keeping its face's colour, texture and lighting. Textured
+    // and movie faces ripple the same way: _DRAW_OBJS pushes the same p to _POLYTEXTURE as to _DRAW_POLY
+    // (1028:1E8F, 1028:1EF9), and _POLYTEXTURE slides its rows by the same steps.
     //   p < 0 (a hit, -1 to -6 and back): step = Cos[((row - 4p - (p >> 4)) * 0x20) & 0xFF] * p >> 8
     //   p > 0 (going): step = Cos[((row + 4p) * 0x20) & 0xFF] * (p + width >> 3) >> 8, then
     //                  step += rand * step / 0x8000 - step / 2, width being the face's row in pixels
@@ -29,7 +30,7 @@ namespace SpectreEX
             public int[] tris;
             public int[] faceOf;   // per triangle: the face it belongs to, its coplanar neighbours
             public Vector2? uv;    // one colour for the whole part (a dump's ramp)
-            public int material;   // its index in the ripple's materials
+            public Material material;
         }
 
         static readonly Dictionary<GameObject, DeRes> playing = new Dictionary<GameObject, DeRes>();   // one at a time on a craft
@@ -41,6 +42,7 @@ namespace SpectreEX
         readonly List<Vector2> uvs = new List<Vector2>();
         readonly List<Material> materials = new List<Material>();
         readonly List<List<int>> tris = new List<List<int>>();
+        readonly List<Material> drawn = new List<Material>();   // the materials with something in them this frame
         Mesh mesh;
         MeshRenderer own;
         bool isPlayer;
@@ -88,9 +90,11 @@ namespace SpectreEX
             var dump = source.GetComponent<AmmoDump>();
             foreach (var f in source.GetComponentsInChildren<MeshFilter>(true))
             {
-                // _DRAW_OBJS sends textured faces to _POLYTEXTURE, which has no de-res: they stay as they are.
-                // With textures off they're plain faces ("Flat") and ripple like the rest.
-                bool shown = f.name == "Panels" || (!GameSettings.DisplayTextures && f.name == "Flat") || (dump != null && f.name == "Tile");
+                // Every filled face the source shows: textures and movies ripple too, and with them off their
+                // faces are plain ("Flat", and the colour under a movie in "Panels")
+                bool shown = f.name == "Panels" || (dump != null && f.name == "Tile")
+                    || (f.name == "Textured" && GameSettings.DisplayTextures) || (f.name == "Flat" && !GameSettings.DisplayTextures)
+                    || (f.name == "Movie" && GameSettings.DisplayMovies);
                 if (!shown || f.sharedMesh == null || !f.sharedMesh.isReadable) continue;
                 var r = f.GetComponent<Renderer>();
                 if (returns && !r.enabled) continue;   // a cloaked robot stays that way
@@ -104,11 +108,10 @@ namespace SpectreEX
                     tris = WithoutMovieFaces(f),
                     uv = dump != null ? SpectrePalette.Uv(SpectrePalette.Entry(dump.Ramp)) : (Vector2?)null,
                 };
-                // Everything that ripples is in the palette (textured faces don't), so one material and
-                // one submesh: ray tracing can't take an empty submesh
-                var material = gm.obstacleLook.shapes;
-                part.material = d.materials.IndexOf(material);
-                if (part.material < 0) { part.material = d.materials.Count; d.materials.Add(material); d.tris.Add(new List<int>()); }
+                // Plain faces in the palette's material, textures and movies in their own (a movie's plays on)
+                bool picture = f.name == "Textured" || f.name == "Movie";
+                part.material = picture && r != null && r.sharedMaterial != null ? r.sharedMaterial : gm.obstacleLook.shapes;
+                if (!d.materials.Contains(part.material)) { d.materials.Add(part.material); d.tris.Add(new List<int>()); }
                 part.faceOf = Faces(part.verts, part.tris, d.parts.Count);
                 d.parts.Add(part);
                 if (returns) r.enabled = false;
@@ -129,8 +132,8 @@ namespace SpectreEX
         }
 
         // A movie face is drawn a hair in front of its plain colour, which is what shows with movies off.
-        // With them on, the movie is a texture to the original (_POLYTEXTURE, no de-res) with nothing
-        // under it, so the plain copy stays out of the ripple, or it would poke out round the still movie.
+        // With them on, the original draws only the movie there (_POLYTEXTURE), so the plain copy stays out
+        // of the ripple, or it would fight the movie's own rippling rows.
         static int[] WithoutMovieFaces(MeshFilter panels)
         {
             int[] tris = panels.sharedMesh.triangles;
@@ -285,7 +288,7 @@ namespace SpectreEX
         struct Corner { public Vector3 world; public Vector4 clip; public Vector2 uv; }
         readonly List<Corner> poly = new List<Corner>(8), lower = new List<Corner>(8), upper = new List<Corner>(8), bandPoly = new List<Corner>(8);
         readonly List<Corner> bandCorners = new List<Corner>();
-        readonly List<(int start, int count, int row, int face, Vector3 normal, int material)> bands = new List<(int, int, int, int, Vector3, int)>();
+        readonly List<(int start, int count, int row, int face, Vector3 normal, Material material)> bands = new List<(int, int, int, int, Vector3, Material)>();
         readonly Dictionary<(int face, int row), (float min, float max)> rowExtent = new Dictionary<(int, int), (float, float)>();
 
         void Build(int p, long tick)
@@ -390,27 +393,40 @@ namespace SpectreEX
                 {
                     var k = bandCorners[band.start + j];
                     // Pushed back along its own line of sight, so it stays on the same pixels but loses to any
-                    // still face in its plane: a texture or movie, which the original never ripples, would
-                    // otherwise fight the rows sliding across it
+                    // still face in its plane, which would otherwise fight the rows sliding across it
                     Vector3 moved = k.world + right * (ndc * k.clip.w / p00);
                     verts.Add(eye + (moved - eye) * (1f + BehindStill));
                     normals.Add(band.normal);
                     uvs.Add(k.uv);
                 }
-                var into = tris[band.material];
+                var into = tris[materials.IndexOf(band.material)];
                 for (int j = 1; j + 1 < band.count; j++) { into.Add(n); into.Add(n + j); into.Add(n + j + 1); }
             }
             mesh.Clear();
             mesh.SetVertices(verts);
             mesh.SetNormals(normals);
             mesh.SetUVs(0, uvs);
-            mesh.subMeshCount = tris.Count;
-            for (int m = 0; m < tris.Count; m++) mesh.SetTriangles(tris[m], m, false);
+            // Only the materials with something on screen get a submesh: ray tracing can't build an empty one
+            bool changed = false;
+            int used = 0;
+            for (int m = 0; m < tris.Count; m++)
+            {
+                if (tris[m].Count == 0) continue;
+                if (used >= drawn.Count || drawn[used] != materials[m]) changed = true;
+                used++;
+            }
+            changed |= used != drawn.Count;
+            if (changed)
+            {
+                drawn.Clear();
+                for (int m = 0; m < tris.Count; m++) if (tris[m].Count > 0) drawn.Add(materials[m]);
+            }
+            mesh.subMeshCount = Mathf.Max(1, used);
+            for (int m = 0, sub = 0; m < tris.Count; m++) if (tris[m].Count > 0) mesh.SetTriangles(tris[m], sub++, false);
             mesh.RecalculateBounds();
-            // Off while there's nothing in it (all off screen): ray tracing can't build an empty mesh
-            bool any = false;
-            foreach (var list in tris) any |= list.Count > 0;
-            own.enabled = any && !(isPlayer && ViewCamera.CraftHidden);
+            if (changed && used > 0) own.sharedMaterials = drawn.ToArray();
+            // Off while there's nothing in it (all off screen)
+            own.enabled = used > 0 && !(isPlayer && ViewCamera.CraftHidden);
         }
 
         // _DRAW_POLY's step for one row of one face, in the original's pixels

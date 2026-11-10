@@ -149,9 +149,9 @@ namespace SpectreEX.Matrix
             var picture = new GameObject("Picture").AddComponent<RawImage>();
             picture.transform.SetParent(go.transform, false);
             picture.texture = movie.Texture;
-            Stretch(picture.rectTransform);
-            picture.gameObject.AddComponent<AspectRatioFitter>().aspectMode = AspectRatioFitter.AspectMode.FitInParent;
-            picture.GetComponent<AspectRatioFitter>().aspectRatio = movie.Width / (float)movie.Height;
+            movie.Texture.filterMode = FilterMode.Point;
+            var frame = picture.rectTransform;
+            frame.anchorMin = frame.anchorMax = frame.pivot = Vector2.zero;
 
             AudioSource audio = null;
             var clip = Sfx.Enabled ? LoadWave(Path.Combine(MovieFile.Folder, Name + ".wav")) : null;
@@ -164,16 +164,28 @@ namespace SpectreEX.Matrix
             }
 
             float clock = 0f;
+            Fit(frame, movie);
             yield return null;
             while (clock < movie.Seconds && !Pressed())
             {
                 clock += Time.unscaledDeltaTime;
+                Fit(frame, movie);
                 movie.Show(clock);
                 yield return null;
             }
             if (audio != null) audio.Stop();
             Object.Destroy(go);
             Object.Destroy(movie.Texture);
+        }
+
+        // Square pixels at the largest whole-number scale that fits, on whole screen pixels, so every
+        // movie pixel is the same size and none is smeared. The overlay canvas counts in screen pixels.
+        static void Fit(RectTransform frame, MovieFile movie)
+        {
+            int scale = Mathf.Max(1, Mathf.Min(Screen.width / movie.Width, Screen.height / movie.Height));
+            int w = movie.Width * scale, h = movie.Height * scale;
+            frame.sizeDelta = new Vector2(w, h);
+            frame.anchoredPosition = new Vector2((Screen.width - w) / 2, (Screen.height - h) / 2);
         }
 
         static void Stretch(RectTransform r)
