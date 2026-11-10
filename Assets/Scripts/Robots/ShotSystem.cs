@@ -257,7 +257,7 @@ namespace SpectreEX
             if (struck && s.pitch != 0f) s.vz = 0;   // an aimed shot stops where it struck, up and down too
             if (s.visual == null) return;
             DeRes.Play(s.visual.gameObject, 10, s.fading, false);
-            foreach (var r in s.visual.GetComponentsInChildren<Renderer>()) r.enabled = false;
+            foreach (var r in s.visual.GetComponentsInChildren<Renderer>(true)) r.enabled = false;   // hidden at the eye too
         }
 
         // A plain shape swap on a flying shot (_CHANGE_SHAPE)
@@ -265,7 +265,7 @@ namespace SpectreEX
         {
             var geometry = GameManager.Instance.Shapes?.ShapeById(shape);
             if (s.visual == null || geometry == null) return;
-            var filter = s.visual.GetComponentInChildren<MeshFilter>();
+            var filter = s.visual.GetComponentInChildren<MeshFilter>(true);
             if (filter != null) filter.sharedMesh = geometry.Coloured(s.colour);
             if (s.weapon != Debris) SetBox(s, shape);
         }
@@ -451,6 +451,35 @@ namespace SpectreEX
         {
             var m = GameManager.Instance.CurrentMatrix;
             return m != null && m.Weapons.TryGetValue(weapon, out var w) ? w.damage : 1;
+        }
+
+        // _P_TO_EYE drops any object with a point at or behind the eye (its depth, doubled outside the overhead
+        // view, below 1 unit). A shot reaching past the eye isn't drawn until it's clear: the explosion's debris
+        // starts round the eye of the death swing's first view, and drawn there it stalled ray-traced lighting.
+        static readonly Dictionary<Mesh, Vector3[]> points = new Dictionary<Mesh, Vector3[]>();
+
+        public void HideAtEye(Camera cam)
+        {
+            if (cam == null) return;
+            Vector3 eye = cam.transform.position, ahead = cam.transform.forward;
+            float limit = 0.5f * OriginalMath.UnitsToMetres;
+            foreach (var s in shots)
+            {
+                if (s.visual == null) continue;
+                var filter = s.visual.GetComponentInChildren<MeshFilter>(true);
+                if (filter == null || filter.sharedMesh == null) continue;
+                var mesh = filter.sharedMesh;
+                if (!points.TryGetValue(mesh, out var local))
+                {
+                    if (points.Count > 256) points.Clear();   // meshes of levels gone by
+                    points[mesh] = local = mesh.isReadable ? mesh.vertices : new Vector3[0];
+                }
+                var m = filter.transform.localToWorldMatrix;
+                bool behind = false;
+                foreach (var p in local)
+                    if (Vector3.Dot(m.MultiplyPoint3x4(p) - eye, ahead) < limit) { behind = true; break; }
+                if (filter.gameObject.activeSelf == behind) filter.gameObject.SetActive(!behind);
+            }
         }
 
         // Every shot in flight, with its colour, for the hidden map

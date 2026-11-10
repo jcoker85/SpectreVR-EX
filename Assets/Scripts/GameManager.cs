@@ -538,6 +538,7 @@ namespace SpectreEX
 
             PlacePlayerAtStart();
             PlaceRobotsAgain();
+            DeRes.Warm(this);   // so the first hit's ripple doesn't stall a frame
 
             // Acid burns for the level's Smart Acid collision damage, or 10 (_LOAD_BVAL)
             AcidDamage = EnemyData(lv.enemyData, 23, out var acid) ? acid.collideDamage : 10;

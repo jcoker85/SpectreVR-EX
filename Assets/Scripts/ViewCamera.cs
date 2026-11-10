@@ -109,6 +109,17 @@ namespace SpectreEX
 
         void LateUpdate()
         {
+            Place();
+            // With the eye where it is now, any shot reaching past it isn't drawn (_P_TO_EYE)
+            var gm = GameManager.Instance;
+            if (director == null && gm != null) director = gm.GetComponent<RobotDirector>();
+            if (director != null && director.Shots != null) director.Shots.HideAtEye(cam);
+        }
+
+        RobotDirector director;
+
+        void Place()
+        {
             if (target == null) return;
             if (motor == null)
             {
