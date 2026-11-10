@@ -4,7 +4,7 @@ using UnityEngine;
 namespace SpectreEX
 {
     // Original Spectre VR sound names, in one place so a mis-guessed mapping is a one-line fix.
-    // Clips are the original SOUNDS folder's WAVs, copied in by Tools/import_original.py.
+    // Clips are the original SOUNDS folder's WAVs, copied into GameData/Sounds by the first-run setup.
     public static class Snd
     {
         public const string PlayerShot = "PLYRSHT";
@@ -88,7 +88,7 @@ namespace SpectreEX
         {
             if (!cache.TryGetValue(name, out var clip))
             {
-                clip = Resources.Load<AudioClip>("Sounds/" + name);
+                clip = GameData.Sound(name);
                 if (clip == null) Debug.LogWarning("Spectre VR-EX: missing sound " + name);
                 cache[name] = clip;
             }

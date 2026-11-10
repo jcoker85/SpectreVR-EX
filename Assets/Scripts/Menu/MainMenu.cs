@@ -7,7 +7,7 @@ using UnityEngine.UI;
 namespace SpectreEX.Menu
 {
     // The original Spectre VR main menu and its dialogs, rebuilt from the game's own artwork
-    // (imported from the DATA folder by Tools/import_original.py) at the largest whole-number scale that
+    // (imported from the DATA folder into GameData/Pictures by the first-run setup) at the largest whole-number scale that
     // fits the screen, with point filtering so the 1993 pixels stay crisp.
     //
     //   PLAY      -> Choose a vehicle (Balance / Speedy / Strong / Custom, Edit Custom..., Cancel, Play)
@@ -94,7 +94,7 @@ namespace SpectreEX.Menu
         {
             if (LoadTex("MainMenu") == null)
             {
-                Debug.LogError("Spectre VR-EX: no imported game data. Run Tools/import_original.py on your copy of Spectre VR.");
+                Debug.LogError("Spectre VR-EX: no game data in " + GameData.Root + ". Start from the Setup scene, or run Spectre VR-EX > Import Original Game.");
                 enabled = false;
                 return;
             }
@@ -306,7 +306,14 @@ namespace SpectreEX.Menu
             Tile(main, 377, 25, 1, 0, PlayFromStart, Key.P);
             Tile(main, 449, 25, 3, 0, () => ShowNotice("CYBERNET NETWORK PLAY\nIS NOT AVAILABLE\nIN THIS VERSION"), Key.C);
             Tile(main, 377, 93, 1, 1, () => Push(ShiftHeld ? settingsPage : options), Key.O);
-            optionsHue = AddRect(main, new Rect(377, 93, 64, 64), new Color(0.55f, 0.1f, 1f, 0.5f));
+            // Shift held: the Options tile turns the menu blue, a copy of the tile (or its hover tile) multiplied
+            // by the blue, scaled so the tile's white comes out as the blue's lightest, #C0C0FF
+            optionsTile = main.hotspots[main.hotspots.Count - 1];
+            optionsTex = LoadTex("MainMenu");
+            var menuTex = optionsTex;
+            optionsUv = new Rect(377f / menuTex.width, 1f - (93f + 64f) / menuTex.height, 64f / menuTex.width, 64f / menuTex.height);
+            optionsHue = AddRaw(main, menuTex, new Rect(377, 93, 64, 64), optionsUv);
+            optionsHue.color = new Color(SegBlue.r * 255f / 0xCC, SegBlue.g * 255f / 0xCC, 1f);
             optionsHue.enabled = false;
             Tile(main, 449, 93, 3, 1, () => { enteringName = false; Push(scores); }, Key.S);
             Tile(main, 377, 161, 1, 2, () => Push(help), Key.H);
@@ -549,7 +556,7 @@ namespace SpectreEX.Menu
         }
 
         // _SHOW_HIGHSCORES: all ten rows, blank ones as score 0, level 1, laid out as on the original's
-        // panel but in the HUD's green on black
+        // panel but in the menu blue on black
         // ---------- the modern settings: Shift + Options ----------
 
         // One line of the settings list. A new option is one more entry in Settings(): a drop-down, an
@@ -566,7 +573,10 @@ namespace SpectreEX.Menu
         const int PickRows = 10, SettingRows = 7;
         const int SettingsW = 480, SettingsH = 340;
         MenuScreen graphics, controls, pick, settingsPage;
-        Image optionsHue;
+        RawImage optionsHue;
+        Hotspot optionsTile;
+        Rect optionsUv;
+        Texture optionsTex;
         List<SettingRow> settingRows, shownRows = new List<SettingRow>();
         int settingsTop;
         List<string> pickChoices = new List<string>();
@@ -633,10 +643,12 @@ namespace SpectreEX.Menu
                 Toggle("RAY TRACING", GraphicsOptions.RayTracing),
                 When(tracing, Toggle("RT SHADOWS", GraphicsOptions.Shadows)),
                 When(tracing, Toggle("RT REFLECTIONS", GraphicsOptions.Reflections)),
+                When(reflecting, Choice("REFLECT MODE", GraphicsOptions.ReflectionMode, GraphicsOptions.TraceModeNames)),
                 When(reflecting, Number("REFLECT DISTANCE", GraphicsOptions.ReflectionDistance, 25, 500, 25, " M")),
                 When(reflecting, Number("REFLECT SAMPLES", GraphicsOptions.ReflectionSamples, 1, 8, 1)),
                 When(reflecting, Number("REFLECT BOUNCES", GraphicsOptions.ReflectionBounces, 1, 4, 1)),
                 When(tracing, Toggle("RT LIGHTING", GraphicsOptions.Lighting)),
+                When(lighting, Choice("GI MODE", GraphicsOptions.LightingMode, GraphicsOptions.TraceModeNames)),
                 When(lighting, Number("LIGHT DISTANCE", GraphicsOptions.LightingDistance, 10, 200, 10, " M")),
                 When(lighting, Number("LIGHT SAMPLES", GraphicsOptions.LightingSamples, 1, 8, 1)),
                 When(lighting, Number("LIGHT BOUNCES", GraphicsOptions.LightingBounces, 1, 4, 1)),
@@ -648,9 +660,9 @@ namespace SpectreEX.Menu
 
         void BuildGraphics()
         {
-            var green = new Color(0.25f, 0.78f, 0.27f);
-            var dim = new Color(0.2f, 0.6f, 0.22f);
-            var glow = new Color(0.25f, 0.78f, 0.27f, 0.22f);
+            var blue = SegBlue;
+            var dim = DimBlue;
+            var glow = new Color(SegBlue.r, SegBlue.g, SegBlue.b, 0.22f);
             settingRows = Settings();
             graphics = settingsPage = SettingsScreen("Graphics");
 
@@ -664,11 +676,11 @@ namespace SpectreEX.Menu
             {
                 int row = i;
                 float y = 44 + i * 32;
-                labels.Add(AddText(graphics, new Rect(22, y, 240, 22), 9, green, TextAnchor.MiddleLeft));
-                boxes.Add(Frame(graphics, new Rect(266, y - 2, 192, 26), green, 1f));
-                values.Add(AddText(graphics, new Rect(300, y, 124, 22), 9, green, TextAnchor.MiddleCenter));
-                minus.Add(AddText(graphics, new Rect(266, y, 34, 22), 10, green, TextAnchor.MiddleCenter));
-                plus.Add(AddText(graphics, new Rect(424, y, 34, 22), 10, green, TextAnchor.MiddleCenter));
+                labels.Add(AddText(graphics, new Rect(22, y, 240, 22), 9, blue, TextAnchor.MiddleLeft));
+                boxes.Add(Frame(graphics, new Rect(266, y - 2, 192, 26), blue, 1f));
+                values.Add(AddText(graphics, new Rect(300, y, 124, 22), 9, blue, TextAnchor.MiddleCenter));
+                minus.Add(AddText(graphics, new Rect(266, y, 34, 22), 10, blue, TextAnchor.MiddleCenter));
+                plus.Add(AddText(graphics, new Rect(424, y, 34, 22), 10, blue, TextAnchor.MiddleCenter));
                 void Press(int sign)
                 {
                     if (settingsTop + row >= shownRows.Count) return;
@@ -705,13 +717,13 @@ namespace SpectreEX.Menu
             // The drop-down list: one for every setting above
             pick = NewScreen("Pick", new Vector2(240, 44 + PickRows * 22));
             AddRect(pick, new Rect(-2000, -2000, 4240, 4300), Color.black);
-            Frame(pick, new Rect(0, 0, 240, 44 + PickRows * 22), green, 4f);
+            Frame(pick, new Rect(0, 0, 240, 44 + PickRows * 22), blue, 4f);
             var pickMore = AddText(pick, new Rect(8, 10, 224, 16), 8, dim, TextAnchor.MiddleCenter);
             var rows = new List<PixelSegmentText>();
             for (int i = 0; i < PickRows; i++)
             {
                 int row = i;
-                rows.Add(AddText(pick, new Rect(18, 32 + i * 22, 204, 20), 9, green, TextAnchor.MiddleLeft));
+                rows.Add(AddText(pick, new Rect(18, 32 + i * 22, 204, 20), 9, blue, TextAnchor.MiddleLeft));
                 Button(pick, new Rect(10, 31 + i * 22, 220, 22), () =>
                 {
                     int chosen = pickTop + row;
@@ -739,13 +751,13 @@ namespace SpectreEX.Menu
         {
             var s = NewScreen(name, new Vector2(SettingsW, SettingsH));
             AddRect(s, new Rect(-2000, -2000, 4000 + SettingsW, 4000 + SettingsH), Color.black);
-            Frame(s, new Rect(0, 0, SettingsW, SettingsH), SegGreen, 4f);
+            Frame(s, new Rect(0, 0, SettingsW, SettingsH), SegBlue, 4f);
             void Tab(string title, Rect r, System.Func<MenuScreen> page)
             {
                 bool here = title == name.ToUpperInvariant();
-                AddText(s, r, 12, here ? SegGreen : DimGreen, TextAnchor.MiddleCenter).Text = Seg(title);
-                if (here) Frame(s, r, SegGreen, 1f);
-                Button(s, r, () => ShowPage(page()), Key.None, new Color(SegGreen.r, SegGreen.g, SegGreen.b, 0.22f));
+                AddText(s, r, 12, here ? SegBlue : DimBlue, TextAnchor.MiddleCenter).Text = Seg(title);
+                if (here) Frame(s, r, SegBlue, 1f);
+                Button(s, r, () => ShowPage(page()), Key.None, new Color(SegBlue.r, SegBlue.g, SegBlue.b, 0.22f));
             }
             Tab("GRAPHICS", new Rect(100, 10, 130, 26), () => graphics);
             Tab("CONTROLS", new Rect(250, 10, 130, 26), () => controls);
@@ -754,9 +766,9 @@ namespace SpectreEX.Menu
 
         void SettingsButton(MenuScreen s, Rect r, string title, System.Action action)
         {
-            Frame(s, r, SegGreen, 1f);
-            AddText(s, new Rect(r.x, r.y + 3, r.width, 22), 9, SegGreen, TextAnchor.MiddleCenter).Text = Seg(title);
-            Button(s, r, action, Key.None, new Color(SegGreen.r, SegGreen.g, SegGreen.b, 0.22f));
+            Frame(s, r, SegBlue, 1f);
+            AddText(s, new Rect(r.x, r.y + 3, r.width, 22), 9, SegBlue, TextAnchor.MiddleCenter).Text = Seg(title);
+            Button(s, r, action, Key.None, new Color(SegBlue.r, SegBlue.g, SegBlue.b, 0.22f));
         }
 
         void ShowPage(MenuScreen page)
@@ -782,7 +794,7 @@ namespace SpectreEX.Menu
 
         void BuildControls()
         {
-            var glow = new Color(SegGreen.r, SegGreen.g, SegGreen.b, 0.22f);
+            var glow = new Color(SegBlue.r, SegBlue.g, SegBlue.b, 0.22f);
             controls = SettingsScreen("Controls");
             var labels = new List<PixelSegmentText>();
             var boxes = new List<PixelSegmentText[]>();
@@ -792,14 +804,14 @@ namespace SpectreEX.Menu
             {
                 int row = i;
                 float y = 44 + i * 32;
-                labels.Add(AddText(controls, new Rect(22, y, 130, 22), 9, SegGreen, TextAnchor.MiddleLeft));
+                labels.Add(AddText(controls, new Rect(22, y, 130, 22), 9, SegBlue, TextAnchor.MiddleLeft));
                 var line = new PixelSegmentText[GameKeys.Slots];
                 for (int j = 0; j < GameKeys.Slots; j++)
                 {
                     int slot = j;
                     var r = new Rect(KeyBoxX + j * KeyBoxStep, y - 2, KeyBoxW, 26);
-                    keyFrames.AddRange(Frame(controls, r, SegGreen, 1f));
-                    line[j] = AddText(controls, new Rect(r.x, y, r.width, 22), 9, SegGreen, TextAnchor.MiddleCenter);
+                    keyFrames.AddRange(Frame(controls, r, SegBlue, 1f));
+                    line[j] = AddText(controls, new Rect(r.x, y, r.width, 22), 9, SegBlue, TextAnchor.MiddleCenter);
                     var box = Button(controls, r, () =>
                     {
                         capturing = GameKeys.All[keysTop + row];
@@ -828,10 +840,10 @@ namespace SpectreEX.Menu
             {
                 int row = i;
                 float y = 44 + i * 32;
-                mouseFrames.Add(Frame(controls, new Rect(266, y - 2, 192, 26), SegGreen, 1f));
-                mouseValues.Add(AddText(controls, new Rect(300, y, 124, 22), 9, SegGreen, TextAnchor.MiddleCenter));
-                mouseMinus.Add(AddText(controls, new Rect(266, y, 34, 22), 10, SegGreen, TextAnchor.MiddleCenter));
-                mousePlus.Add(AddText(controls, new Rect(424, y, 34, 22), 10, SegGreen, TextAnchor.MiddleCenter));
+                mouseFrames.Add(Frame(controls, new Rect(266, y - 2, 192, 26), SegBlue, 1f));
+                mouseValues.Add(AddText(controls, new Rect(300, y, 124, 22), 9, SegBlue, TextAnchor.MiddleCenter));
+                mouseMinus.Add(AddText(controls, new Rect(266, y, 34, 22), 10, SegBlue, TextAnchor.MiddleCenter));
+                mousePlus.Add(AddText(controls, new Rect(424, y, 34, 22), 10, SegBlue, TextAnchor.MiddleCenter));
                 void Press(int sign)
                 {
                     var setting = mouseRows[row];
@@ -844,7 +856,7 @@ namespace SpectreEX.Menu
                 Button(controls, new Rect(424, y - 2, 34, 26), () => Press(1), Key.None, glow).live = mouseLive;
             }
 
-            var more = AddText(controls, new Rect(8, 270, SettingsW - 16, 14), 8, DimGreen, TextAnchor.MiddleCenter);
+            var more = AddText(controls, new Rect(8, 270, SettingsW - 16, 14), 8, DimBlue, TextAnchor.MiddleCenter);
             SettingsButton(controls, new Rect(276, 292, 80, 28), "DONE", Pop);
             SettingsButton(controls, new Rect(366, 292, 92, 28), "DEFAULTS", () =>
             {
@@ -859,9 +871,9 @@ namespace SpectreEX.Menu
             void Section(string title, float x, int which)
             {
                 var r = new Rect(x, 292, 80, 28);
-                var t = AddText(controls, new Rect(r.x, r.y + 3, r.width, 22), 9, SegGreen, TextAnchor.MiddleCenter);
+                var t = AddText(controls, new Rect(r.x, r.y + 3, r.width, 22), 9, SegBlue, TextAnchor.MiddleCenter);
                 t.Text = Seg(title);
-                sections.Add((t, Frame(controls, r, SegGreen, 1f), which));
+                sections.Add((t, Frame(controls, r, SegBlue, 1f), which));
                 Button(controls, r, () =>
                 {
                     padSection = which == 1;
@@ -901,7 +913,7 @@ namespace SpectreEX.Menu
                 }
                 foreach (var (title, edges, which) in sections)
                 {
-                    title.color = which == Shown() ? SegGreen : DimGreen;
+                    title.color = which == Shown() ? SegBlue : DimBlue;
                     foreach (var edge in edges) edge.enabled = which == Shown();
                 }
                 more.Text = Seg(mouseSection ? MouseModeHelp[(int)MouseLook.Mode]
@@ -934,8 +946,8 @@ namespace SpectreEX.Menu
 
         static void ResetMouse()
         {
-            foreach (var key in new[] { MouseLook.ModeKey, MouseLook.SpeedKey, MouseLook.StickKey, MouseLook.InvertKey }) PlayerPrefs.DeleteKey(key);
-            PlayerPrefs.Save();
+            foreach (var key in new[] { MouseLook.ModeKey, MouseLook.SpeedKey, MouseLook.StickKey, MouseLook.InvertKey }) Prefs.DeleteKey(key);
+            Prefs.Save();
         }
 
         // Waiting for the key to set: nothing else in the menu hears it, Esc included
@@ -997,7 +1009,7 @@ namespace SpectreEX.Menu
         {
             scores = NewScreen("Scores", new Vector2(284, 220));
             AddRect(scores, new Rect(-2000, -2000, 4284, 4220), Color.black);   // on black, not over the menu
-            var ink = new Color(0.25f, 0.78f, 0.27f);
+            var ink = SegBlue;
             Frame(scores, new Rect(0, 0, 284, 220), ink, 4f);
             var title = AddText(scores, new Rect(8, 8, 268, 14), 9, ink, TextAnchor.MiddleCenter);
             AddText(scores, new Rect(46, 28, 100, 12), 8, ink, TextAnchor.MiddleLeft).Text = Seg("Name");
@@ -1094,9 +1106,9 @@ namespace SpectreEX.Menu
         {
             levelPrompt = NewScreen("StartLevel", new Vector2(284, 220));
             AddRect(levelPrompt, new Rect(-2000, -2000, 4284, 4220), Color.black);
-            Frame(levelPrompt, new Rect(0, 0, 284, 220), SegGreen, 4f);
-            AddText(levelPrompt, new Rect(30, 104, 190, 14), 8, SegGreen, TextAnchor.MiddleLeft).Text = Seg("Enter Starting Level:");
-            levelField = AddText(levelPrompt, new Rect(224, 104, 40, 14), 8, SegGreen, TextAnchor.MiddleLeft);
+            Frame(levelPrompt, new Rect(0, 0, 284, 220), SegBlue, 4f);
+            AddText(levelPrompt, new Rect(30, 104, 190, 14), 8, SegBlue, TextAnchor.MiddleLeft).Text = Seg("Enter Starting Level:");
+            levelField = AddText(levelPrompt, new Rect(224, 104, 40, 14), 8, SegBlue, TextAnchor.MiddleLeft);
             levelPrompt.refresh = () => levelField.Text = Seg(typed + Cursor);
             levelPrompt.onEscape = Pop;
             levelPrompt.onEnter = () =>
@@ -1121,18 +1133,18 @@ namespace SpectreEX.Menu
         {
             slots = NewScreen("Slots", new Vector2(284, 220));
             AddRect(slots, new Rect(-2000, -2000, 4284, 4220), Color.black);
-            Frame(slots, new Rect(0, 0, 284, 220), SegGreen, 4f);
-            slotsTitle = AddText(slots, new Rect(8, 16, 268, 14), 8, SegGreen, TextAnchor.MiddleCenter);
+            Frame(slots, new Rect(0, 0, 284, 220), SegBlue, 4f);
+            slotsTitle = AddText(slots, new Rect(8, 16, 268, 14), 8, SegBlue, TextAnchor.MiddleCenter);
             for (int i = 0; i < SavedGames.Slots; i++)
             {
                 float y = 40 + i * 16;
                 slotRows.Add(new[]
                 {
-                    AddText(slots, new Rect(8, y, 28, 12), 8, SegGreen, TextAnchor.MiddleRight),
-                    AddText(slots, new Rect(42, y, 130, 12), 8, SegGreen, TextAnchor.MiddleLeft),
-                    AddText(slots, new Rect(172, y, 24, 12), 8, SegGreen, TextAnchor.MiddleRight),
-                    AddText(slots, new Rect(198, y, 24, 12), 8, SegGreen, TextAnchor.MiddleRight),
-                    AddText(slots, new Rect(224, y, 52, 12), 8, SegGreen, TextAnchor.MiddleRight),
+                    AddText(slots, new Rect(8, y, 28, 12), 8, SegBlue, TextAnchor.MiddleRight),
+                    AddText(slots, new Rect(42, y, 130, 12), 8, SegBlue, TextAnchor.MiddleLeft),
+                    AddText(slots, new Rect(172, y, 24, 12), 8, SegBlue, TextAnchor.MiddleRight),
+                    AddText(slots, new Rect(198, y, 24, 12), 8, SegBlue, TextAnchor.MiddleRight),
+                    AddText(slots, new Rect(224, y, 52, 12), 8, SegBlue, TextAnchor.MiddleRight),
                 });
             }
             slots.refresh = () =>
@@ -1211,11 +1223,11 @@ namespace SpectreEX.Menu
         void BuildNotice()
         {
             notice = Panel("Notice", new Vector2(300, 110));
-            noticeText = AddText(notice, new Rect(14, 14, 272, 52), 9, SegGreen, TextAnchor.MiddleCenter);
+            noticeText = AddText(notice, new Rect(14, 14, 272, 52), 9, SegBlue, TextAnchor.MiddleCenter);
             var ok = new Rect(110, 72, 80, 26);
-            Frame(notice, ok, DimGreen, 1);
-            AddText(notice, ok, 10, SegGreen, TextAnchor.MiddleCenter).Text = "OK";
-            Button(notice, ok, Pop, tint: new Color(SegGreen.r, SegGreen.g, SegGreen.b, 0.2f));
+            Frame(notice, ok, DimBlue, 1);
+            AddText(notice, ok, 10, SegBlue, TextAnchor.MiddleCenter).Text = "OK";
+            Button(notice, ok, Pop, tint: new Color(SegBlue.r, SegBlue.g, SegBlue.b, 0.2f));
             notice.onAnyClick = null;
             notice.onEscape = notice.onEnter = Pop;
         }
@@ -1226,15 +1238,16 @@ namespace SpectreEX.Menu
             Push(notice);
         }
 
-        // Our own dialogs (notices) use the high-score table's look: black with green segment text
-        static readonly Color SegGreen = new Color(0.25f, 0.78f, 0.27f);
-        static readonly Color DimGreen = new Color(0.2f, 0.6f, 0.22f);
+        // Our own dialogs (notices) use the high-score table's look: black with segment text in the blue of
+        // the matrix picture's "CENTRAL SYSTEMS MATRIX" and copyright line (palette 85, #9999CC; 19, #666699 dim)
+        static readonly Color SegBlue = new Color32(0x99, 0x99, 0xCC, 0xFF);
+        static readonly Color DimBlue = new Color32(0x66, 0x66, 0x99, 0xFF);
 
         MenuScreen Panel(string name, Vector2 size)
         {
             var s = NewScreen(name, size);
             AddRect(s, new Rect(0, 0, size.x, size.y), Color.black);
-            Frame(s, new Rect(3, 3, size.x - 6, size.y - 6), DimGreen, 1);
+            Frame(s, new Rect(3, 3, size.x - 6, size.y - 6), DimBlue, 1);
             return s;
         }
 
@@ -1319,7 +1332,7 @@ namespace SpectreEX.Menu
 
         static Texture2D LoadTex(string name)
         {
-            var t = Resources.Load<Texture2D>("Menu/" + name);
+            var t = GameData.Picture(name);
             if (t != null) t.filterMode = FilterMode.Point;
             return t;
         }
@@ -1429,6 +1442,12 @@ namespace SpectreEX.Menu
             if (Screen.width != lastScreen.x || Screen.height != lastScreen.y) { Relayout(); graphics.refresh(); }
             if (Screen.fullScreenMode != lastMode) { lastMode = Screen.fullScreenMode; graphics.refresh(); }
             optionsHue.enabled = ShiftHeld;
+            if (optionsHue.enabled)
+            {
+                bool onTile = optionsTile.hover != null && optionsTile.hover.enabled;
+                optionsHue.texture = onTile ? optionsTile.hover.texture : optionsTex;
+                optionsHue.uvRect = onTile ? optionsTile.hover.uvRect : optionsUv;
+            }
 
             var top = stack[stack.Count - 1];
             if (capturing != null) { CaptureKey(); return; }

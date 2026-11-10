@@ -26,32 +26,32 @@ namespace SpectreEX
 
         public static MouseMode Mode
         {
-            get => (MouseMode)Mathf.Clamp(PlayerPrefs.GetInt(ModeKey, 0), 0, ModeNames.Length - 1);
+            get => (MouseMode)Mathf.Clamp(Prefs.GetInt(ModeKey, 0), 0, ModeNames.Length - 1);
             set => Save(ModeKey, (int)value);
         }
 
         public static int Speed
         {
-            get => Mathf.Clamp(PlayerPrefs.GetInt(SpeedKey, 5), MinSpeed, MaxSpeed);
+            get => Mathf.Clamp(Prefs.GetInt(SpeedKey, 5), MinSpeed, MaxSpeed);
             set => Save(SpeedKey, Mathf.Clamp(value, MinSpeed, MaxSpeed));
         }
 
         public static int StickSpeed
         {
-            get => Mathf.Clamp(PlayerPrefs.GetInt(StickKey, 8), MinSpeed, MaxSpeed);
+            get => Mathf.Clamp(Prefs.GetInt(StickKey, 8), MinSpeed, MaxSpeed);
             set => Save(StickKey, Mathf.Clamp(value, MinSpeed, MaxSpeed));
         }
 
         public static bool Invert
         {
-            get => PlayerPrefs.GetInt(InvertKey, 0) != 0;
+            get => Prefs.GetInt(InvertKey, 0) != 0;
             set => Save(InvertKey, value ? 1 : 0);
         }
 
         static void Save(string key, int value)
         {
-            PlayerPrefs.SetInt(key, value);
-            PlayerPrefs.Save();
+            Prefs.SetInt(key, value);
+            Prefs.Save();
         }
 
         // The mode working now, for this view

@@ -30,7 +30,7 @@ namespace SpectreEX
 
     public enum Difficulty { Easy, Normal, Hard }
 
-    // Everything the Options dialog controls, persisted in PlayerPrefs.
+    // Everything the Options dialog controls, persisted in Prefs (UserData/Settings.txt).
     public static class GameSettings
     {
         // Music styles from the original's Options dialog; their tracks follow the original's own song
@@ -69,41 +69,42 @@ namespace SpectreEX
         {
             if (loaded) return;
             loaded = true;
-            Joystick = PlayerPrefs.GetInt("opt.joystick", 1) == 1;
-            SoundEffectsOn = PlayerPrefs.GetInt("opt.sounds", 1) != 0;
-            for (int i = 0; i < Music.Length; i++) Music[i] = PlayerPrefs.GetInt("opt.music" + i, 1) == 1;
-            Difficulty = (Difficulty)PlayerPrefs.GetInt("opt.difficulty", (int)Difficulty.Easy);
-            DisplayComplex = PlayerPrefs.GetInt("opt.complex", 1) == 1;
-            DisplayFilled = PlayerPrefs.GetInt("opt.filled", 1) == 1;
-            DisplayTextures = PlayerPrefs.GetInt("opt.textures", 1) == 1;
-            DisplayMovies = PlayerPrefs.GetInt("opt.movies", 1) == 1;
-            Custom = new VehicleSpec("CUSTOM", PlayerPrefs.GetInt("custom.speed", 8), PlayerPrefs.GetInt("custom.shields", 4), PlayerPrefs.GetInt("custom.ammo", 3));
-            SelectedVehicle = PlayerPrefs.GetInt("vehicle", 0);
-            SelectedMatrix = PlayerPrefs.GetString("matrix", "CENTRAL.MAT");
-            UseCustomMatrices = PlayerPrefs.GetInt("opt.custommatrix", 0) == 1;
+            Joystick = Prefs.GetInt("opt.joystick", 1) == 1;
+            SoundEffectsOn = Prefs.GetInt("opt.sounds", 1) != 0;
+            for (int i = 0; i < Music.Length; i++) Music[i] = Prefs.GetInt("opt.music" + i, 1) == 1;
+            Difficulty = (Difficulty)Prefs.GetInt("opt.difficulty", (int)Difficulty.Easy);
+            DisplayComplex = Prefs.GetInt("opt.complex", 1) == 1;
+            DisplayFilled = Prefs.GetInt("opt.filled", 1) == 1;
+            DisplayTextures = Prefs.GetInt("opt.textures", 1) == 1;
+            DisplayMovies = Prefs.GetInt("opt.movies", 1) == 1;
+            // _LOAD_CONFIG's own, and the shipped SPECTRVR.CFG's: _CUSTOM_SPEED 8, _CUSTOM_DAMAGE 0x28, _CUSTOM_AMMO 0x1E
+            Custom = new VehicleSpec("CUSTOM", Prefs.GetInt("custom.speed", 8), Prefs.GetInt("custom.shields", 4), Prefs.GetInt("custom.ammo", 3));
+            SelectedVehicle = Prefs.GetInt("vehicle", 0);
+            SelectedMatrix = Prefs.GetString("matrix", "CENTRAL.MAT");
+            UseCustomMatrices = Prefs.GetInt("opt.custommatrix", 0) == 1;
         }
 
         public static void Save()
         {
-            PlayerPrefs.SetInt("opt.joystick", Joystick ? 1 : 0);
-            PlayerPrefs.SetInt("opt.sounds", SoundEffectsOn ? 1 : 0);
-            for (int i = 0; i < Music.Length; i++) PlayerPrefs.SetInt("opt.music" + i, Music[i] ? 1 : 0);
-            PlayerPrefs.SetInt("opt.difficulty", (int)Difficulty);
-            PlayerPrefs.SetInt("opt.complex", DisplayComplex ? 1 : 0);
-            PlayerPrefs.SetInt("opt.filled", DisplayFilled ? 1 : 0);
-            PlayerPrefs.SetInt("opt.textures", DisplayTextures ? 1 : 0);
-            PlayerPrefs.SetInt("opt.movies", DisplayMovies ? 1 : 0);
-            PlayerPrefs.SetInt("custom.speed", Custom.speed);
-            PlayerPrefs.SetInt("custom.shields", Custom.shields);
-            PlayerPrefs.SetInt("custom.ammo", Custom.ammo);
-            PlayerPrefs.SetInt("vehicle", SelectedVehicle);
-            PlayerPrefs.SetString("matrix", SelectedMatrix);
-            PlayerPrefs.SetInt("opt.custommatrix", UseCustomMatrices ? 1 : 0);
-            PlayerPrefs.Save();
+            Prefs.SetInt("opt.joystick", Joystick ? 1 : 0);
+            Prefs.SetInt("opt.sounds", SoundEffectsOn ? 1 : 0);
+            for (int i = 0; i < Music.Length; i++) Prefs.SetInt("opt.music" + i, Music[i] ? 1 : 0);
+            Prefs.SetInt("opt.difficulty", (int)Difficulty);
+            Prefs.SetInt("opt.complex", DisplayComplex ? 1 : 0);
+            Prefs.SetInt("opt.filled", DisplayFilled ? 1 : 0);
+            Prefs.SetInt("opt.textures", DisplayTextures ? 1 : 0);
+            Prefs.SetInt("opt.movies", DisplayMovies ? 1 : 0);
+            Prefs.SetInt("custom.speed", Custom.speed);
+            Prefs.SetInt("custom.shields", Custom.shields);
+            Prefs.SetInt("custom.ammo", Custom.ammo);
+            Prefs.SetInt("vehicle", SelectedVehicle);
+            Prefs.SetString("matrix", SelectedMatrix);
+            Prefs.SetInt("opt.custommatrix", UseCustomMatrices ? 1 : 0);
+            Prefs.Save();
         }
     }
 
-    // Top-ten table, persisted in PlayerPrefs.
+    // Top-ten table, persisted in Prefs (UserData/Settings.txt).
     public static class HighScores
     {
         public const int Count = 10;
@@ -115,12 +116,12 @@ namespace SpectreEX
             var list = new List<Entry>();
             for (int i = 0; i < Count; i++)
             {
-                if (!PlayerPrefs.HasKey("hs.score" + i)) break;
+                if (!Prefs.HasKey("hs.score" + i)) break;
                 list.Add(new Entry
                 {
-                    name = PlayerPrefs.GetString("hs.name" + i, "---"),
-                    score = PlayerPrefs.GetInt("hs.score" + i),
-                    level = PlayerPrefs.GetInt("hs.level" + i, 1),
+                    name = Prefs.GetString("hs.name" + i, "---"),
+                    score = Prefs.GetInt("hs.score" + i),
+                    level = Prefs.GetInt("hs.level" + i, 1),
                 });
             }
             return list;
@@ -147,11 +148,11 @@ namespace SpectreEX
             if (list.Count > Count) list.RemoveRange(Count, list.Count - Count);
             for (int i = 0; i < list.Count; i++)
             {
-                PlayerPrefs.SetString("hs.name" + i, list[i].name);
-                PlayerPrefs.SetInt("hs.score" + i, list[i].score);
-                PlayerPrefs.SetInt("hs.level" + i, list[i].level);
+                Prefs.SetString("hs.name" + i, list[i].name);
+                Prefs.SetInt("hs.score" + i, list[i].score);
+                Prefs.SetInt("hs.level" + i, list[i].level);
             }
-            PlayerPrefs.Save();
+            Prefs.Save();
         }
     }
 }

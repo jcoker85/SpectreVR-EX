@@ -113,7 +113,7 @@ InitTestScene*.unity*
 # Auto-generated cache in Assets folder
 /[Aa]ssets/[Ss]ceneDependencyCache*
 
-# Original Spectre VR install, soundfont and FluidSynth (third-party, reference only - never commit)
+# Original Spectre VR install, SoundFont, FluidSynth and the reverse-engineering tools (third-party - never commit)
 /Tools/SpectreVR/
 /Tools/GeneralUser-GS/
 /Tools/fluidsynth/
@@ -130,7 +130,14 @@ InitTestScene*.unity*
 # Python bytecode
 __pycache__/
 
-# Generated from the player's own copy of Spectre VR by Tools/import_original.py - never commit
+# Game data built from a copy of the original game (Spectre VR-EX > Import Original Game) - never commit
+/GameData/
+/GameData.importing/
+# The settings, scores and saves, and custom matrices, the editor keeps in the project folder
+/UserData/
+/Matrices/
+
+# Where the old Python importer put the original game's data, inside Assets - never commit
 /Assets/Imported/
 /Assets/Imported.meta
 /Assets/StreamingAssets/Matrices/
@@ -142,3 +149,21 @@ __pycache__/
 /Assets/Editor/Data/
 /Assets/Editor/Data.meta
 /Assets/Meshes/Spectre_*
+
+# The original game's own files, anywhere (named so Unity's .mat materials aren't caught, as Windows
+# ignores case)
+CENTRAL.*
+BASIC.MAT
+SVRWIN.EXE
+SPCP*.DAT
+*.MOV
+*.MID
+
+# Unity's crash-recovery scenes
+/Assets/_Recovery/
+/Assets/_Recovery.meta
+
+# The owner's local-only files: an Asset Store skybox pack (not redistributable) and shortcuts
+/Assets/Real Stars Skybox/
+/Assets/Real Stars Skybox.meta
+*.lnk

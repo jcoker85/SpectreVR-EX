@@ -267,7 +267,7 @@ namespace SpectreEX.Matrix
     }
 
     // The shapes built into SVRWIN.EXE (ids under 1000) and its _OT_TO_SHAPE table, exported by
-    // Tools/import_original.py into Resources/Shapes/BuiltinShapes.json.
+    // Setup.BuiltinShapeExporter into the player's GameData/Shapes/BuiltinShapes.json.
     public static class BuiltinShapes
     {
         [Serializable] class Face { public int[] idx; public int col; }
@@ -321,9 +321,9 @@ namespace SpectreEX.Matrix
             if (byName != null) return;
             byName = new Dictionary<string, ShapeGeometry>();
             byId = new Dictionary<int, Entry>();
-            var text = Resources.Load<TextAsset>("Shapes/BuiltinShapes");
-            if (text == null) { Debug.LogWarning("Spectre VR-EX: Resources/Shapes/BuiltinShapes.json is missing"); return; }
-            var file = data = JsonUtility.FromJson<File>(text.text);
+            string path = System.IO.Path.Combine(GameData.Shapes, "BuiltinShapes.json");
+            if (!System.IO.File.Exists(path)) { Debug.LogWarning("Spectre VR-EX: " + path + " is missing"); return; }
+            var file = data = JsonUtility.FromJson<File>(System.IO.File.ReadAllText(path));
             foreach (var s in file.shapes)
                 byName[s.name] = new ShapeGeometry(s.verts, Array.ConvertAll(s.faces, f => f.idx), Array.ConvertAll(s.faces, f => f.col));
             // As _ADD_SHAPE reads it: the first entry for an id naming a shap resource wins,

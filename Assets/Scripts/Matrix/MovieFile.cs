@@ -8,10 +8,10 @@ using UnityEngine.UI;
 
 namespace SpectreEX.Matrix
 {
-    // One of the player's own QuickTime movies, decoded by Tools/qtmovie.py into StreamingAssets/Movies.
+    // One of the player's own QuickTime movies, decoded by Setup.QuickTimeMovie into GameData/Movies.
     public class MovieFile
     {
-        public static string Folder => Path.Combine(Application.streamingAssetsPath, "Movies");
+        public static string Folder => GameData.Movies;
 
         readonly byte[] data;
         readonly int[] times, offsets, sizes;
@@ -154,7 +154,7 @@ namespace SpectreEX.Matrix
             frame.anchorMin = frame.anchorMax = frame.pivot = Vector2.zero;
 
             AudioSource audio = null;
-            var clip = Sfx.Enabled ? LoadWave(Path.Combine(MovieFile.Folder, Name + ".wav")) : null;
+            var clip = Sfx.Enabled ? Wav.Load(Path.Combine(MovieFile.Folder, Name + ".wav")) : null;
             if (clip != null)
             {
                 audio = go.AddComponent<AudioSource>();
@@ -200,24 +200,6 @@ namespace SpectreEX.Matrix
             var k = Keyboard.current;
             var m = Mouse.current;
             return (k != null && k.anyKey.wasPressedThisFrame) || (m != null && m.leftButton.wasPressedThisFrame);
-        }
-
-        // The movie's sound: plain 8-bit unsigned PCM
-        static AudioClip LoadWave(string path)
-        {
-            if (!File.Exists(path)) return null;
-            var b = File.ReadAllBytes(path);
-            int channels = System.BitConverter.ToInt16(b, 22), rate = System.BitConverter.ToInt32(b, 24);
-            int at = 12;
-            while (at + 8 <= b.Length && !(b[at] == 'd' && b[at + 1] == 'a' && b[at + 2] == 't' && b[at + 3] == 'a'))
-                at += 8 + System.BitConverter.ToInt32(b, at + 4);
-            if (at + 8 > b.Length) return null;
-            int size = Mathf.Min(System.BitConverter.ToInt32(b, at + 4), b.Length - at - 8);
-            var samples = new float[size];
-            for (int i = 0; i < size; i++) samples[i] = (b[at + 8 + i] - 128) / 128f;
-            var clip = AudioClip.Create(Path.GetFileNameWithoutExtension(path), size / channels, channels, rate, false);
-            clip.SetData(samples, 0);
-            return clip;
         }
     }
 }

@@ -350,7 +350,7 @@ namespace SpectreEX.Hud
 
         static Sprite LoadWeaponIcon(int index)
         {
-            var tex = Resources.Load<Texture2D>("HUD/WeaponIcons");
+            var tex = GameData.Picture("WeaponIcons");
             if (tex == null) return null;
             tex.filterMode = FilterMode.Point;
             int size = tex.height;

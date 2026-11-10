@@ -14,8 +14,12 @@ namespace SpectreEX.EditorTools
     // the prefabs in Assets/Prefabs and the generated meshes/textures.
     //
     // Look: Spectre VR's black void with tall glowing gradient walls (recoloured per level at runtime)
-    // and a dotted floor, on a ray-traced glossy floor. The player craft and robots use the original
-    // game's 3D shapes (see ShapeLibrary) rendered as black panels with neon edges, like the obstacles.
+    // and a dotted floor, on a ray-traced glossy floor. The craft, robots and obstacles are built at
+    // runtime from the player's own game data (GameData), so nothing here comes from the original game:
+    // the scene and prefabs it writes can be committed and built into a release.
+    //
+    // It also writes Assets/Scenes/Setup.unity, the build's first scene (Setup.FirstRunSetup), which
+    // builds that game data from the player's copy of Spectre VR on first run.
     public static class ArenaBuilder
     {
         const string MaterialDir = "Assets/Materials";
@@ -23,6 +27,7 @@ namespace SpectreEX.EditorTools
         const string TextureDir = "Assets/Textures";
         const string PrefabDir = "Assets/Prefabs";
         const string ScenePath = "Assets/Scenes/Arena.unity";
+        public const string SetupScenePath = "Assets/Scenes/Setup.unity";
         const string VolumePath = "Assets/Settings/ArenaVolume.asset";
         const string PlayerLayer = "PlayerModel";
         const string HudFontPath = "Assets/Fonts/DSEG14Classic-Light.ttf";
@@ -42,14 +47,13 @@ namespace SpectreEX.EditorTools
         static readonly Color OrbiterBlue = new Color(0.15f, 0.25f, 1f);
         static readonly Color SlicerOrange = new Color(1f, 0.3f, 0.05f);
 
-        // Original Spectre VR shape ids (CENTRAL.MAT) and the scale that maps their units to metres
-        const int PlayerShape = 10011, FlagShape = 10086;
         const float EdgeThickness = 0.07f;
+        // The craft's box until PlayerModel builds it from the matrix: the size of Central Systems' craft
+        static readonly Bounds PlayerPlaceholder = new Bounds(new Vector3(0f, 0.75f, 0.75f), new Vector3(4.5f, 1.5f, 4.5f));
 
         static Material shapeMat, floorMat, bodyMat, wallMat, blockMat, dotMat, cyanMat, flagMat, poleMat, dumpMat;
         static Material roverMat, turretMat, orbiterMat, slicerMat, enemyBoltMat;
         static Material acidMat, teleportMat, pusherMat, transportMat;
-        static Bounds playerBounds;
 
         [MenuItem("Spectre VR-EX/Build Arena Scene")]
         public static void Build()
@@ -96,9 +100,29 @@ namespace SpectreEX.EditorTools
             BuildCamera(player.transform);
 
             EditorSceneManager.SaveScene(scene, ScenePath);
-            EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
+            BuildSetupScene();
+            EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(SetupScenePath, true), new EditorBuildSettingsScene(ScenePath, true) };
             AssetDatabase.SaveAssets();
-            Debug.Log("Spectre VR-EX: arena scene built at " + ScenePath);
+            EditorSceneManager.OpenScene(ScenePath);
+            Debug.Log("Spectre VR-EX: scenes built at " + SetupScenePath + " and " + ScenePath);
+        }
+
+        // The first-run setup screen: a black camera for HDRP to draw to, and FirstRunSetup's IMGUI over it
+        static void BuildSetupScene()
+        {
+            var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            RenderSettings.skybox = null;
+            var camGo = new GameObject("Main Camera") { tag = "MainCamera" };
+            var cam = camGo.AddComponent<Camera>();
+            cam.clearFlags = CameraClearFlags.SolidColor;
+            cam.backgroundColor = Color.black;
+            cam.cullingMask = 0;
+            var hd = camGo.AddComponent<HDAdditionalCameraData>();
+            hd.clearColorMode = HDAdditionalCameraData.ClearColorMode.Color;
+            hd.backgroundColorHDR = Color.black;
+            camGo.AddComponent<AudioListener>();
+            new GameObject("Setup").AddComponent<SpectreEX.Setup.FirstRunSetup>();
+            EditorSceneManager.SaveScene(scene, SetupScenePath);
         }
 
         // ---------- project setup ----------
@@ -385,23 +409,6 @@ namespace SpectreEX.EditorTools
             return p;
         }
 
-        // An original Spectre VR shape in the Spectre VR-EX style: solid panels (black, or a craft's
-        // own colour) with glowing edges.
-        static Transform SpectreModel(string name, Transform parent, int shapeId, float scale, Material glow, out Bounds bounds,
-                                      System.Func<Vector3, Vector3> warp = null, string variant = "")
-        {
-            string key = $"Spectre_{shapeId}_{Mathf.RoundToInt(scale * 1000)}{variant}";
-            var body = SaveMesh(ShapeLibrary.BodyMesh(shapeId, scale, warp), key + "_Body");
-            var edges = SaveMesh(ShapeLibrary.EdgeMesh(shapeId, scale, EdgeThickness, warp), key + "_Edges");
-            var model = new GameObject(name).transform;
-            model.SetParent(parent, false);
-            MeshObj("Panels", model, body, bodyMat, Vector3.zero, Vector3.one, Quaternion.identity);
-            var e = MeshObj("Edges", model, edges, glow, Vector3.zero, Vector3.one, Quaternion.identity);
-            e.GetComponent<MeshRenderer>().shadowCastingMode = ShadowCastingMode.Off;
-            bounds = body.bounds;
-            return model;
-        }
-
         static GameObject BuildFlag()
         {
             var f = new GameObject("Flag");
@@ -520,13 +527,12 @@ namespace SpectreEX.EditorTools
             rb.mass = 50f;
             rb.isKinematic = true;
 
-            // Default "Balance" Spectre: the original's low wedge hull with its raised canopy
-            var model = SpectreModel("Model", root.transform, PlayerShape, 0.25f, cyanMat, out var b);
-            FitCollider(root, b).sharedMaterial = NoFriction();
-            NoShadows(model.gameObject);
+            // The craft's shape comes from the matrix at runtime (PlayerModel); until then it's an empty box
+            var model = new GameObject("Model");
+            model.transform.SetParent(root.transform, false);
+            FitCollider(root, PlayerPlaceholder).sharedMaterial = NoFriction();
             int layer = LayerMask.NameToLayer(PlayerLayer);
-            if (layer >= 0) SetLayerRecursive(model.gameObject, layer);
-            playerBounds = b;
+            if (layer >= 0) model.layer = layer;
 
             // "Balance" Spectre (the original's _SET_TANK_SETTINGS): speed 5, 60 damage points, 40 rounds
             root.AddComponent<PlayerMotor>().speedPoints = 5;

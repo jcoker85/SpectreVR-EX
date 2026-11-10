@@ -5,16 +5,16 @@ using UnityEngine;
 namespace SpectreEX.Matrix
 {
     // Finds the matrices the game can play. The ones that shipped with Spectre VR (CENTRAL.MAT,
-    // BASIC.MAT) live in StreamingAssets/Matrices; with Options "Use Custom Matrix Files" ticked, any
+    // BASIC.MAT) are imported into the player's GameData/Matrices; with Options "Use Custom Matrix Files" ticked, any
     // .MAT files in a Matrices folder next to the game (or in the user's persistent data folder) are
     // offered too - e.g. ones made with the original VRchitect editor.
     public static class MatrixLibrary
     {
         public const string DefaultMatrix = "CENTRAL.MAT";
 
-        public static string BundledFolder => Path.Combine(Application.streamingAssetsPath, "Matrices");
-        public static string CustomFolder => Path.Combine(Application.persistentDataPath, "Matrices");
-        public static string GameFolder => Path.Combine(Path.GetDirectoryName(Application.dataPath) ?? ".", "Matrices");
+        public static string BundledFolder => GameData.Matrices;
+        // Custom matrices: a Matrices folder beside the game (the project folder in the editor)
+        public static string GameFolder => Path.Combine(GameData.Home, "Matrices");
 
         static readonly Dictionary<string, MatrixFile> cache = new Dictionary<string, MatrixFile>();
 
@@ -26,7 +26,6 @@ namespace SpectreEX.Matrix
             if (includeCustom)
             {
                 AddFrom(list, GameFolder);
-                AddFrom(list, CustomFolder);
             }
             return list;
         }

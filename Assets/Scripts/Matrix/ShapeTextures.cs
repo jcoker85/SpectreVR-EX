@@ -5,7 +5,7 @@ using UnityEngine;
 namespace SpectreEX.Matrix
 {
     // The textures some faces use: face colours 6000-6015 name a PCX in the game's TEXTURES folder,
-    // imported to StreamingAssets/Textures. Each gets the shape material with the image in place of
+    // imported to GameData/Textures. Each gets the shape material with the image in place of
     // the palette.
     public static class ShapeTextures
     {
@@ -16,7 +16,7 @@ namespace SpectreEX.Matrix
         {
             if (images.TryGetValue(id, out var tex)) return tex;
             string file = BuiltinShapes.TextureFile(id);
-            string path = Path.Combine(Application.streamingAssetsPath, "Textures", file);
+            string path = Path.Combine(GameData.Textures, file);
             try { if (file != "" && File.Exists(path)) tex = PcxImage.Load(File.ReadAllBytes(path)); }
             catch (System.Exception e) { Debug.LogWarning($"Spectre VR-EX: couldn't read texture {path}: {e.Message}"); }
             images[id] = tex;

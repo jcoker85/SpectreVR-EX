@@ -262,24 +262,24 @@ namespace SpectreEX
         {
             foreach (var action in All)
             {
-                PlayerPrefs.SetString(Pref(action), string.Join(",", Array.ConvertAll(action.slots, Serial)));
-                PlayerPrefs.SetString(PadPref(action), string.Join(",", Array.ConvertAll(action.pads, PadName)));
+                Prefs.SetString(Pref(action), string.Join(",", Array.ConvertAll(action.slots, Serial)));
+                Prefs.SetString(PadPref(action), string.Join(",", Array.ConvertAll(action.pads, PadName)));
             }
-            PlayerPrefs.Save();
+            Prefs.Save();
         }
 
         public static void Load()
         {
             foreach (var action in All)
             {
-                if (PlayerPrefs.HasKey(Pref(action)))
+                if (Prefs.HasKey(Pref(action)))
                 {
-                    var names = PlayerPrefs.GetString(Pref(action)).Split(',');
+                    var names = Prefs.GetString(Pref(action)).Split(',');
                     for (int i = 0; i < Slots; i++) action.slots[i] = i < names.Length ? Parse(names[i]) : 0;
                 }
-                if (PlayerPrefs.HasKey(PadPref(action)))
+                if (Prefs.HasKey(PadPref(action)))
                 {
-                    var names = PlayerPrefs.GetString(PadPref(action)).Split(',');
+                    var names = Prefs.GetString(PadPref(action)).Split(',');
                     for (int i = 0; i < Slots; i++) action.pads[i] = i < names.Length ? Mathf.Max(0, Array.IndexOf(PadNames, names[i])) : 0;
                 }
             }

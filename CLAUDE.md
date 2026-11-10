@@ -4,26 +4,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Spectre VR-EX is a modern engine for Spectre VR (1993), built in Unity 6.3 (6000.3.27f2) with HDRP. It plays the original game's content with ray-traced graphics, a widescreen HUD and frame-rate independent physics. The goal is feature parity with the original's rules, read from its decompiled Windows build, plus a short list of deliberate differences.
+Spectre VR-EX is a modern engine for Spectre VR (1993), built in Unity 6.3 (6000.3.28f1) with HDRP. It plays the original game's content with ray-traced graphics, a widescreen HUD and frame-rate independent physics. The goal is feature parity with the original's rules, read from its decompiled Windows build, plus a short list of deliberate differences.
 
 ## Original game data is never committed
 
-The repository contains none of the original game. Everything generated from a user's copy is git-ignored: `Assets/Imported/`, `Assets/StreamingAssets/{Matrices,Textures,Movies}/`, `Assets/Editor/Data/`, `Assets/Meshes/Spectre_*`, and under `Tools/`, the original game, Ghidra, DOSBox and FluidSynth folders. When adding imported content, write it to an ignored location and extend `.gitignore` if needed.
+The repository and the release contain none of the original game. The game reads everything it takes from the original at runtime from a game data folder that the player's own copy is imported into: `GameData/` in the project for the editor (git-ignored), `GameData/` beside the exe for a build. The game is portable: `GameData.Home` is the exe's folder (the project folder in the editor), holding `GameData`, `UserData\Settings.txt` (settings, scores and saves, through `Prefs`; don't use `PlayerPrefs`, which writes the registry) and `Matrices`. Only if that folder can't be written to does it fall back to `persistentDataPath`. Nothing derived from the original may go under `Assets/`, because anything there can be built into the release; `BuildTools` refuses to build if the old importer's folders (`Assets/Imported/`, `Assets/StreamingAssets/{Matrices,Textures,Movies}/`, `Assets/Editor/Data/`, `Assets/Meshes/Spectre_*`) are back, and checks the finished build for the original's files. Under `Tools/`, the original game, Ghidra, DOSBox, FluidSynth and SoundFont folders are git-ignored too.
 
 ## Commands
 
-Set up the game data (needs Python 3 with `pip install pillow numpy soundfile`; music also needs FluidSynth and a General MIDI SoundFont, looked for in `Tools/fluidsynth` and `Tools/GeneralUser-GS`):
-
-```bash
-python Tools/import_original.py "path/to/Spectre VR" [--fluidsynth EXE] [--soundfont SF2] [--skip-music]
-```
-
-The importer stops if `SVRWIN.EXE` is a different release from the one `Tools/builtin_shapes_layout.json` was made from.
+Set up the game data: press Play (play mode always starts from the Setup scene, which asks for the Spectre VR folder when there's no game data), or run **Spectre VR-EX > Import Original Game...** and pick the folder with `SVRWIN.EXE`. Music needs FluidSynth in `Tools/fluidsynth` and the GeneralUser GS SoundFont in `Tools/GeneralUser-GS`; without them the import leaves music out. The import refuses an `SVRWIN.EXE` that's a different release from the one `Assets/Resources/BuiltinShapesLayout.json` was made from. **Spectre VR-EX > Open Game Data Folder** shows the result. No Python is needed except for the reverse-engineering tools.
 
 In the Unity editor:
 
-- **Spectre VR-EX > Build Arena Scene** (`ArenaBuilder.Build`): regenerates the scene, prefabs, materials, meshes and textures.
-- **Spectre VR-EX > Build Windows EXE** (`BuildTools.BuildWindows`): builds to `Builds/Windows`, with the result in `Builds/Windows/build.log`.
+- **Spectre VR-EX > Build Arena Scene** (`ArenaBuilder.Build`): regenerates both scenes (`Setup`, `Arena`), the prefabs, materials, meshes and textures.
+- **Spectre VR-EX > Build Windows EXE** (`BuildTools.BuildWindows`): builds to `Builds/Windows`, adds `Setup/` (FluidSynth and the SoundFont from `Tools/`), `Licenses/`, `LICENSE.txt` and `README.md`, and zips it all as `Builds/SpectreVR-EX-<version>-win64.zip`. The result is in `Builds/Windows/build.log`. The version is PlayerSettings' `bundleVersion`.
 
 There are no automated tests, no lint and no CI. Changes are checked by compiling in Unity and playing, or by scripting checks in Play mode. There is no `.asmdef`, so game code compiles into `Assembly-CSharp` and editor code into `Assembly-CSharp-Editor`.
 
@@ -31,13 +25,13 @@ There are no automated tests, no lint and no CI. Changes are checked by compilin
 
 ### The scene is generated
 
-`Assets/Editor/ArenaBuilder.cs` builds `Assets/Scenes/Arena.unity` and `Assets/Prefabs` from scratch, and wires up `GameManager`'s references. Re-running it overwrites them, so a lasting scene, prefab or generated material change belongs in `ArenaBuilder`, not in a hand edit. `Arena` is the only scene.
+`Assets/Editor/ArenaBuilder.cs` builds `Assets/Scenes/Setup.unity`, `Assets/Scenes/Arena.unity` and `Assets/Prefabs` from scratch, and wires up `GameManager`'s references. Re-running it overwrites them, so a lasting scene, prefab or generated material change belongs in `ArenaBuilder`, not in a hand edit. `Setup` (build index 0, `Setup.FirstRunSetup`) goes straight on to `Arena` when the game data is in place, and otherwise runs the first-run import; run the exe with `-setup` to see it again. `Arena` is the game.
 
 ### Data flow
 
-1. `Tools/import_original.py` turns the user's copy into Unity-readable files.
-2. `ShapeLibrary` (editor) reads `SpectreShapes.json` to make the player, robot and flag meshes at build time.
-3. `Matrix/` reads `.MAT` level files at runtime. `MatrixLibrary` finds them and `MatrixFile` parses them, then `ObstacleFactory` builds each level's obstacles from that matrix's own shapes. `GameManager` falls back to generated levels (`LevelPlan`) when there is no matrix.
+1. `Setup.OriginalImporter` turns the player's copy into the game data folder (`GameData.Root`), on a worker thread: menu and HUD pictures and textures as PCX, sounds as WAV, the matrices as they are, the movies decoded by `QuickTimeMovie`, the built-in shapes read from `SVRWIN.EXE` by `BuiltinShapeExporter`, and the MIDI soundtrack rendered to Ogg Vorbis by FluidSynth (twice: once to measure the peak and where the sound ends, which go into `import.txt`, then at the gain that peaks at 0.89). These files have no Unity types, so they can be compiled and checked outside Unity. Bump `OriginalImporter.Version` when the data layout changes, and players import again.
+2. `GameData` finds and loads it at runtime: `Picture`, `Sound`, `Wav`, `MusicPlayer` (loads the Ogg, cuts it at the measured end), `BuiltinShapes`, `MatrixLibrary`, `MovieFile`, `ShapeTextures`.
+3. `Matrix/` reads `.MAT` level files. `MatrixLibrary` finds them and `MatrixFile` parses them, then `ObstacleFactory` builds each level's obstacles from that matrix's own shapes, and `PlayerModel` the craft. `GameManager` falls back to generated levels (`LevelPlan`) when there is no matrix.
 
 ### Simulation
 
@@ -98,10 +92,10 @@ Unity:
 - Unity in the background doesn't compile. Call `AssetDatabase.Refresh`, then wait until `Library/ScriptAssemblies/Assembly-CSharp.dll` is newer than the edited file before pressing Play. Entering Play mid-compile gives errors that look like real bugs. Compile errors are in `Library/Bee/tundra.log.json`.
 - "Unity not detected" from the MCP is normal during a domain reload, and the first enter-Play after a compile is often dropped.
 - Play stops when the owner is active, and InputSystem events queued inside Unity don't work without focus. Don't send synthetic OS keystrokes while the owner is active unless they've agreed.
-- Build with `BuildTools.BuildWindows`. With Unity open, run it in the editor; a batch build needs Unity closed. Check `Builds/Windows/build.log` and the time on `Builds/Windows/Spectre VR-EX_Data/Managed/Assembly-CSharp.dll`.
+- Build with `BuildTools.BuildWindows`. With Unity open, run it in the editor; a batch build needs Unity closed. Check `Builds/Windows/build.log` and the time on `Builds/Windows/Spectre VR-EX_Data/Managed/Assembly-CSharp.dll`. To test the first run, run the exe with `-setup`, or move `Builds/Windows/GameData` aside. Running the build from `Builds/Windows` leaves `GameData`, `UserData` and `Matrices` there; `BuildTools` leaves them out of the zip.
 
 ```bash
-"/c/Program Files/Unity/Hub/Editor/6000.3.27f2/Editor/Unity.exe" -batchmode -quit -projectPath "C:/Users/james/Unity/SpectreVR-EX" -executeMethod SpectreEX.EditorTools.BuildTools.BuildWindows -logFile "C:/Users/james/Unity/SpectreVR-EX/Temp/sx/build_batch.log"
+"/c/Program Files/Unity/Hub/Editor/6000.3.28f1/Editor/Unity.exe" -batchmode -quit -projectPath "C:/Users/james/Unity/SpectreVR-EX" -executeMethod SpectreEX.EditorTools.BuildTools.BuildWindows -logFile "C:/Users/james/Unity/SpectreVR-EX/Temp/sx/build_batch.log"
 ```
 
 Running the original (`Tools/win31/launch.ps1`, `drive.ps1`):

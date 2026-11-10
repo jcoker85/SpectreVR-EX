@@ -7,12 +7,15 @@ vertex count and index-list pointer (+0/+2). The points themselves are initialis
 EXE's data segments (three 32-bit ints each: x forward, y side, z up, in world units).
 
 This replays those stores over the EXE's segments and reads the templates back. The stores are only
-pointers and counts: they were taken once from the Ghidra decompile into builtin_shapes_layout.json,
+pointers and counts: they were taken once from the Ghidra decompile into BuiltinShapesLayout.json,
 so the import needs nothing but the player's own SVRWIN.EXE, where all the geometry is read from. The id -> template table is _OT_TO_SHAPE (DS:0x9B8): 10-byte entries of shape
 id, object type, shap resource id, far pointer to the template (pointer filled by relocations).
 
-    python export_builtin_shapes.py <SVRWIN.EXE> <out.json>       (the import, using the layout)
     python export_builtin_shapes.py --make-layout <SVRWIN.EXE> <SVRWIN.EXE.c> <symbols.tsv>
+    python export_builtin_shapes.py <SVRWIN.EXE> <out.json>       (a reference export, using the layout)
+
+The game's own import is Assets/Scripts/Setup/BuiltinShapeExporter.cs, a C# port of the export here that
+gives the same JSON byte for byte; this script makes the layout it reads (Assets/Resources/BuiltinShapesLayout.json).
 """
 import hashlib
 import json
@@ -21,7 +24,7 @@ import re
 import struct
 import sys
 
-LAYOUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "builtin_shapes_layout.json")
+LAYOUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "Assets", "Resources", "BuiltinShapesLayout.json")
 
 TEMPLATES = ["BIG_BOX", "PYRAMID", "WALL", "WINDMILL", "WINDMILL_FANS", "COLUMN", "FUEL", "PLAYER_TANK",
              "TANK", "SUPERTANK", "SHOT", "BASE", "FLAG", "ICE", "GOO", "TURRET"]

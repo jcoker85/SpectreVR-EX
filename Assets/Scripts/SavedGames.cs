@@ -16,7 +16,7 @@ namespace SpectreEX
 
         public static Game Load(int slot)
         {
-            var parts = PlayerPrefs.GetString("save." + slot, "").Split(new[] { '|' }, 4);
+            var parts = Prefs.GetString("save." + slot, "").Split(new[] { '|' }, 4);
             if (parts.Length < 4) return new Game { name = "" };
             int.TryParse(parts[0], out int level);
             int.TryParse(parts[1], out int score);
@@ -26,8 +26,8 @@ namespace SpectreEX
 
         public static void Save(int slot, string name, int level, int score, int lives)
         {
-            PlayerPrefs.SetString("save." + slot, $"{level}|{score}|{lives}|{name}");
-            PlayerPrefs.Save();
+            Prefs.SetString("save." + slot, $"{level}|{score}|{lives}|{name}");
+            Prefs.Save();
         }
     }
 }

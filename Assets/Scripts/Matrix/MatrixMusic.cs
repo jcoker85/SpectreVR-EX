@@ -2,7 +2,7 @@ using System.Collections.Generic;
 
 namespace SpectreEX.Matrix
 {
-    // Matrix song ids (from VRchitect's song list) mapped to the rendered MIDI tracks in Resources/Music.
+    // Matrix song ids (from VRchitect's song list) mapped to the rendered MIDI tracks in GameData/Music.
     // The thousands digit picks the style, matching the Options music checkboxes:
     // 20xxx Cyber/Techno, 21xxx New Age, 22xxx Rock/Rave, 23xxx VRBach, 24xxx game themes.
     public static class MatrixMusic

@@ -14,8 +14,8 @@ namespace SpectreEX
 
         // Keys
         public const string RayTracing = "gfx.rt", Shadows = "gfx.rt.shadows", Skybox = "gfx.skybox", SkyBrightness = "gfx.skybox.brightness",
-            Reflections = "gfx.ssr", ReflectionDistance = "gfx.ssr.distance", ReflectionSamples = "gfx.ssr.samples", ReflectionBounces = "gfx.ssr.bounces",
-            Lighting = "gfx.gi", LightingDistance = "gfx.gi.distance", LightingSamples = "gfx.gi.samples", LightingBounces = "gfx.gi.bounces",
+            Reflections = "gfx.ssr", ReflectionMode = "gfx.ssr.mode", ReflectionDistance = "gfx.ssr.distance", ReflectionSamples = "gfx.ssr.samples", ReflectionBounces = "gfx.ssr.bounces",
+            Lighting = "gfx.gi", LightingMode = "gfx.gi.mode", LightingDistance = "gfx.gi.distance", LightingSamples = "gfx.gi.samples", LightingBounces = "gfx.gi.bounces",
             Occlusion = "gfx.ao", OcclusionDistance = "gfx.ao.distance", OcclusionSamples = "gfx.ao.samples",
             AntiAliasing = "gfx.aa", TaaQuality = "gfx.taa.quality", DlssScale = "gfx.dlss.scale", DlssSharpness = "gfx.dlss.sharpness",
             MotionBlurAmount = "gfx.motionblur";
@@ -23,6 +23,10 @@ namespace SpectreEX
         public const int AaOff = 0, AaTaa = 1, AaDlss = 2;
         public static readonly string[] AaNames = { "None", "TAA", "DLSS" };
         public static readonly string[] TaaNames = { "Low", "Medium", "High" };
+        // GI Mode and Reflect Mode: Full traces every ray; Mixed takes what it can from the picture on screen
+        // and traces only what that misses, which costs far less when a wall or debris fills the view
+        public const int TraceFull = 0, TraceMixed = 1;
+        public static readonly string[] TraceModeNames = { "Full", "Mixed" };
         const int CustomQuality = 3;                                               // past the Low-Medium-High tiers
 
         public static readonly string[] ModeNames = { "Windowed", "Borderless", "Fullscreen" };
@@ -67,12 +71,12 @@ namespace SpectreEX
         public static void Set(string key, int value)
         {
             values[key] = value;
-            PlayerPrefs.SetInt(key, value);
-            PlayerPrefs.Save();
+            Prefs.SetInt(key, value);
+            Prefs.Save();
             Apply();
         }
 
-        static void Default(string key, int value) => values[key] = PlayerPrefs.GetInt(key, value);
+        static void Default(string key, int value) => values[key] = Prefs.GetInt(key, value);
 
         // Every size the display offers from 640x480 up, smallest first
         public static List<Vector2Int> Resolutions()
@@ -91,16 +95,16 @@ namespace SpectreEX
 
         public static void SetResolution(Vector2Int size)
         {
-            PlayerPrefs.SetInt("gfx.width", size.x);
-            PlayerPrefs.SetInt("gfx.height", size.y);
-            PlayerPrefs.Save();
+            Prefs.SetInt("gfx.width", size.x);
+            Prefs.SetInt("gfx.height", size.y);
+            Prefs.Save();
             Screen.SetResolution(size.x, size.y, Screen.fullScreenMode);
         }
 
         public static void SetMode(int index)
         {
-            PlayerPrefs.SetInt("gfx.mode", index);
-            PlayerPrefs.Save();
+            Prefs.SetInt("gfx.mode", index);
+            Prefs.Save();
             Screen.fullScreenMode = Modes[index];
         }
 
@@ -126,8 +130,8 @@ namespace SpectreEX
         public static void SetQuality(string name)
         {
             int index = System.Array.IndexOf(QualitySettings.names, name);
-            PlayerPrefs.SetInt("gfx.quality", index);
-            PlayerPrefs.Save();
+            Prefs.SetInt("gfx.quality", index);
+            Prefs.Save();
             ApplyQuality(index);
             Apply();
         }
@@ -135,10 +139,10 @@ namespace SpectreEX
         // At startup: what was chosen last time, or the project's own settings if nothing was
         public static void Load()
         {
-            if (PlayerPrefs.HasKey("gfx.quality")) ApplyQuality(PlayerPrefs.GetInt("gfx.quality"));
+            if (Prefs.HasKey("gfx.quality")) ApplyQuality(Prefs.GetInt("gfx.quality"));
             ReadDefaults();
-            if (PlayerPrefs.HasKey("gfx.mode")) Screen.fullScreenMode = Modes[Mathf.Clamp(PlayerPrefs.GetInt("gfx.mode"), 0, Modes.Length - 1)];
-            if (PlayerPrefs.HasKey("gfx.width")) Screen.SetResolution(PlayerPrefs.GetInt("gfx.width"), PlayerPrefs.GetInt("gfx.height"), Screen.fullScreenMode);
+            if (Prefs.HasKey("gfx.mode")) Screen.fullScreenMode = Modes[Mathf.Clamp(Prefs.GetInt("gfx.mode"), 0, Modes.Length - 1)];
+            if (Prefs.HasKey("gfx.width")) Screen.SetResolution(Prefs.GetInt("gfx.width"), Prefs.GetInt("gfx.height"), Screen.fullScreenMode);
             DynamicResolutionHandler.SetDynamicResScaler(RenderScale, DynamicResScalePolicyType.ReturnsPercentage);
             Apply();
         }
@@ -149,9 +153,11 @@ namespace SpectreEX
         // NVIDIA's own level nearest the render scale, for its tuning
         static uint DlssLevel(int percent) => percent >= 100 ? 4u : percent >= 66 ? 2u : percent >= 58 ? 1u : percent >= 50 ? 0u : 3u;
 
+        // The owner's defaults (2026-11-09), set here rather than in the hand-tuned volume.
+        // Ray tracing starts off where the machine can't do it.
         static void ReadDefaults()
         {
-            Default(RayTracing, 1);
+            Default(RayTracing, SystemInfo.supportsRayTracing ? 1 : 0);
             Default(Shadows, 1);
             Default(Skybox, 0);
             Default(SkyBrightness, 100);
@@ -161,34 +167,36 @@ namespace SpectreEX
             {
                 reflectionTier = reflections.quality.value;
                 Default(Reflections, reflections.enabled.value ? 1 : 0);
-                Default(ReflectionDistance, Mathf.RoundToInt(reflections.rayLength));
-                Default(ReflectionSamples, reflections.sampleCount.value);
-                Default(ReflectionBounces, reflections.bounceCount.value);
+                Default(ReflectionMode, TraceFull);
+                Default(ReflectionDistance, 200);
+                Default(ReflectionSamples, 4);
+                Default(ReflectionBounces, 2);
             }
             if (profile != null && profile.TryGet<GlobalIllumination>(out var lighting))
             {
                 lightingTier = lighting.quality.value;
                 Default(Lighting, lighting.enable.value ? 1 : 0);
-                Default(LightingDistance, Mathf.RoundToInt(lighting.rayLength));
-                Default(LightingSamples, lighting.sampleCount.value);
-                Default(LightingBounces, lighting.bounceCount.value);
+                Default(LightingMode, TraceFull);
+                Default(LightingDistance, 100);
+                Default(LightingSamples, 4);
+                Default(LightingBounces, 2);
             }
             if (profile != null && profile.TryGet<ScreenSpaceAmbientOcclusion>(out var occlusion))
             {
                 occlusionTier = occlusion.quality.value;
                 occlusionIntensity = occlusion.intensity.value;
                 Default(Occlusion, 1);
-                Default(OcclusionDistance, Mathf.RoundToInt(occlusion.rayLength));
-                Default(OcclusionSamples, occlusion.sampleCount);
+                Default(OcclusionDistance, 50);
+                Default(OcclusionSamples, 8);
             }
             var camera = Camera();
             if (camera != null) plainClear = camera.clearColorMode;
             int aa = camera != null && camera.allowDeepLearningSuperSampling ? AaDlss : camera != null && camera.antialiasing == HDAdditionalCameraData.AntialiasingMode.None ? AaOff : AaTaa;
             Default(AntiAliasing, aa);
             Default(TaaQuality, camera != null ? (int)camera.TAAQuality : 1);
-            Default(DlssScale, 60);
+            Default(DlssScale, 65);
             Default(DlssSharpness, 0);
-            Default(MotionBlurAmount, 50);                                         // HDRP's own 0.5, the default volume's
+            Default(MotionBlurAmount, 0);
         }
 
         // The vSync choice stays as it is whichever level is picked: a level's own setting would change it
@@ -306,7 +314,7 @@ namespace SpectreEX
             if (profile != null && profile.TryGet<ScreenSpaceReflection>(out var reflections))
             {
                 reflections.enabled.Override(On(Reflections));
-                reflections.tracing.Override(mode);
+                reflections.tracing.Override(tracing && Get(ReflectionMode) == TraceMixed ? RayCastingMode.Mixed : mode);
                 reflections.quality.Override(tracing ? CustomQuality : reflectionTier);
                 reflections.rayLength = Get(ReflectionDistance);
                 reflections.sampleCount.Override(Get(ReflectionSamples));
@@ -317,7 +325,7 @@ namespace SpectreEX
             if (profile != null && profile.TryGet<GlobalIllumination>(out var lighting))
             {
                 lighting.enable.Override(On(Lighting));
-                lighting.tracing.Override(mode);
+                lighting.tracing.Override(tracing && Get(LightingMode) == TraceMixed ? RayCastingMode.Mixed : mode);
                 lighting.quality.Override(tracing ? CustomQuality : lightingTier);
                 lighting.rayLength = Get(LightingDistance);
                 lighting.sampleCount.Override(Get(LightingSamples));
