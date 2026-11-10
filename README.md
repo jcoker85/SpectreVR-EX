@@ -212,6 +212,10 @@ to the original's intent".
 
 ## Building it yourself
 
+> **Note:** a build made from this repository has no star skybox. The skybox in the release comes from an
+> Asset Store package that can't be shared here, so the Skybox setting does nothing unless you import the
+> package yourself (step 1 below). Everything else is the same as the release.
+
 ### What you need
 
 - **Unity 6.3** (6000.3.28f1) with Windows build support, from the Unity Hub.
@@ -221,10 +225,20 @@ to the original's intent".
   [GeneralUser GS](https://schristiancollins.com/generaluser.php) SoundFont (unzipped into
   `Tools/GeneralUser-GS`). Without them, the game builds and plays with no music. A release build copies
   both into its `Setup` folder.
+- **For the star skybox:** the free [Real Stars Skybox Lite](https://assetstore.unity.com/packages/3d/environments/sci-fi/real-stars-skybox-lite-116333)
+  package from the Unity Asset Store, imported into the project. Its licence doesn't allow it in a public
+  repository, so it isn't included. **Build Windows EXE** copies its plain-stars cubemap into
+  `Assets/Resources/Skybox`, which git ignores. Without it, the Skybox setting does nothing.
 
 ### Steps
 
 1. Clone the repository and open it in Unity 6.3.
+   - For the star skybox, add [Real Stars Skybox Lite](https://assetstore.unity.com/packages/3d/environments/sci-fi/real-stars-skybox-lite-116333)
+     to your Unity account. Then, in **Window > Package Manager > My Assets**, download it and import it. It
+     goes into `Assets/Real Stars Skybox`, which git ignores. **Build Windows EXE** copies
+     `StarSkybox04/CubemapStars.cubemap` from it to `Assets/Resources/Skybox/Stars.cubemap`, where the game
+     loads it. To see the skybox in the editor before your first build, copy that file there yourself. If
+     the package isn't imported, everything still builds and runs, and the Skybox setting does nothing.
 2. Run **Spectre VR-EX > Build Arena Scene** once. It generates the `Setup` and `Arena` scenes, prefabs,
    materials and meshes. Re-run it whenever `Assets/Editor/ArenaBuilder.cs` changes.
 3. Import your game data: run **Spectre VR-EX > Import Original Game...** and choose your Spectre VR folder.
@@ -269,10 +283,11 @@ the original game, and not the third-party works below, which keep their own lic
   setup.
 - **GeneralUser GS** by S. Christian Collins is the SoundFont the soundtrack is rendered with.
 - **DSEG** by Keshikan (SIL Open Font License 1.1) is the font of the HUD and menus.
-- The **star skybox** (`Assets/Resources/Skybox/Stars.cubemap`) is made from the HYG star database by David
-  Nash ([astronexus.com](https://astronexus.com)), licensed under
-  [CC BY-SA 2.5](https://creativecommons.org/licenses/by-sa/2.5/). The skybox is shared under the same
-  licence.
+- The **star skybox** in the release is from **Real Stars Skybox Lite**, a free package on the Unity Asset
+  Store, used under the Asset Store licence. Its stars come from the HYG star database by David Nash
+  ([astronexus.com](https://astronexus.com)), licensed under
+  [CC BY-SA 2.5](https://creativecommons.org/licenses/by-sa/2.5/). It isn't in this repository: see
+  [Building it yourself](#building-it-yourself).
 - Built with **Unity** and the High Definition Render Pipeline. The Unity runtime includes **NVIDIA DLSS**
   and Microsoft **DirectML**.
 

@@ -79,7 +79,7 @@ What stays faithful:
 Git and files:
 
 - Commit only when the owner asks, and push only when told to, each time. Work goes straight on `main`.
-- Commit only your own files. Leave `Spectre VR DOS.lnk`, `Spectre VR-EX.lnk` and `Assets/Real Stars Skybox` uncommitted, and leave the owner's own settings changes alone unless told otherwise.
+- Commit only your own files. Leave `Spectre VR DOS.lnk`, `Spectre VR-EX.lnk`, `Assets/Real Stars Skybox` and `Assets/Resources/Skybox` (an Asset Store asset, which the licence keeps out of a public repo; `BuildTools.EnsureSkybox` copies it from the package) uncommitted, and leave the owner's own settings changes alone unless told otherwise.
 - Never regenerate `Assets/Settings/ArenaVolume.asset`, which is hand-tuned. At runtime, change a copy through `vol.profile`.
 - `git status` before running Build Arena Scene: it can overwrite uncommitted generated assets.
 - Back up before bulk or unfamiliar file operations. Ask before downloading any binary, and don't `pip install` without asking.

@@ -30,9 +30,10 @@ DSEG14 Classic by Keshikan, used for the HUD and menus. SIL Open Font License 1.
 
 ## Star skybox
 
-The star skybox (`Assets/Resources/Skybox/Stars.cubemap`) is made from the HYG star database by David Nash
-(<https://astronexus.com>), licensed under CC BY-SA 2.5 (<https://creativecommons.org/licenses/by-sa/2.5/>).
-The skybox is shared under the same licence.
+The star skybox built into the game is the plain-stars cubemap from Real Stars Skybox Lite, a free package on
+the Unity Asset Store, used under the Unity Asset Store End User License Agreement. Its stars come from the
+HYG star database by David Nash (<https://astronexus.com>), licensed under CC BY-SA 2.5
+(<https://creativecommons.org/licenses/by-sa/2.5/>).
 
 ## Unity
 

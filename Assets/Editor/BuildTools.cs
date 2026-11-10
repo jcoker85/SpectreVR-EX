@@ -35,6 +35,7 @@ namespace SpectreEX.EditorTools
         {
             string problem = OriginalDataInAssets();
             if (problem != null) { Finish("Spectre VR-EX build refused: " + problem, false); return; }
+            string sky = EnsureSkybox();
 
             var options = new BuildPlayerOptions
             {
@@ -54,7 +55,7 @@ namespace SpectreEX.EditorTools
             {
                 foreach (var dir in Directory.GetDirectories(OutputDir, "*DoNotShip"))
                     Directory.Delete(dir, true);
-                var notes = new List<string> { line };
+                var notes = new List<string> { line, sky };
                 notes.Add(CopyExtras());
                 problem = OriginalDataInBuild();
                 if (problem != null) { Finish(string.Join("\n", notes) + "\nRelease check FAILED: " + problem, false); return; }
@@ -78,6 +79,27 @@ namespace SpectreEX.EditorTools
             if (Directory.Exists("Assets/Meshes")) found.AddRange(Directory.GetFiles("Assets/Meshes", "Spectre_*.asset"));
             return found.Count == 0 ? null :
                 "these hold data imported from the original game and would be built in; move them out of Assets: " + string.Join(", ", found);
+        }
+
+        // The star skybox (GraphicsOptions loads Resources/Skybox/Stars) is the plain-stars cubemap from the
+        // free Unity Asset Store package Real Stars Skybox Lite. The Asset Store licence lets a game ship it but
+        // not a public repository, so it's git-ignored: import the package and the build copies the cubemap in.
+        // Without it the game builds and runs with the skybox setting doing nothing.
+        public const string SkyboxPath = "Assets/Resources/Skybox/Stars.cubemap";
+        const string SkyboxPackageCubemap = "Assets/Real Stars Skybox/StarSkybox04/CubemapStars.cubemap";
+
+        static string EnsureSkybox()
+        {
+            if (File.Exists(SkyboxPath)) return "Skybox: " + SkyboxPath;
+            if (File.Exists(SkyboxPackageCubemap))
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(SkyboxPath));
+                AssetDatabase.Refresh();
+                if (AssetDatabase.CopyAsset(SkyboxPackageCubemap, SkyboxPath)) return "Skybox: copied from Real Stars Skybox Lite";
+            }
+            const string none = "WARNING: no star skybox (import the free Real Stars Skybox Lite package from the Unity Asset Store)";
+            Debug.LogWarning("Spectre VR-EX: " + none);
+            return none;
         }
 
         // FluidSynth and the SoundFont the first-run setup uses, and the licences

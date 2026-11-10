@@ -166,4 +166,8 @@ SPCP*.DAT
 # The owner's local-only files: an Asset Store skybox pack (not redistributable) and shortcuts
 /Assets/Real Stars Skybox/
 /Assets/Real Stars Skybox.meta
+# The star skybox copied from that package (BuildTools.EnsureSkybox): the Asset Store licence allows it in
+# a build, not in a public repository
+/Assets/Resources/Skybox/
+/Assets/Resources/Skybox.meta
 *.lnk
