@@ -29,6 +29,8 @@ namespace SpectreEX
     // does with _ADD_SHAPE - with a collider round the exact bounds (_CUBE_COLLIDE).
     public static class RobotFactory
     {
+        const float FlatLift = 0.07f;
+
         public static Robot Build(int type, ShapeSet shapes, RobotLook look, float edgeThickness)
         {
             var parts = Parts(type, shapes);
@@ -77,6 +79,10 @@ namespace SpectreEX
                 b.center += part.offset;
                 if (i == 0) bounds = b; else bounds.Encapsulate(b);
             }
+
+            // Flat robots (Smart Acid, Cyber Mud) lie at height 0: drawn just above the floor, or they'd
+            // z-fight it, and above the floor pads (0.04), dumps (0.06) and jump pads they can cross
+            if (bounds.size.y < 0.01f) model.localPosition = Vector3.up * FlatLift;
 
             col.center = bounds.center;
             col.size = Vector3.Max(bounds.size, Vector3.one * 0.6f);

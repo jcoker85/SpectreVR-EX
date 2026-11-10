@@ -69,7 +69,8 @@ namespace SpectreEX
     }
 
     // The keyboard, mouse and gamepad controls, set on the Controls page behind Shift + Options. The
-    // defaults are the original's keys and the modern ones together. Esc and the menus' own keys stay fixed.
+    // keyboard defaults are the owner's layout, keeping the original's numpad keys. Esc and the menus' own
+    // keys stay fixed.
     public static class GameKeys
     {
         public const int Slots = 3;
@@ -85,33 +86,37 @@ namespace SpectreEX
             "Start", "Select",
         };
         const int PadA = 1, PadB = 2, PadX = 3, PadY = 4, PadLB = 5, PadRB = 6, PadRT = 8,
-            PadLSUp = 9, PadLSDown = 10, PadLSLeft = 11, PadLSRight = 12;
+            PadLSUp = 9, PadLSDown = 10, PadLSLeft = 11, PadLSRight = 12, PadStart = 23, PadSelect = 24;
 
         static GameKey New(string label, params Key[] keys) => new GameKey(label, Array.ConvertAll(keys, k => (int)k));
 
+        // The keyboard defaults are the owner's layout (2026-11-09): WASD with QEZC for the diagonals,
+        // numpad as the original's, F to jump, R / T to look aside, V for the next view
         public static readonly GameKey
-            Forward = New("FORWARD", Key.W, Key.UpArrow, Key.Numpad8).Pad(PadLSUp),
-            Back = New("BACK", Key.S, Key.DownArrow, Key.Numpad2).Pad(PadLSDown),
-            TurnLeft = New("TURN LEFT", Key.A, Key.LeftArrow, Key.Numpad4).Pad(PadLSLeft),
-            TurnRight = New("TURN RIGHT", Key.D, Key.RightArrow, Key.Numpad6).Pad(PadLSRight),
-            ForwardLeft = New("FORWARD LEFT", Key.Numpad7, Key.Home),
-            ForwardRight = New("FORWARD RIGHT", Key.Numpad9, Key.PageUp),
-            BackLeft = New("BACK LEFT", Key.Numpad1, Key.End),
-            BackRight = New("BACK RIGHT", Key.Numpad3, Key.PageDown),
+            Forward = New("FORWARD", Key.W, Key.Numpad8).Pad(PadLSUp),
+            Back = New("BACK", Key.S, Key.Numpad2).Pad(PadLSDown),
+            TurnLeft = New("TURN LEFT", Key.A, Key.Numpad4).Pad(PadLSLeft),
+            TurnRight = New("TURN RIGHT", Key.D, Key.Numpad6).Pad(PadLSRight),
+            ForwardLeft = New("FORWARD LEFT", Key.Q, Key.Numpad7),
+            ForwardRight = New("FORWARD RIGHT", Key.E, Key.Numpad9),
+            BackLeft = New("BACK LEFT", Key.Z, Key.Numpad1),
+            BackRight = New("BACK RIGHT", Key.C, Key.Numpad3),
             Fire = new GameKey("FIRE", (int)Key.Space, (int)Key.Numpad0, MouseLeft).Pad(PadRT, PadA),
-            HeavyWeapon = New("HEAVY WEAPON", Key.LeftAlt, Key.RightAlt).Pad(PadX),
+            HeavyWeapon = New("HEAVY WEAPON", Key.Tab).Pad(PadX),
             NextWeapon = New("NEXT WEAPON", Key.LeftCtrl, Key.RightCtrl).Pad(PadLB, PadRB),
-            Hyperspace = New("HYPERSPACE", Key.Backspace, Key.Backquote).Pad(PadY),
-            Jump = new GameKey("JUMP", (int)Key.J, (int)Key.Numpad5, MouseRight).Pad(PadB),
-            LookLeft = New("LOOK LEFT", Key.LeftShift),
-            LookRight = New("LOOK RIGHT", Key.RightShift),
-            NextView = New("NEXT VIEW", Key.Tab, Key.NumpadMultiply),
+            Hyperspace = New("HYPERSPACE", Key.LeftAlt).Pad(PadY),
+            Jump = new GameKey("JUMP", (int)Key.F, (int)Key.Numpad5, MouseRight).Pad(PadB),
+            LookLeft = New("LOOK LEFT", Key.R),
+            LookRight = New("LOOK RIGHT", Key.T),
+            NextView = New("NEXT VIEW", Key.V, Key.NumpadMultiply),
             ZoomIn = New("ZOOM IN", Key.Equals, Key.NumpadPlus),
             ZoomOut = New("ZOOM OUT", Key.Minus, Key.NumpadMinus),
-            Pause = New("PAUSE", Key.P),
+            Pause = New("PAUSE", Key.P).Pad(PadStart),
+            // Esc's job, ending the game the original's way; Esc itself stays fixed, so this is for a pad
+            QuitGame = New("QUIT GAME").Pad(PadSelect),
             Sound = New("SOUND", Key.F2),
             FloorDots = New("FLOOR DOTS", Key.F3),
-            Wire = New("WIRE", Key.F),
+            Wire = New("WIRE", Key.F4),
             Textures = New("TEXTURES", Key.F5),
             Movies = New("MOVIES", Key.F6),
             Music = New("MUSIC", Key.M);
@@ -131,7 +136,7 @@ namespace SpectreEX
         {
             var all = new List<GameKey> { Forward, Back, TurnLeft, TurnRight, ForwardLeft, ForwardRight, BackLeft, BackRight, Fire, HeavyWeapon, NextWeapon };
             all.AddRange(Weapons);
-            all.AddRange(new[] { Hyperspace, Jump, LookLeft, LookRight, NextView, ZoomIn, ZoomOut, Pause, Sound, FloorDots, Wire, Textures, Movies, Music });
+            all.AddRange(new[] { Hyperspace, Jump, LookLeft, LookRight, NextView, ZoomIn, ZoomOut, Pause, QuitGame, Sound, FloorDots, Wire, Textures, Movies, Music });
             return all;
         }
 

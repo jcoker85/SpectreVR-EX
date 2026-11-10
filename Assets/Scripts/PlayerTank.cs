@@ -20,6 +20,7 @@ namespace SpectreEX
             Shields = GetComponent<PlayerShields>();
             if (Shields == null) Shields = gameObject.AddComponent<PlayerShields>();
             if (GetComponent<PlayerModel>() == null) gameObject.AddComponent<PlayerModel>();
+            if (GetComponent<MouseLook>() == null) gameObject.AddComponent<MouseLook>();
         }
 
         public void ResetForLife()

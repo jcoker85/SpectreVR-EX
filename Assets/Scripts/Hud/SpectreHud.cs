@@ -42,7 +42,9 @@ namespace SpectreEX.Hud
         readonly List<Text> recapWords = new List<Text>();
         readonly List<RecapWedge> recapWedges = new List<RecapWedge>();
         readonly Dictionary<RectTransform, Vector2> fullSizes = new Dictionary<RectTransform, Vector2>();
-        RectTransform damageGroup, gameOverRoot, radarCornerRoot, bannerTitleRoot;
+        RectTransform damageTop, damageBottom, damageRight;
+        int damageBarFor = -1;
+        RectTransform damageGroup, gameOverRoot, gameOverWords, radarCornerRoot, bannerTitleRoot;
         Image hFillImg;
         Vector2 crosshairAt, radarAt;
         readonly List<Text> radarLetters = new List<Text>();
@@ -91,8 +93,12 @@ namespace SpectreEX.Hud
             // The bars are as long as the craft's capacity (_SETUP_SCN, _SHOW_SCORE)
             damageGroup = NewRect("Damage", left);
             damageGroup.anchoredPosition = new Vector2(66f, 0f);
-            Frame(damageGroup, 0, r2 - 6, 50, 12, FrameWhite);
-            damageFill = Fill(damageGroup, 1.5f, r2 - 4.5f, 47, 9, AlertRed, out _, horizontal: true);
+            // Its frame's long sides and right end are kept to stretch with the capacity
+            damageTop = Rect(damageGroup, 0, r2 - 6, DamageBarPerPoint * 60, 1, FrameWhite).rectTransform;
+            damageBottom = Rect(damageGroup, 0, r2 + 5, DamageBarPerPoint * 60, 1, FrameWhite).rectTransform;
+            Rect(damageGroup, 0, r2 - 6, 1, 12, FrameWhite);
+            damageRight = Rect(damageGroup, DamageBarPerPoint * 60 - 1, r2 - 6, 1, 12, FrameWhite).rectTransform;
+            damageFill = Fill(damageGroup, 1.5f, r2 - 4.5f, DamageBarPerPoint * 60 - 3, 9, AlertRed, out _, horizontal: true);
             ammoFill = Fill(left, 66, r3 - 5, MaxAmmoBar, 10, DigitGreen, out ammoFillImg, horizontal: true);
             ammoValue = Value(left, 96, r3);
 
@@ -167,7 +173,15 @@ namespace SpectreEX.Hud
             bannerRoot.SetActive(false);
 
             gameOverRoot = NewRect("GameOver", centre);
-            gameOver = MakeText(gameOverRoot, "GAME OVER", 0, 0, 54, DigitGreen, TextAnchor.MiddleCenter);
+            // _SPIN_UP's _ERASE_BOTTOM: the view goes black behind the words, as the recap's does
+            var overBlank = new GameObject("Blank", typeof(RectTransform)).AddComponent<Image>();
+            overBlank.transform.SetParent(gameOverRoot, false);
+            overBlank.color = Color.black;
+            overBlank.raycastTarget = false;
+            overBlank.rectTransform.anchorMin = overBlank.rectTransform.anchorMax = overBlank.rectTransform.pivot = new Vector2(0.5f, 0.5f);
+            overBlank.rectTransform.sizeDelta = new Vector2(8000f, 8000f);
+            gameOverWords = NewRect("Words", gameOverRoot);
+            gameOver = MakeText(gameOverWords, "GAME OVER", 0, 0, 54, DigitGreen, TextAnchor.MiddleCenter);
             gameOverRoot.gameObject.SetActive(false);
 
             var stats = NewRect("Stats", centre);
@@ -271,6 +285,21 @@ namespace SpectreEX.Hud
             return img;
         }
 
+        // _SHOW_SCORE draws the damage bar a pixel a point, _MAX_DAMAGE long, so every craft's points are
+        // the same length and a stronger craft's bar is longer. Sized rather than scaled, so the frame's
+        // ends stay one pixel wide. Balance's 60 points are the 50 the bar was drawn at.
+        const float DamageBarPerPoint = 50f / 60f;
+
+        void SizeDamageBar(int points)
+        {
+            damageBarFor = points;
+            float w = DamageBarPerPoint * points;
+            damageTop.sizeDelta = new Vector2(w, damageTop.sizeDelta.y);
+            damageBottom.sizeDelta = new Vector2(w, damageBottom.sizeDelta.y);
+            damageRight.anchoredPosition = new Vector2(w - 1f, damageRight.anchoredPosition.y);
+            fullSizes[damageFill] = new Vector2(w - 3f, fullSizes[damageFill].y);
+        }
+
         void Frame(RectTransform parent, float x, float y, float w, float h, Color c, float t = 1f)
         {
             Rect(parent, x, y, w, t, c);
@@ -364,12 +393,12 @@ namespace SpectreEX.Hud
             {
                 spinStart = SimClock.Ticks;
                 spinning = true;
-                ShowSpin(gameOverRoot, 0f);
+                ShowSpin(gameOverWords, 0f);
             }
             else if (step < 0)
             {
                 spinning = false;
-                ShowSpin(gameOverRoot, 32f);
+                ShowSpin(gameOverWords, 32f);
             }
         }
 
@@ -430,7 +459,7 @@ namespace SpectreEX.Hud
         void Update()
         {
             if (spinning && gameOverRoot.gameObject.activeSelf)
-                ShowSpin(gameOverRoot, Mathf.Min(SimClock.Ticks - spinStart + SimClock.TickFraction, 32f));
+                ShowSpin(gameOverWords, Mathf.Min(SimClock.Ticks - spinStart + SimClock.TickFraction, 32f));
             if (titleSpinning && bannerRoot.activeSelf)
                 ShowSpin(bannerTitleRoot, Mathf.Min(SimClock.Ticks - titleStart + SimClock.TickFraction, 32f));
             if (gm == null || gm.player == null) return;
@@ -441,7 +470,7 @@ namespace SpectreEX.Hud
             levelValue.text = gm.Level.ToString("00");
             timeValue.text = gm.Bonus.ToString("0000");   // the original shows the bonus counting down
 
-            damageGroup.localScale = new Vector3(p.Health.maxShields / 60f, 1f, 1f);
+            if (damageBarFor != p.Health.maxShields) SizeDamageBar(p.Health.maxShields);
             SetFill(damageFill, p.Health.Damage01, true);
             int ammo = p.Weapon.Ammo;
             SetFill(ammoFill, ammo / 50f, true);
@@ -457,7 +486,7 @@ namespace SpectreEX.Hud
             // The bounce shake reaches the radar and crosshair, always the one way (_SHOW_RADAR)
             var shake = new Vector2(-Mathf.Abs(p.Motor.CenterX), -Mathf.Abs(p.Motor.CenterY)) * 2.4f;
             radarCornerRoot.anchoredPosition = radarAt + shake;
-            ((RectTransform)crosshair.transform).anchoredPosition = crosshairAt + shake;
+            ((RectTransform)crosshair.transform).anchoredPosition = CrosshairAt(p, view) + shake;
 
             // The heavy weapon's icon, and "<name> Online" for three seconds after a change, as the original shows
             if (weaponIcon != null && shownWeapon != p.Weapon.AltWeapon)
@@ -472,9 +501,31 @@ namespace SpectreEX.Hud
 
             demoRoot.SetActive(gm.Demo && gm.Playing);
             radarRoot.parent.gameObject.SetActive(view == null || view.mode == ViewMode.Internal || view.mode == ViewMode.External);   // _SHOW_RADAR
-            if (crosshair != null) crosshair.SetActive(view == null || view.mode == ViewMode.Internal);
+            // The cockpit's only, as in the original; hidden while the mouse looks away from where shots go
+            if (crosshair != null)
+                crosshair.SetActive((view == null || view.mode == ViewMode.Internal) && crosshairShown);
 
             UpdateRadar(p.transform);
+        }
+
+        const float AimMark = 500f;   // metres out along the shots' path, where the crosshair is put
+        bool crosshairShown = true;
+
+        // Where the crosshair sits: the view's centre, unless the mouse has turned the cockpit view away
+        // from the shots' path (Free aiming down, where shots still fly level; Spectator looking round),
+        // when it stays over the path, or goes while the path is out of sight
+        Vector2 CrosshairAt(PlayerTank p, ViewCamera view)
+        {
+            crosshairShown = true;
+            if (view == null || view.mode != ViewMode.Internal || !(MouseLook.Aiming || MouseLook.Spectating)) return crosshairAt;
+            var cam = view.GetComponent<Camera>();
+            if (cam == null) return crosshairAt;
+            Vector3 path = Quaternion.Euler(-MouseLook.ShotPitch, p.transform.eulerAngles.y + (MouseLook.Aiming ? p.Motor.MouseLead : 0f), 0f) * Vector3.forward;
+            Vector3 screen = cam.WorldToScreenPoint(cam.transform.position + path * AimMark);
+            crosshairShown = screen.z > 0f && screen.x >= 0f && screen.x <= Screen.width && screen.y >= 0f && screen.y <= Screen.height;
+            if (!crosshairShown) return crosshairAt;
+            float perPixel = 480f / Screen.height;   // the canvas is 480 high
+            return new Vector2((screen.x - Screen.width * 0.5f) * perPixel, (screen.y - Screen.height * 0.5f) * perPixel);
         }
 
         void UpdateRadar(Transform me)

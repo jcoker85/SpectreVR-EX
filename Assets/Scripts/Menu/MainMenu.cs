@@ -36,6 +36,7 @@ namespace SpectreEX.Menu
             public Image tint;              // optional darkening shown on hover
             public Key key = Key.None;
             public System.Action rightClick;
+            public System.Func<bool> live;  // optional: when false the spot is ignored (a hidden section)
         }
 
         class MenuScreen
@@ -715,6 +716,7 @@ namespace SpectreEX.Menu
                     Pop();
                     pickChosen(chosen);
                     graphics.refresh();
+                    controls.refresh();
                 }, Key.None, glow);
             }
             pick.refresh = () =>
@@ -771,7 +773,7 @@ namespace SpectreEX.Menu
 
         const float KeyBoxX = 156, KeyBoxW = 98, KeyBoxStep = 101;
         int keysTop;
-        bool padSection;
+        bool padSection, mouseSection;
         GameKey capturing;
         int capturingSlot, capturingFrame;
 
@@ -781,6 +783,8 @@ namespace SpectreEX.Menu
             controls = SettingsScreen("Controls");
             var labels = new List<PixelSegmentText>();
             var boxes = new List<PixelSegmentText[]>();
+            var keyFrames = new List<Image>();
+            System.Func<bool> keysLive = () => !mouseSection;
             for (int i = 0; i < SettingRows; i++)
             {
                 int row = i;
@@ -791,7 +795,7 @@ namespace SpectreEX.Menu
                 {
                     int slot = j;
                     var r = new Rect(KeyBoxX + j * KeyBoxStep, y - 2, KeyBoxW, 26);
-                    Frame(controls, r, SegGreen, 1f);
+                    keyFrames.AddRange(Frame(controls, r, SegGreen, 1f));
                     line[j] = AddText(controls, new Rect(r.x, y, r.width, 22), 9, SegGreen, TextAnchor.MiddleCenter);
                     var box = Button(controls, r, () =>
                     {
@@ -805,46 +809,130 @@ namespace SpectreEX.Menu
                         GameKeys.Clear(GameKeys.All[keysTop + row], slot, padSection);
                         controls.refresh();
                     };
+                    box.live = keysLive;
                 }
                 boxes.Add(line);
             }
-            var more = AddText(controls, new Rect(8, 270, SettingsW - 16, 14), 8, DimGreen, TextAnchor.MiddleCenter);
-            SettingsButton(controls, new Rect(190, 292, 100, 28), "DONE", Pop);
-            SettingsButton(controls, new Rect(358, 292, 100, 28), "DEFAULTS", () => { GameKeys.Reset(padSection); controls.refresh(); });
 
-            // The two sets of bindings share the rows; these pick which one they show
-            var sections = new List<(PixelSegmentText title, Image[] edges, bool pad)>();
-            void Section(string title, float x, bool pad)
+            // The MOUSE section: settings rows in the same places, a value box with - and + on each
+            var mouseRows = MouseRows();
+            var mouseFrames = new List<Image[]>();
+            var mouseValues = new List<PixelSegmentText>();
+            var mouseMinus = new List<PixelSegmentText>();
+            var mousePlus = new List<PixelSegmentText>();
+            System.Func<bool> mouseLive = () => mouseSection;
+            for (int i = 0; i < mouseRows.Count; i++)
+            {
+                int row = i;
+                float y = 44 + i * 32;
+                mouseFrames.Add(Frame(controls, new Rect(266, y - 2, 192, 26), SegGreen, 1f));
+                mouseValues.Add(AddText(controls, new Rect(300, y, 124, 22), 9, SegGreen, TextAnchor.MiddleCenter));
+                mouseMinus.Add(AddText(controls, new Rect(266, y, 34, 22), 10, SegGreen, TextAnchor.MiddleCenter));
+                mousePlus.Add(AddText(controls, new Rect(424, y, 34, 22), 10, SegGreen, TextAnchor.MiddleCenter));
+                void Press(int sign)
+                {
+                    var setting = mouseRows[row];
+                    if (setting.step != null) setting.step(sign == 0 ? 1 : sign);
+                    else setting.open();
+                    controls.refresh();
+                }
+                Button(controls, new Rect(266, y - 2, 34, 26), () => Press(-1), Key.None, glow).live = mouseLive;
+                Button(controls, new Rect(300, y - 2, 124, 26), () => Press(0), Key.None, glow).live = mouseLive;
+                Button(controls, new Rect(424, y - 2, 34, 26), () => Press(1), Key.None, glow).live = mouseLive;
+            }
+
+            var more = AddText(controls, new Rect(8, 270, SettingsW - 16, 14), 8, DimGreen, TextAnchor.MiddleCenter);
+            SettingsButton(controls, new Rect(276, 292, 80, 28), "DONE", Pop);
+            SettingsButton(controls, new Rect(366, 292, 92, 28), "DEFAULTS", () =>
+            {
+                if (mouseSection) ResetMouse();
+                else GameKeys.Reset(padSection);
+                controls.refresh();
+            });
+
+            // The sets of bindings share the rows; these pick which one they show
+            var sections = new List<(PixelSegmentText title, Image[] edges, int which)>();
+            int Shown() => mouseSection ? 2 : padSection ? 1 : 0;
+            void Section(string title, float x, int which)
             {
                 var r = new Rect(x, 292, 80, 28);
                 var t = AddText(controls, new Rect(r.x, r.y + 3, r.width, 22), 9, SegGreen, TextAnchor.MiddleCenter);
                 t.Text = Seg(title);
-                sections.Add((t, Frame(controls, r, SegGreen, 1f), pad));
-                Button(controls, r, () => { padSection = pad; controls.refresh(); }, Key.None, glow);
+                sections.Add((t, Frame(controls, r, SegGreen, 1f), which));
+                Button(controls, r, () =>
+                {
+                    padSection = which == 1;
+                    mouseSection = which == 2;
+                    capturing = null;
+                    controls.refresh();
+                }, Key.None, glow);
             }
-            Section("KEYBOARD", 22, false);
-            Section("GAMEPAD", 104, true);
+            Section("KEYBOARD", 22, 0);
+            Section("GAMEPAD", 104, 1);
+            Section("MOUSE", 186, 2);
 
             controls.refresh = () =>
             {
                 for (int i = 0; i < SettingRows; i++)
                 {
+                    if (mouseSection)
+                    {
+                        labels[i].Text = i < mouseRows.Count ? Seg(mouseRows[i].label) : "";
+                        for (int j = 0; j < GameKeys.Slots; j++) boxes[i][j].Text = "";
+                        continue;
+                    }
                     var action = GameKeys.All[keysTop + i];
                     labels[i].Text = Seg(action.label);
                     for (int j = 0; j < GameKeys.Slots; j++)
                         boxes[i][j].Text = Seg(action == capturing && j == capturingSlot ? "PRESS"
                             : padSection ? GameKeys.PadName(action.pads[j]) : GameKeys.Name(action.slots[j]));
                 }
-                foreach (var (title, edges, pad) in sections)
+                foreach (var edge in keyFrames) edge.enabled = !mouseSection;
+                for (int i = 0; i < mouseRows.Count; i++)
                 {
-                    title.color = pad == padSection ? SegGreen : DimGreen;
-                    foreach (var edge in edges) edge.enabled = pad == padSection;
+                    var setting = mouseRows[i];
+                    foreach (var edge in mouseFrames[i]) edge.enabled = mouseSection;
+                    mouseValues[i].Text = mouseSection ? Seg(setting.value()) : "";
+                    mouseMinus[i].Text = mouseSection && setting.step != null ? "-" : "";
+                    mousePlus[i].Text = mouseSection && setting.step != null ? "+" : "";
                 }
-                more.Text = Seg(capturing != null ? (padSection ? "PRESS A GAMEPAD INPUT  ESC CANCELS" : "PRESS A KEY OR BUTTON  ESC CANCELS")
+                foreach (var (title, edges, which) in sections)
+                {
+                    title.color = which == Shown() ? SegGreen : DimGreen;
+                    foreach (var edge in edges) edge.enabled = which == Shown();
+                }
+                more.Text = Seg(mouseSection ? MouseModeHelp[(int)MouseLook.Mode]
+                    : capturing != null ? (padSection ? "PRESS A GAMEPAD INPUT  ESC CANCELS" : "PRESS A KEY OR BUTTON  ESC CANCELS")
                     : padSection && !GameSettings.Joystick ? "TICK JOYSTICK IN OPTIONS TO USE THE GAMEPAD"
                     : "CLICK CHANGES  RIGHT CLICK CLEARS  WHEEL FOR MORE");
             };
             controls.onEscape = controls.onEnter = Pop;
+        }
+
+        // One line under the MOUSE rows on what the chosen mode does
+        static readonly string[] MouseModeHelp =
+        {
+            "THE MOUSE ONLY FIRES AND JUMPS",
+            "TURNS THE CRAFT  NO FASTER THAN THE KEYS",
+            "TURNS THE CRAFT  AS FAST AS THE MOUSE",
+            "TURNS THE CRAFT AND AIMS UP AND DOWN",
+            "LOOKS AROUND  THE KEYS DRIVE",
+        };
+
+        List<SettingRow> MouseRows() => new List<SettingRow>
+        {
+            Drop("MOUSE CONTROLS", () => MouseLook.ModeNames[(int)MouseLook.Mode], () => new List<string>(MouseLook.ModeNames),
+                () => (int)MouseLook.Mode, i => MouseLook.Mode = (MouseMode)i),
+            new SettingRow { label = "MOUSE SPEED", value = () => MouseLook.Speed.ToString(), step = sign => MouseLook.Speed += sign },
+            new SettingRow { label = "STICK SPEED", value = () => MouseLook.StickSpeed.ToString(), step = sign => MouseLook.StickSpeed += sign },
+            Drop("INVERT UP DOWN", () => MouseLook.Invert ? "On" : "Off", () => new List<string> { "On", "Off" },
+                () => MouseLook.Invert ? 0 : 1, i => MouseLook.Invert = i == 0),
+        };
+
+        static void ResetMouse()
+        {
+            foreach (var key in new[] { MouseLook.ModeKey, MouseLook.SpeedKey, MouseLook.StickKey, MouseLook.InvertKey }) PlayerPrefs.DeleteKey(key);
+            PlayerPrefs.Save();
         }
 
         // Waiting for the key to set: nothing else in the menu hears it, Esc included
@@ -891,6 +979,7 @@ namespace SpectreEX.Menu
             }
             else if (top == controls)
             {
+                if (mouseSection) return;
                 keysTop = Mathf.Clamp(keysTop + step, 0, GameKeys.All.Count - SettingRows);
                 controls.refresh();
             }
@@ -1352,7 +1441,7 @@ namespace SpectreEX.Menu
             Hotspot hovered = null;
             foreach (var h in top.hotspots)
             {
-                bool over = h.rect.width > 0 && h.rect.Contains(img) && h.action != null;
+                bool over = h.rect.width > 0 && h.rect.Contains(img) && h.action != null && (h.live == null || h.live());
                 if (over) hovered = h;
                 if (h.hover != null) h.hover.enabled = over;
                 if (h.tint != null) h.tint.enabled = over;

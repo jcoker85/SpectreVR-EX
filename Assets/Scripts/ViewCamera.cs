@@ -5,7 +5,7 @@ namespace SpectreEX
 {
     public enum ViewMode { Internal, External, Overhead, Map }
 
-    // Spectre's three views, cycled with Tab / numpad *: internal (cockpit), external (a level view
+    // Spectre's three views, cycled with Next View (the original's Tab / numpad *): internal (cockpit), external (a level view
     // from a fixed height behind the tank, trailing it) and overhead (from straight above, always the
     // same way up). + / - zoom the external and overhead views (_EYE_H). Each is where the original puts
     // it on every tick, drawn between ticks rather than jumping from one to the next.
@@ -140,8 +140,11 @@ namespace SpectreEX
             CraftHidden = mode == ViewMode.Internal && !dead;
             if (model != null) model.gameObject.SetActive(!CraftHidden);
 
-            // The craft's own transform is already drawn between its steps
-            Quaternion yaw = Quaternion.Euler(0f, target.eulerAngles.y, 0f);
+            // The craft's own transform is already drawn between its steps. With Free mouse aim the mouse's
+            // turn shows at once (PlayerMotor.MouseLead), as its up and down does; Spectator's look is the
+            // camera's alone, so it's already immediate, and the other modes turn on the craft's steps.
+            float lead = MouseLook.Aiming && motor != null ? motor.MouseLead : 0f;
+            Quaternion yaw = Quaternion.Euler(0f, target.eulerAngles.y + lead, 0f);
 
             // _DEAD_TIMER: 0x32 a tick from the tick the craft went, the view swinging round the wreck
             // from further and further up
@@ -162,10 +165,13 @@ namespace SpectreEX
             {
                 case ViewMode.Internal:
                 {
-                    // Shift looks to the side, both Shifts behind
+                    // Look Left / Right look to the side, both behind (the original's two Shifts)
                     bool left = GameKeys.LookLeft.Held, right = GameKeys.LookRight.Held;
                     float look = left ? (right ? 180f : -90f) : right ? 90f : 0f;
-                    transform.SetPositionAndRotation(target.position + yaw * cockpitOffset, yaw * Quaternion.Euler(0f, look, 0f));
+                    // The mouse's look (MouseLook): Free tilts up and down with the aim, Spectator turns anywhere
+                    float turnAside = MouseLook.Spectating ? MouseLook.LookYaw : 0f;
+                    float tilt = MouseLook.Aiming ? MouseLook.AimPitch : MouseLook.Spectating ? MouseLook.LookPitch : 0f;
+                    transform.SetPositionAndRotation(target.position + yaw * cockpitOffset, yaw * Quaternion.Euler(-tilt, look + turnAside, 0f));
                     break;
                 }
                 case ViewMode.Map:
@@ -177,13 +183,40 @@ namespace SpectreEX
                     var from = viewQueue[0];
                     var to = viewQueue[1];
                     float f = lastQueued == SimClock.Ticks ? SimClock.TickFraction : 1f;
-                    transform.SetPositionAndRotation(Vector3.Lerp(from.eye, to.eye, f), Quaternion.Euler(0f, Mathf.LerpAngle(from.yaw, to.yaw, f), 0f));
+                    Vector3 eye = Vector3.Lerp(from.eye, to.eye, f);
+                    Quaternion facing = Quaternion.Euler(0f, Mathf.LerpAngle(from.yaw, to.yaw, f), 0f);
+                    // Free mouse aim steers like a shooter's camera: straight behind the craft every frame,
+                    // the mouse's turn included, rather than trailing four ticks behind
+                    if (MouseLook.Aiming)
+                    {
+                        float aimYaw = target.eulerAngles.y + (motor != null ? motor.MouseLead : 0f);
+                        (eye, _) = ViewFrom(target.position, aimYaw);
+                        facing = Quaternion.Euler(0f, aimYaw, 0f);
+                    }
+                    Orbit(ref eye, ref facing);
+                    transform.SetPositionAndRotation(eye, facing);
                     break;
                 }
                 case ViewMode.Overhead:
                     transform.SetPositionAndRotation(new Vector3(target.position.x, overheadHeight, target.position.z), Quaternion.Euler(90f, 180f, 0f));
                     break;
             }
+        }
+
+        const float OrbitPivot = 0.5f, OrbitFloor = 0.3f;
+
+        // The mouse's look from behind (MouseLook): the view swings round the craft rather than turning in
+        // place, Free up and down with the aim, Spectator any way, never into the floor
+        void Orbit(ref Vector3 eye, ref Quaternion facing)
+        {
+            float across = MouseLook.Spectating ? MouseLook.LookYaw : 0f;
+            float up = MouseLook.Aiming ? MouseLook.AimPitch : MouseLook.Spectating ? MouseLook.LookPitch : 0f;
+            if (across == 0f && up == 0f) return;
+            Vector3 pivot = target.position + Vector3.up * OrbitPivot;
+            Quaternion orbit = Quaternion.AngleAxis(across, Vector3.up) * Quaternion.AngleAxis(-up, facing * Vector3.right);
+            eye = pivot + orbit * (eye - pivot);
+            eye.y = Mathf.Max(eye.y, OrbitFloor);
+            facing = orbit * facing;
         }
 
         void OnDestroy()

@@ -91,7 +91,9 @@ namespace SpectreEX
 
         void SetAlive(bool alive)
         {
-            foreach (var r in GetComponentsInChildren<Renderer>())
+            // Inactive ones too: from the cockpit the craft's model is switched off, and it comes back on
+            // for the swing round the wreck
+            foreach (var r in GetComponentsInChildren<Renderer>(true))
             {
                 r.enabled = alive;
                 if (alive) GameManager.ApplyFilled(r);   // honour the Options "Filled" setting

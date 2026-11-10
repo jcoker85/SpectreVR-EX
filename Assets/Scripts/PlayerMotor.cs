@@ -110,6 +110,27 @@ namespace SpectreEX
             Resync();
         }
 
+        // The mouse's turn (MouseLook), in degrees, right positive, waiting for the next step. Capped, it
+        // goes no faster than the turn keys' full rate, and a big sweep queues at most a quarter turn.
+        float mouseTurn;
+        bool mouseUncapped;
+        const float MouseQueue = 90f;
+
+        public void AddMouseTurn(float degrees, bool uncapped)
+        {
+            mouseUncapped = uncapped;
+            mouseTurn += degrees;
+            if (!uncapped) mouseTurn = Mathf.Clamp(mouseTurn, -MouseQueue, MouseQueue);
+        }
+
+        public void ClearMouseTurn() => mouseTurn = 0f;
+
+        // How far the view should turn past the drawn craft, in degrees of yaw, so the mouse turns it at
+        // once rather than on the next step (used for Free mouse aim): the turn still waiting, and the latest step's mouse turn
+        // that drawing between steps hasn't shown yet. The craft itself still turns only on its steps.
+        public float MouseLead => mouseUncapped ? mouseTurn + (1f - presentAlpha) * lastMouseStep : 0f;
+        float lastMouseStep, presentAlpha;
+
         public void SetInput(float throttle, float turn)
         {
             this.throttle = throttle;
@@ -196,6 +217,7 @@ namespace SpectreEX
         // The moment between the last two steps, for this frame
         public void Present(float alpha)
         {
+            presentAlpha = alpha;
             Write(Vector3.Lerp(prevPos, curPos, alpha), Mathf.LerpAngle(prevYaw, curYaw, alpha));
         }
 
@@ -213,6 +235,20 @@ namespace SpectreEX
                 turnStep = turn < 0f ? step : -step;    // left raises the heading
             }
             else turningSteps = 0;
+
+            // The mouse's whole heading steps join the keys' (right lowers the heading), the rest waits
+            lastMouseStep = 0f;
+            int mouseTurned = 0;
+            if (mouseTurn != 0f)
+            {
+                int want = (int)(-mouseTurn * FineHeadings / 360f);
+                int total = turnStep + want;
+                if (!mouseUncapped) total = Mathf.Clamp(total, -2, 2);   // the keys' full rate
+                mouseTurned = total - turnStep;
+                mouseTurn += mouseTurned * 360f / FineHeadings;
+                turnStep = total;
+            }
+            int withMouse = turnStep;
 
             if (steered)
             {
@@ -236,6 +272,7 @@ namespace SpectreEX
             }
 
             CommandSpeed = speed;
+            if (turnStep == withMouse) lastMouseStep = -mouseTurned * 360f / FineHeadings;   // in yaw, right positive
             int startHeading = fineHeading;
             fineHeading = (fineHeading + turnStep + FineHeadings) % FineHeadings;
 
@@ -353,6 +390,7 @@ namespace SpectreEX
             if (blocked)
             {
                 fineHeading = startHeading;
+                lastMouseStep = 0f;
                 moveLeftX = moveLeftY = 0;
                 if (z <= minZ)
                 {

@@ -25,6 +25,7 @@ namespace SpectreEX
             public Vector3 prevPos, curPos;
             public Vector3 boxCentre, boxHalf;   // the size of its shape (_COPY_SIZE), side / up / along
             public float scale = 1f;             // +0x65
+            public float pitch;                  // Free mouse aim: degrees up (the remake's own)
             public Vector3 Position => new Vector3(x, z, y) * OriginalMath.UnitsToMetres;
         }
 
@@ -67,14 +68,21 @@ namespace SpectreEX
             Vector3 p = motor.SimPosition;
             long x = OriginalMath.ToUnits(p.x), y = OriginalMath.ToUnits(p.z), z = motor.ZUnits + lift;
             int h = motor.OriginalHeading;
+            // Free mouse aim tilts the weapons that fly straight, upward only: aimed down they fly level,
+            // as the original fires them. The rest keep their own paths.
+            float pitch = MouseLook.Aiming && FliesStraight(weapon) ? MouseLook.ShotPitch : 0f;
             if (weapon == 5)
             {
-                Fire(null, true, x, y, z, h, 0);
-                Fire(null, true, x, y, z, h - 0x10, 0);
-                Fire(null, true, x, y, z, h + 0x10, 0);
+                Fire(null, true, x, y, z, h, 0, pitch);
+                Fire(null, true, x, y, z, h - 0x10, 0, pitch);
+                Fire(null, true, x, y, z, h + 0x10, 0, pitch);
             }
-            else Fire(null, true, x, y, z, h, weapon);
+            else Fire(null, true, x, y, z, h, weapon, pitch);
         }
+
+        // The cannon, its heavy version, the triple shot and the spinner; homing shots, mines, lobbed bombs
+        // and pulse bursts make their own way up and down
+        static bool FliesStraight(int weapon) => weapon == 0 || weapon == 1 || weapon == 5 || weapon == 11;
 
         // _TANK_SHOOT
         public void RobotShoot(Robot r, int weapon)
@@ -132,7 +140,7 @@ namespace SpectreEX
         };
 
         // _DO_SHOOT. The player's own fire sounds come from its weapon (the original's later call wins).
-        void Fire(Robot owner, bool fromPlayer, long x, long y, long z, int heading, int weapon)
+        void Fire(Robot owner, bool fromPlayer, long x, long y, long z, int heading, int weapon, float pitch = 0f)
         {
             if (shots.Count >= MaxShots) return;   // no slot, no shot, so it doesn't count against Accuracy
             if (weapon != Debris)
@@ -163,6 +171,16 @@ namespace SpectreEX
             }
             s.vx = (long)OriginalMath.Cos[s.heading] * s.speed >> 8;
             s.vy = (long)OriginalMath.Sin[s.heading] * s.speed >> 8;
+            if (pitch != 0f)
+            {
+                // The same speed along the aim: less of it across, the rest up or down
+                float r = pitch * Mathf.Deg2Rad;
+                s.vx = (long)(s.vx * Mathf.Cos(r));
+                s.vy = (long)(s.vy * Mathf.Cos(r));
+                s.vz = (long)(s.speed * Mathf.Sin(r));
+                s.pitch = pitch;
+                s.z += s.vz >> 1;
+            }
             s.x += s.vx >> 1;
             s.y += s.vy >> 1;
             s.colour = ShotColour(weapon);
@@ -216,7 +234,7 @@ namespace SpectreEX
         static void Place(Shot s, Vector3 pos)
         {
             if (s.visual == null) return;
-            s.visual.SetPositionAndRotation(pos, Quaternion.Euler(0f, OriginalMath.Yaw(s.heading), s.roll * 360f / 256f));
+            s.visual.SetPositionAndRotation(pos, Quaternion.Euler(-s.pitch, OriginalMath.Yaw(s.heading), s.roll * 360f / 256f));
         }
 
         public void Interpolate(float t)
@@ -236,6 +254,7 @@ namespace SpectreEX
         {
             s.fading = struck ? 7 : 9;
             if (struck) s.vx = s.vy = 0;
+            if (struck && s.pitch != 0f) s.vz = 0;   // an aimed shot stops where it struck, up and down too
             if (s.visual == null) return;
             DeRes.Play(s.visual.gameObject, 10, s.fading, false);
             foreach (var r in s.visual.GetComponentsInChildren<Renderer>()) r.enabled = false;
@@ -325,6 +344,16 @@ namespace SpectreEX
                 if (s.weapon == Debris) continue;
 
                 bool splashes = s.weapon == 1 || s.weapon == 17;
+                // An aimed shot that reaches the floor strikes it
+                if (s.pitch < 0f && s.z < 0)
+                {
+                    s.z = 0;
+                    s.vz = 0;
+                    s.curPos = s.Position;
+                    if (splashes) { Splash(s); Kill(s); }
+                    else Fade(s, true);
+                    continue;
+                }
                 if (HitSomething(s) || (s.weapon == 17 && s.z < 1))
                 {
                     if (splashes) Splash(s);

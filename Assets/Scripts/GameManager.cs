@@ -200,7 +200,10 @@ namespace SpectreEX
         {
             Sfx.Enabled = GameSettings.SoundEffectsOn && !GameSettings.SoundMuted;
             ShowFloorDots();
-            foreach (var r in FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None)) ApplyFilled(r);
+            // Inactive ones too: the craft's model is switched off in the cockpit
+            foreach (var r in FindObjectsByType<MeshRenderer>(FindObjectsInactive.Include, FindObjectsSortMode.None)) ApplyFilled(r);
+            if (player != null && player.Health.IsDead)   // the wreck is only its de-res
+                foreach (var part in player.GetComponentsInChildren<Renderer>(true)) part.enabled = false;
             foreach (var r in director.Robots)
                 if (r != null && (r.matrixType == 26 || !r.visible))
                     foreach (var part in r.GetComponentsInChildren<Renderer>()) part.enabled = false;
@@ -381,9 +384,10 @@ namespace SpectreEX
                 bool anyKey = (k != null && k.anyKey.wasPressedThisFrame) || (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame);
                 if (anyKey && Time.frameCount != demoStartFrame) { QuitToMenu(); return; }   // not the click that started it
             }
-            else if (k != null)
+            else
             {
-                if (k.escapeKey.wasPressedThisFrame && Playing) { EscapeGame(); return; }
+                bool quit = (k != null && k.escapeKey.wasPressedThisFrame) || GameKeys.QuitGame.Pressed;
+                if (quit && Playing) { EscapeGame(); return; }
                 if (GameKeys.Pause.Pressed) TogglePause();
             }
 
