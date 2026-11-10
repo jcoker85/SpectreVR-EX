@@ -111,9 +111,10 @@ namespace SpectreEX
         }
 
         // The mouse's turn (MouseLook), in degrees, right positive, waiting for the next step. Capped, it
-        // goes no faster than the turn keys' full rate, and a big sweep queues at most a quarter turn.
+        // goes no faster than the turn keys' full rate, and whatever a frame's steps couldn't turn is
+        // dropped (Present), so a fast sweep stops when the mouse does instead of turning on afterwards.
         float mouseTurn;
-        bool mouseUncapped;
+        bool mouseUncapped, mouseCapHit;
         const float MouseQueue = 90f;
 
         public void AddMouseTurn(float degrees, bool uncapped)
@@ -218,6 +219,13 @@ namespace SpectreEX
         public void Present(float alpha)
         {
             presentAlpha = alpha;
+            // Capped: the turn past the keys' rate is cut off at the end of the frame, not saved for later.
+            // Done here, after all of the frame's steps, so a slow frame still turns at the full rate on each.
+            if (mouseCapHit)
+            {
+                if (!mouseUncapped) mouseTurn = 0f;
+                mouseCapHit = false;
+            }
             Write(Vector3.Lerp(prevPos, curPos, alpha), Mathf.LerpAngle(prevYaw, curYaw, alpha));
         }
 
@@ -243,7 +251,12 @@ namespace SpectreEX
             {
                 int want = (int)(-mouseTurn * FineHeadings / 360f);
                 int total = turnStep + want;
-                if (!mouseUncapped) total = Mathf.Clamp(total, -2, 2);   // the keys' full rate
+                if (!mouseUncapped)
+                {
+                    int capped = Mathf.Clamp(total, -2, 2);   // the keys' full rate
+                    if (capped != total) mouseCapHit = true;
+                    total = capped;
+                }
                 mouseTurned = total - turnStep;
                 mouseTurn += mouseTurned * 360f / FineHeadings;
                 turnStep = total;
